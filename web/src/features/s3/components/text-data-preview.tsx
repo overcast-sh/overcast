@@ -17,17 +17,16 @@ import {
   PreviewSkeleton,
   RawText,
   UnreadableObject,
-  ViewToggle,
-  type ToggleOption,
 } from "./data-preview"
 import { ObjectDataGrid } from "./object-data-grid"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 type TextView = "table" | "raw"
 
 const TEXT_VIEWS = [
   { value: "table", label: "Table", icon: Table2 },
   { value: "raw", label: "Raw", icon: FileText },
-] as const satisfies readonly ToggleOption<TextView>[]
+] as const satisfies readonly SegmentedOption<TextView>[]
 
 const DELIMITER_NAMES: Record<string, string> = {
   ",": "comma",
@@ -114,7 +113,7 @@ export function TextDataPreview({ kind, ...props }: DataFileProps & { kind: Text
       meta={meta}
       control={
         <div className="flex items-center gap-2">
-          <ViewToggle
+          <SegmentedControl
             label={`${label} view`}
             value={view}
             options={TEXT_VIEWS}

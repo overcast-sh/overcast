@@ -8,6 +8,7 @@ import { CopyButton } from "@/components/ui/copy-button"
 import { LinkifiedText } from "@/components/ui/arn-link"
 import { cn } from "@/lib/utils"
 import { errorHint, parseCause } from "../lambda-invocations"
+import { formatQuantity } from "@/lib/format"
 
 interface Props {
   error: string | undefined
@@ -55,7 +56,7 @@ export function ErrorCause({ error, cause, tone = "failed", note, className }: P
       {parsed && parsed.stack.length > 0 && (
         <details className="group">
           <summary className="cursor-pointer text-fg-muted select-none hover:text-fg">
-            Stack trace · {parsed.stack.length} frame{parsed.stack.length === 1 ? "" : "s"}
+            Stack trace · {formatQuantity(parsed.stack.length, "frame")}
           </summary>
           <pre className="mt-1.5 max-h-60 overflow-auto rounded border border-border bg-bg-muted p-2 font-mono text-2xs leading-relaxed whitespace-pre text-fg">
             {parsed.stack.join("\n")}

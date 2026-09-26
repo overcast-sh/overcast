@@ -83,6 +83,8 @@ import { Label } from "@/components/ui/label"
 import { SendMessageDialog } from "./send-message"
 import type { SQSMessage, SQSQueueDetail, SNSSubscription, SNSTopic } from "@/types"
 import { cn } from "@/lib/utils"
+import { formatQuantity } from "@/lib/format"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 /** Payload shape for sqs:MessageSent / sqs:MessageInflight / sqs:MessageVisible / sqs:MessageDeleted events. */
 interface SQSMessageEventPayload {
@@ -367,7 +369,7 @@ export function QueueDetail({ queueName }: Props) {
       toast({
         title:
           data.count > 0
-            ? `Received ${data.count} message${data.count !== 1 ? "s" : ""}`
+            ? `Received ${formatQuantity(data.count, "message")}`
             : "No visible messages",
         description: data.count > 0 ? "Messages are now in-flight." : undefined,
       })
@@ -1391,6 +1393,13 @@ function EditConfigDialog({
 
 // ─── SubscribeDialog ──────────────────────────────────────────────────────────
 
+type TopicMode = "existing" | "new"
+
+const TOPIC_MODES = [
+  { value: "existing", label: "Existing topic" },
+  { value: "new", label: "New topic" },
+] as const satisfies readonly SegmentedOption<TopicMode>[]
+
 const subscribeSchema = z.object({
   value: z.string().min(1, "Required"),
 })
@@ -1410,7 +1419,7 @@ function SubscribeDialog({
   onSubscribe: (topicName: string, isNew: boolean) => void
   isPending: boolean
 }) {
-  const [mode, setMode] = useState<"existing" | "new">("existing")
+  const [mode, setMode] = useState<TopicMode>("existing")
 
   const form = useForm({
     validators: { onChange: subscribeSchema },
@@ -1418,7 +1427,7 @@ function SubscribeDialog({
     onSubmit: ({ value }) => onSubscribe(value.value.trim(), mode === "new"),
   })
 
-  function handleModeChange(newMode: "existing" | "new") {
+  function handleModeChange(newMode: TopicMode) {
     setMode(newMode)
     void form.setFieldValue("value", "")
   }
@@ -1446,24 +1455,14 @@ function SubscribeDialog({
             void form.handleSubmit()
           }}
         >
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              type="button"
-              variant={mode === "existing" ? "default" : "ghost"}
-              onClick={() => handleModeChange("existing")}
-            >
-              Existing Topic
-            </Button>
-            <Button
-              size="sm"
-              type="button"
-              variant={mode === "new" ? "default" : "ghost"}
-              onClick={() => handleModeChange("new")}
-            >
-              New Topic
-            </Button>
-          </div>
+          <SegmentedControl
+            label="Topic"
+            value={mode}
+            options={TOPIC_MODES}
+            onChange={handleModeChange}
+            size="md"
+            className="self-start"
+          />
 
           <form.Field name="value" validators={{ onChange: subscribeSchema.shape.value }}>
             {(field) =>

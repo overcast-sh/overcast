@@ -35,7 +35,7 @@ import { LogViewer } from "@/components/logs/log-viewer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
-import { formatCount } from "@/lib/format"
+import { formatQuantity } from "@/lib/format"
 import { logPanelQueryOptions } from "@/features/cloudwatch/logs/data"
 import { compileFilterHighlighter } from "@/features/cloudwatch/logs/tail"
 import {
@@ -212,7 +212,7 @@ export function LogPanel({
 
       {events.length > 0 && (
         <p className="text-right text-2xs text-fg-muted">
-          Showing last {formatCount(events.length)} event{events.length !== 1 ? "s" : ""}
+          Showing last {formatQuantity(events.length, "event")}
           {refreshIntervalMs
             ? ` · auto-refreshes every ${Math.round(refreshIntervalMs / 1000)}s`
             : null}

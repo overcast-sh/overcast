@@ -13,6 +13,7 @@
 import type { HistoryEvent } from "@aws-sdk/client-sfn"
 import { parentContainer, type AslModel } from "./asl"
 import { END_ID, START_ID, forkId, joinId } from "./graph-layout"
+import { isRecord } from "@/lib/utils"
 
 export { formatDuration } from "@/lib/format"
 
@@ -155,8 +156,7 @@ type Details = {
 /** Finds the `…EventDetails` object on an event, whichever typed field it arrived in. */
 export function eventDetails(event: HistoryEvent): Details | undefined {
   for (const [key, value] of Object.entries(event)) {
-    if (key.endsWith("EventDetails") && typeof value === "object" && value !== null)
-      return value as Details
+    if (key.endsWith("EventDetails") && isRecord(value)) return value
   }
   return undefined
 }

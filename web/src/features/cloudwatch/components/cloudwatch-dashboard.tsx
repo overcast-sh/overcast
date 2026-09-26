@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { QueryListState, PageHeader } from "@/components/ui/primitives"
 import { Select } from "@/components/ui/select"
-import { formatDate } from "@/lib/format"
+import { formatDate, formatQuantity } from "@/lib/format"
 import { fieldLabel, sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
 
@@ -298,7 +298,7 @@ export function CloudwatchDashboard() {
             <p className="font-mono text-2xs text-fg-muted tabular-nums">
               {metricFilter
                 ? `${shownCount} of ${metrics.length}`
-                : `${metrics.length} metric${metrics.length === 1 ? "" : "s"}`}
+                : formatQuantity(metrics.length, "metric")}
             </p>
           </div>
 

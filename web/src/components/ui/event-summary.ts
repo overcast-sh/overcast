@@ -1,4 +1,5 @@
 import type { StreamEvent } from "@/hooks/use-event-stream"
+import { formatQuantity } from "@/lib/format"
 
 /** Default payload summary: key fields for known sources, truncated JSON otherwise. */
 export function defaultEventSummary(event: StreamEvent): string {
@@ -35,7 +36,7 @@ export function defaultEventSummary(event: StreamEvent): string {
     const count = Number(p.recordCount ?? 1)
     const name = String(p.eventName ?? "")
     const nameStr = name ? ` [${name}]` : ""
-    return `${src} → ${fn}${nameStr} · ${count} record${count !== 1 ? "s" : ""}`
+    return `${src} → ${fn}${nameStr} · ${formatQuantity(count, "record")}`
   }
 
   if (event.type === "lambda:ESMRecordFiltered") {
@@ -49,7 +50,7 @@ export function defaultEventSummary(event: StreamEvent): string {
       patterns && patterns.length > 0
         ? ` · no match: ${patterns[0].length > 60 ? patterns[0].slice(0, 60) + "…" : patterns[0]}`
         : ""
-    return `${src} → ${fn}${nameStr} filtered ${count} record${count !== 1 ? "s" : ""}${reasonStr}`
+    return `${src} → ${fn}${nameStr} filtered ${formatQuantity(count, "record")}${reasonStr}`
   }
 
   if (event.type === "lambda:ESMRecordMatched") {

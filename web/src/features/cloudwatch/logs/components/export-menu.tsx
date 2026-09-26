@@ -10,6 +10,7 @@ import { Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { FilteredLogEvent } from "@/types/logs"
 import { buildLogEventsCsv, buildLogEventsJson } from "../export-log-events"
+import { formatQuantity } from "@/lib/format"
 
 interface Props {
   /** Exactly what the list holds, in the displayed order. */
@@ -60,7 +61,7 @@ export function ExportMenu({ events, hasMore, baseName }: Props) {
     setOpen(false)
   }
 
-  const scope = `the ${events.length.toLocaleString()} loaded event${events.length === 1 ? "" : "s"}`
+  const scope = `the ${formatQuantity(events.length, "loaded event")}`
   return (
     <div ref={containerRef} className="relative">
       <Button

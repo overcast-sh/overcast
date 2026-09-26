@@ -8,6 +8,8 @@
  * typed when every sampled value agrees, and `string` is always safe.
  */
 
+import { isRecord } from "@/lib/utils"
+
 /** An integer as CSV spells it. Leading zeros (`007`) make it an identifier, not a number. */
 const INTEGER_TEXT = /^[-+]?(0|[1-9]\d*)$/
 const DECIMAL_TEXT = /^[-+]?(\d+\.\d*|\.\d+|\d+)([eE][-+]?\d+)?$/
@@ -66,12 +68,8 @@ export function inferJsonHiveType(values: ArrayLike<unknown>): string {
   if (present.every(Array.isArray)) {
     return `array<${inferJsonHiveType((present as unknown[][]).flat())}>`
   }
-  if (present.every(isPlainObject)) return structType(present)
+  if (present.every(isRecord)) return structType(present)
   return "string"
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 /** `struct<a:bigint,b:string>` over the union of the objects' fields, in first-seen order. */

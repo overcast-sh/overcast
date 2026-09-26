@@ -1,5 +1,6 @@
 import { createContext, useContext, useId, type ReactNode } from "react"
 import { cn } from "@/lib/utils"
+import { handleRovingKeyDown } from "@/lib/roving-focus"
 
 // ─── Context ──────────────────────────────────────────────────────────────
 
@@ -58,44 +59,14 @@ interface TabListProps {
   "aria-label"?: string
 }
 
-/**
- * Only the selected tab is in the tab order (see `Tab`), so the arrow keys are
- * the only way to reach the others — without them the roving `tabIndex` would
- * make every unselected tab unreachable by keyboard.
- */
-function moveFocus(list: HTMLElement, from: EventTarget | null, delta: number | "first" | "last") {
-  const tabs = [...list.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)')]
-  if (tabs.length === 0) return
-  const current = tabs.indexOf(from as HTMLButtonElement)
-  const next =
-    delta === "first"
-      ? 0
-      : delta === "last"
-        ? tabs.length - 1
-        : (current + delta + tabs.length) % tabs.length
-  tabs[next].focus()
-  tabs[next].click()
-}
-
-const ARROW_KEYS = new Map<string, number | "first" | "last">([
-  ["ArrowRight", 1],
-  ["ArrowLeft", -1],
-  ["Home", "first"],
-  ["End", "last"],
-])
-
 export function TabList({ children, className, "aria-label": ariaLabel }: TabListProps) {
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
       className={cn("flex gap-6 border-b border-border", className)}
-      onKeyDown={(event) => {
-        const delta = ARROW_KEYS.get(event.key)
-        if (delta === undefined) return
-        event.preventDefault()
-        moveFocus(event.currentTarget, event.target, delta)
-      }}
+      // Only the selected tab is in the tab order (see `Tab`), so the arrow keys reach the rest.
+      onKeyDown={(event) => handleRovingKeyDown(event, '[role="tab"]')}
     >
       {children}
     </div>

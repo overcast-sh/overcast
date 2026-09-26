@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, within } from "@/test/render"
-import { ObjectSearchBar, SortHead, HighlightedName } from "./object-controls"
+import { HighlightedName, LISTING_NOUNS, ObjectSearchBar, SortHead } from "./object-controls"
 import { DEFAULT_SORT } from "@/features/s3/object-browser"
 
 function searchBar(over: Partial<React.ComponentProps<typeof ObjectSearchBar>> = {}) {
@@ -14,7 +14,7 @@ function searchBar(over: Partial<React.ComponentProps<typeof ObjectSearchBar>> =
       scanned={0}
       isScanning={false}
       capped={false}
-      noun="objects"
+      noun={LISTING_NOUNS.objects}
       {...over}
     />
   )
@@ -47,18 +47,15 @@ describe("ObjectSearchBar", () => {
     expect(onChange).toHaveBeenCalledWith("")
   })
 
-  it("marks the active scope as pressed", () => {
+  it("marks the active scope as checked", () => {
     render(searchBar({ scope: "recursive" }))
-    expect(screen.getByRole("button", { name: "All nested" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    )
+    expect(screen.getByRole("radio", { name: "All nested" })).toBeChecked()
   })
 
   it("switches to a recursive listing when the other scope is chosen", async () => {
     const onScopeChange = vi.fn()
     const { user } = render(searchBar({ onScopeChange }))
-    await user.click(screen.getByRole("button", { name: "All nested" }))
+    await user.click(screen.getByRole("radio", { name: "All nested" }))
     expect(onScopeChange).toHaveBeenCalledWith("recursive")
   })
 
@@ -88,7 +85,7 @@ describe("ObjectSearchBar", () => {
   })
 
   it("names the summary after versions when browsing history", () => {
-    render(searchBar({ scanned: 3, noun: "versions" }))
+    render(searchBar({ scanned: 3, noun: LISTING_NOUNS.versions }))
     expect(screen.getByText("3 versions")).toBeInTheDocument()
   })
 })

@@ -25,10 +25,11 @@ import { Badge } from "@/components/ui/badge"
 import { CopyButton } from "@/components/ui/copy-button"
 import { useDebugEnabled } from "@/hooks/use-server-info"
 import type { StreamEvent } from "@/hooks/use-event-stream"
-import { cn } from "@/lib/utils"
+import { cn, isRecord } from "@/lib/utils"
 import { highlightJSON } from "@/lib/highlight-code"
 import { defaultEventSummary } from "./event-summary"
 import { ArnLink, LinkifiedText } from "./arn-link"
+import { formatQuantity } from "@/lib/format"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -339,8 +340,8 @@ function JsonValue({ value, path }: { value: unknown; path: string }) {
     )
   }
 
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
+  if (isRecord(value)) {
+    const entries = Object.entries(value)
     if (entries.length === 0) return <span className={TOKEN_PUNCTUATION}>{"{}"}</span>
     return (
       <span>
@@ -489,7 +490,7 @@ export function EventConsole({
           <span className="font-mono text-xs text-fg-muted">
             {paused ? "Paused" : connected ? "Live" : "Disconnected"}
             {" · "}
-            {events.length.toLocaleString()} event{events.length !== 1 ? "s" : ""}
+            {formatQuantity(events.length, "event")}
           </span>
           {!pinned && (
             <button

@@ -26,7 +26,7 @@ import { Tooltip } from "@/components/ui/tooltip"
 import { Input } from "@/components/ui/input"
 import { CheckboxFilterDropdown } from "@/components/ui/checkbox-filter-dropdown"
 import { cn } from "@/lib/utils"
-import { toTitleCase } from "@/lib/format"
+import { formatQuantity, toTitleCase } from "@/lib/format"
 import { EventType, isNoiseEventType } from "@/services/event-types"
 import { SERVICES } from "@/lib/service-registry"
 
@@ -256,9 +256,7 @@ export function EventsPage() {
           connected ? (
             top5.length > 0 ? (
               <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                <span>
-                  {rawEvents.length.toLocaleString()} event{rawEvents.length !== 1 ? "s" : ""}
-                </span>
+                <span>{formatQuantity(rawEvents.length, "event")}</span>
                 {top5.map((s) => (
                   <span key={s.id} className="text-fg-subtle">
                     <span className="font-medium text-fg-muted">{s.count}</span> {s.label}
@@ -309,7 +307,7 @@ export function EventsPage() {
             const vc = allSources.length - hiddenSources.size
             if (vc <= 0) return "No sources"
             if (vc === allSources.length) return "All sources"
-            return `${vc} source${vc !== 1 ? "s" : ""}`
+            return formatQuantity(vc, "source")
           })()}
         />
 

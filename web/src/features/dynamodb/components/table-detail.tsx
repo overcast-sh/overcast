@@ -63,6 +63,8 @@ import { FilterBuilder, matchesFilters, type FilterCondition } from "./filter-bu
 import type { DynamoItem, DynamoAttrValue, DynamoGSI, DynamoTable, DynamoKeySchema } from "@/types"
 import { fieldLabel, sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
+import { formatQuantity } from "@/lib/format"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -153,6 +155,11 @@ const DYNAMODB_MONITOR_CARDS: MonitorCardConfig[] = [
 ]
 
 // ─── Component ─────────────────────────────────────────────────────────────
+
+const FILTER_MODES = [
+  { value: "scan", label: "Scan" },
+  { value: "query", label: "Query", icon: Filter },
+] as const satisfies readonly SegmentedOption<"scan" | "query">[]
 
 interface Props {
   tableName: string
@@ -300,7 +307,7 @@ export function TableDetail({ tableName }: Props) {
       setSelectedKeys(new Set())
       setShowBulkDeleteConfirm(false)
       toast({
-        title: `${keys.length} item${keys.length !== 1 ? "s" : ""} deleted`,
+        title: `${formatQuantity(keys.length, "item")} deleted`,
         variant: "success",
       })
     },
@@ -571,35 +578,19 @@ export function TableDetail({ tableName }: Props) {
               )}
 
               {/* Mode toggle */}
-              <div className="flex rounded-md border border-border text-sm">
-                <button
-                  onClick={() => {
-                    setFilterMode("scan")
+              <SegmentedControl
+                label="Read mode"
+                value={filterMode}
+                options={FILTER_MODES}
+                onChange={(mode) => {
+                  setFilterMode(mode)
+                  if (mode === "scan") {
                     setQueryParams(null)
                     setQueryError(undefined)
-                  }}
-                  className={cn(
-                    "rounded-l-md px-3 py-1.5 transition-colors",
-                    filterMode === "scan"
-                      ? "bg-accent font-medium text-fg-on-accent"
-                      : "hover:bg-accent-muted hover:text-accent",
-                  )}
-                >
-                  Scan
-                </button>
-                <button
-                  onClick={() => setFilterMode("query")}
-                  className={cn(
-                    "rounded-r-md border-l border-border px-3 py-1.5 transition-colors",
-                    filterMode === "query"
-                      ? "bg-accent font-medium text-fg-on-accent"
-                      : "hover:bg-accent-muted hover:text-accent",
-                  )}
-                >
-                  <Filter className="mr-1 inline h-3 w-3" />
-                  Query
-                </button>
-              </div>
+                  }
+                }}
+                size="md"
+              />
 
               {(queryParams !== null || filterHashVal || scanFilters.length > 0) && (
                 <Button size="sm" variant="ghost" onClick={clearFilter}>
@@ -739,7 +730,7 @@ export function TableDetail({ tableName }: Props) {
               {selectedKeys.size > 0 && (
                 <div className="flex items-center gap-3 rounded-md border border-border bg-bg-muted px-3 py-2">
                   <span className="text-sm text-fg-muted">
-                    {selectedKeys.size} item{selectedKeys.size !== 1 ? "s" : ""} selected
+                    {formatQuantity(selectedKeys.size, "item")} selected
                   </span>
                   <Button size="sm" variant="danger" onClick={() => setShowBulkDeleteConfirm(true)}>
                     <Trash2 className="mr-1 h-3.5 w-3.5" />
@@ -1023,13 +1014,11 @@ export function TableDetail({ tableName }: Props) {
       <Dialog open={showBulkDeleteConfirm} onOpenChange={setShowBulkDeleteConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Delete {selectedKeys.size} item{selectedKeys.size !== 1 ? "s" : ""}
-            </DialogTitle>
+            <DialogTitle>Delete {formatQuantity(selectedKeys.size, "item")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-fg-muted">
-            This will permanently delete {selectedKeys.size} selected item
-            {selectedKeys.size !== 1 ? "s" : ""}. This action cannot be undone.
+            This will permanently delete {formatQuantity(selectedKeys.size, "selected item")}. This
+            action cannot be undone.
           </p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowBulkDeleteConfirm(false)}>

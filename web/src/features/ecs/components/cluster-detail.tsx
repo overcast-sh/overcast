@@ -43,7 +43,7 @@ import { ServiceFailureAlert } from "@/features/ecs/components/service-failure-a
 import { emptyAwsvpcNetworking, type AwsvpcNetworking } from "@/features/ecs/awsvpc"
 import type { EcsTask, EcsTaskDefinition, EcsService, EcsContainerInstance } from "@/types"
 import { fieldLabel } from "@/lib/typography"
-import { formatPreciseTimeOfDay } from "@/lib/format"
+import { formatPreciseTimeOfDay, formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import {
   failedContainer,
@@ -54,6 +54,7 @@ import {
   type ClusterTab,
   type TaskView,
 } from "@/features/ecs/diagnostics"
+import { SegmentedControl } from "@/components/ui/segmented-control"
 
 export function ClusterDetail({
   clusterName,
@@ -201,24 +202,16 @@ function TasksPanel({
           <Play className="mr-1.5 h-3.5 w-3.5" />
           Run Task
         </Button>
-        <div className="ml-auto flex items-center gap-1 rounded border border-border bg-bg p-0.5">
-          <Button
-            size="sm"
-            variant={selection.effectiveView === "running" ? "secondary" : "ghost"}
-            aria-pressed={selection.effectiveView === "running"}
-            onClick={() => onViewChange("running")}
-          >
-            Active {selection.activeCount}
-          </Button>
-          <Button
-            size="sm"
-            variant={selection.effectiveView === "stopped" ? "secondary" : "ghost"}
-            aria-pressed={selection.effectiveView === "stopped"}
-            onClick={() => onViewChange("stopped")}
-          >
-            Stopped {selection.stoppedCount}
-          </Button>
-        </div>
+        <SegmentedControl
+          label="Tasks"
+          value={selection.effectiveView}
+          options={[
+            { value: "running", label: `Active ${selection.activeCount}` },
+            { value: "stopped", label: `Stopped ${selection.stoppedCount}` },
+          ]}
+          onChange={onViewChange}
+          className="ml-auto"
+        />
       </div>
 
       {serviceFilter && (
@@ -444,9 +437,7 @@ function TaskDefinitionsPanel() {
               >
                 <span>{family}</span>
                 <span className="flex items-center gap-2 text-xs text-fg-muted">
-                  <Badge variant="default">
-                    {revisions.length} revision{revisions.length !== 1 ? "s" : ""}
-                  </Badge>
+                  <Badge variant="default">{formatQuantity(revisions.length, "revision")}</Badge>
                   <span>{expandedFamily === family ? "▲" : "▼"}</span>
                 </span>
               </button>

@@ -16,10 +16,11 @@ import { Spinner } from "@/components/ui/primitives"
 // eslint-disable-next-line local/prefer-resource-table -- borrows `TableHead` for the shared sortable header; it renders no table of its own
 import { TableHead } from "@/components/ui/table"
 import { Tooltip } from "@/components/ui/tooltip"
-import { formatBytes, formatCount } from "@/lib/format"
+import { formatBytes, formatCount, formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { ListScope } from "@/features/s3/data"
 import type { NameSlice, ObjectSort, SortColumn } from "@/features/s3/object-browser"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 // ─── Search bar ────────────────────────────────────────────────────────────
 
@@ -36,9 +37,35 @@ export interface ObjectSearchBarProps {
   isScanning: boolean
   /** Set when the scan stopped at its page cap instead of the end of the listing. */
   capped: boolean
-  /** Noun for the summary line — objects in the normal view, versions in history. */
-  noun: string
+  /** What the rows are — objects in the normal view, versions in history. */
+  noun: ListingNoun
 }
+
+/** A listing's noun, both ways, for the search box's name and the count beside it. */
+export interface ListingNoun {
+  one: string
+  many: string
+}
+
+export const LISTING_NOUNS = {
+  objects: { one: "object", many: "objects" },
+  versions: { one: "version", many: "versions" },
+} as const satisfies Record<string, ListingNoun>
+
+const SCOPES = [
+  {
+    value: "folder",
+    label: "This folder",
+    icon: Folder,
+    hint: "List only what sits directly in this folder.",
+  },
+  {
+    value: "recursive",
+    label: "All nested",
+    icon: ListTree,
+    hint: "List every object beneath this prefix, folders flattened into full keys.",
+  },
+] as const satisfies readonly SegmentedOption<ListScope>[]
 
 export function ObjectSearchBar({
   value,
@@ -61,7 +88,7 @@ export function ObjectSearchBar({
         <Input
           type="search"
           value={value}
-          aria-label={`Search ${noun}`}
+          aria-label={`Search ${noun.many}`}
           placeholder="Search by name, or type a prefix like logs/2024/"
           spellCheck={false}
           autoComplete="off"
@@ -91,26 +118,13 @@ export function ObjectSearchBar({
         )}
       </div>
 
-      <div
-        role="group"
-        aria-label="Search scope"
-        className="inline-flex overflow-hidden rounded-md border border-border"
-      >
-        <ScopeButton
-          active={scope === "folder"}
-          icon={<Folder className="h-3.5 w-3.5" />}
-          label="This folder"
-          hint="List only what sits directly in this folder."
-          onClick={() => onScopeChange("folder")}
-        />
-        <ScopeButton
-          active={scope === "recursive"}
-          icon={<ListTree className="h-3.5 w-3.5" />}
-          label="All nested"
-          hint="List every object beneath this prefix, folders flattened into full keys."
-          onClick={() => onScopeChange("recursive")}
-        />
-      </div>
+      <SegmentedControl
+        label="Search scope"
+        value={scope}
+        options={SCOPES}
+        onChange={onScopeChange}
+        size="md"
+      />
 
       <ScanSummary
         matches={matches}
@@ -121,37 +135,6 @@ export function ObjectSearchBar({
         noun={noun}
       />
     </div>
-  )
-}
-
-function ScopeButton({
-  active,
-  icon,
-  label,
-  hint,
-  onClick,
-}: {
-  active: boolean
-  icon: React.ReactNode
-  label: string
-  hint: string
-  onClick: () => void
-}) {
-  return (
-    <Tooltip content={hint}>
-      <button
-        type="button"
-        aria-pressed={active}
-        onClick={onClick}
-        className={cn(
-          "inline-flex h-8 cursor-pointer items-center gap-1.5 px-2.5 font-mono text-2xs transition-colors",
-          active ? "bg-accent-muted text-fg" : "text-fg-muted hover:bg-bg-muted hover:text-fg",
-        )}
-      >
-        {icon}
-        {label}
-      </button>
-    </Tooltip>
   )
 }
 
@@ -176,14 +159,11 @@ function ScanSummary({
   isScanning: boolean
   capped: boolean
   filtered: boolean
-  noun: string
+  noun: ListingNoun
 }) {
+  const total = formatQuantity(scanned, noun.one, noun.many)
   if (!filtered && !isScanning && !capped) {
-    return (
-      <span className="font-mono text-2xs whitespace-nowrap text-fg-subtle">
-        {formatCount(scanned)} {noun}
-      </span>
-    )
+    return <span className="font-mono text-2xs whitespace-nowrap text-fg-subtle">{total}</span>
   }
 
   return (
@@ -191,12 +171,10 @@ function ScanSummary({
       {isScanning && <Spinner className="h-3 w-3" />}
       {filtered ? (
         <>
-          {formatCount(matches)} of {formatCount(scanned)} {noun}
+          {formatCount(matches)} of {total}
         </>
       ) : (
-        <>
-          {formatCount(scanned)} {noun}
-        </>
+        total
       )}
       {isScanning && <span className="text-fg-subtle">scanning…</span>}
       {capped && !isScanning && (
@@ -339,9 +317,7 @@ export function SelectionBar({
   if (count === 0) return null
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent/40 bg-accent-muted px-3 py-2 text-sm">
-      <span className="font-medium">
-        {formatCount(count)} object{count === 1 ? "" : "s"} selected
-      </span>
+      <span className="font-medium">{formatQuantity(count, "object")} selected</span>
       <span className="font-mono text-2xs text-fg-muted">{formatBytes(bytes)}</span>
       <div className="ml-auto flex items-center gap-2">
         {blockedReason && <span className="text-xs text-warning">{blockedReason}</span>}

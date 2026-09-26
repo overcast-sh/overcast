@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label"
 import { FormField } from "@/components/ui/form"
 import { PageHeader, Spinner } from "@/components/ui/primitives"
 import { useToast } from "@/components/ui/toast"
-import { formatBytes } from "@/lib/format"
+import { formatBytes, formatQuantity } from "@/lib/format"
 
 // ─── Storage classes ──────────────────────────────────────────────────────────
 
@@ -214,7 +214,7 @@ export function PutObject() {
 
     if (errorCount === 0) {
       toast({
-        title: `Uploaded ${rows.length} file${rows.length !== 1 ? "s" : ""}`,
+        title: `Uploaded ${formatQuantity(rows.length, "file")}`,
         variant: "success",
       })
       // Back to the folder the files landed in, not the bucket root — the
@@ -226,7 +226,7 @@ export function PutObject() {
       })
     } else {
       toast({
-        title: `${errorCount} file${errorCount !== 1 ? "s" : ""} failed to upload`,
+        title: `${formatQuantity(errorCount, "file")} failed to upload`,
         variant: "danger",
       })
     }
@@ -494,7 +494,7 @@ export function PutObject() {
             <span className="text-success">All files uploaded</span>
           ) : (
             <>
-              {rows.length} file{rows.length !== 1 ? "s" : ""} ·{" "}
+              {formatQuantity(rows.length, "file")} ·{" "}
               {formatBytes(rows.reduce((a, r) => a + r.file.size, 0))} total
             </>
           )}
@@ -522,8 +522,7 @@ export function PutObject() {
               ) : (
                 <>
                   <Upload className="h-4 w-4" />
-                  Upload{" "}
-                  {pendingCount > 0 ? `${pendingCount} file${pendingCount !== 1 ? "s" : ""}` : ""}
+                  Upload {pendingCount > 0 ? formatQuantity(pendingCount, "file") : ""}
                 </>
               )}
             </Button>

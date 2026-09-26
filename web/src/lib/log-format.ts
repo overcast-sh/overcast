@@ -15,6 +15,7 @@
  */
 import { LruCache } from "@/lib/lru-cache"
 import { stripAnsi } from "@/lib/ansi"
+import { isRecord } from "@/lib/utils"
 
 // `highlightJSON` lives in `lib/highlight-code.ts` — the module that owns
 // syntax highlighting — and is re-exported here so the log viewers (and this
@@ -303,11 +304,11 @@ export function parsePlatformRecord(msg: string): PlatformLogRecord | null {
     record?: unknown
   }
   if (typeof type !== "string" || !type.startsWith("platform.")) return null
-  if (record == null || typeof record !== "object" || Array.isArray(record)) return null
+  if (!isRecord(record)) return null
   return {
     type,
     time: typeof time === "string" ? time : undefined,
-    record: record as Record<string, unknown>,
+    record,
   }
 }
 
@@ -333,9 +334,7 @@ function numberField(value: unknown): number | undefined {
 
 function metricsOf(rec: PlatformLogRecord): Record<string, unknown> {
   const metrics = rec.record.metrics
-  return metrics != null && typeof metrics === "object" && !Array.isArray(metrics)
-    ? (metrics as Record<string, unknown>)
-    : {}
+  return isRecord(metrics) ? metrics : {}
 }
 
 function labelled(label: string, value: string | undefined): string | undefined {

@@ -61,6 +61,7 @@ import { computeDiagramState, type EdgeState } from "../diagram-state"
 import { laneLabel, pillStatus } from "../diagram-labels"
 import { ExportMenu } from "./export-menu"
 import { LEGEND_STATUSES, STATUS_THEME, stateTypeTheme } from "../state-theme"
+import { formatQuantity } from "@/lib/format"
 
 // ─── Node and edge data ──────────────────────────────────────────────────────
 
@@ -186,7 +187,7 @@ const StateNode = memo(function StateNode({ data }: NodeProps<Node<StateNodeData
           {retries > 0 && (
             <span
               className="rounded-full border border-warning/40 bg-warning-muted px-1.5 font-mono text-2xs leading-4 text-warning"
-              title={`${retries} ${retries === 1 ? "retry" : "retries"}`}
+              title={formatQuantity(retries, "retry", "retries")}
             >
               ↻{retries}
             </span>

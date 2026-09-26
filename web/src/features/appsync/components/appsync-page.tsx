@@ -19,6 +19,7 @@ import { ResourceTable, type ResourceTableSort } from "@/components/ui/resource-
 import { Badge } from "@/components/ui/badge"
 import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs-modal"
 import { CreateResourceDialog } from "@/components/create-resource-dialog"
+import { formatQuantity } from "@/lib/format"
 
 interface AppSyncPageProps {
   /** Current filter text — owned by the route's `q` search param, see `useFilterSearchParam`. */
@@ -62,7 +63,7 @@ export function AppSyncPage({ filter, onFilterChange, sort, onSortChange }: AppS
   return (
     <ResourceListPage
       title="AppSync"
-      description={`${apis.length} GraphQL API${apis.length !== 1 ? "s" : ""}`}
+      description={formatQuantity(apis.length, "GraphQL API")}
       actions={
         <>
           <ServiceDocsButton

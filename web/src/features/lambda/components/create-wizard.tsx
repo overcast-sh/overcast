@@ -70,6 +70,7 @@ import type { Runtime } from "@aws-sdk/client-lambda"
 import { buildRuntimeItems, type RuntimeItem } from "@/features/lambda/runtime-items"
 import { canReadClipboardText, readClipboardText } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
+import { formatQuantity } from "@/lib/format"
 
 // ─── Runtime data ────────────────────────────────────────────────────────────
 
@@ -782,9 +783,7 @@ export function CreateFunctionWizard({ open, onOpenChange }: CreateFunctionWizar
                 icon={<Variable className="h-3.5 w-3.5" />}
                 label="Environment variables"
                 summary={
-                  envVars.length > 0
-                    ? `${envVars.length} variable${envVars.length > 1 ? "s" : ""}`
-                    : undefined
+                  envVars.length > 0 ? formatQuantity(envVars.length, "variable") : undefined
                 }
               >
                 <div className="flex flex-col gap-2">

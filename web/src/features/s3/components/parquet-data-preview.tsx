@@ -7,21 +7,16 @@ import type { DataColumn } from "@/lib/data-sources/row-source"
 import { createDataWorker } from "@/lib/data-sources/worker-port"
 import { formatQuantity } from "@/lib/format"
 import { useObjectSource, type DataFileProps } from "./data-file-source"
-import {
-  PreviewPanel,
-  PreviewSkeleton,
-  UnreadableObject,
-  ViewToggle,
-  type ToggleOption,
-} from "./data-preview"
+import { PreviewPanel, PreviewSkeleton, UnreadableObject } from "./data-preview"
 import { ObjectDataGrid } from "./object-data-grid"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 type ParquetView = "rows" | "schema"
 
 const PARQUET_VIEWS = [
   { value: "rows", label: "Rows", icon: Table2 },
   { value: "schema", label: "Schema", icon: ListTree },
-] as const satisfies readonly ToggleOption<ParquetView>[]
+] as const satisfies readonly SegmentedOption<ParquetView>[]
 
 const SCHEMA_COLUMNS: DataColumn[] = [
   { name: "column", numeric: false },
@@ -91,7 +86,7 @@ export function ParquetDataPreview(props: DataFileProps) {
       meta={meta}
       control={
         <div className="flex items-center gap-2">
-          <ViewToggle
+          <SegmentedControl
             label="Parquet view"
             value={view}
             options={PARQUET_VIEWS}

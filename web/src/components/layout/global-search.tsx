@@ -28,6 +28,7 @@ import {
 import { matchesQuery, orderGroupsByActiveService, type SearchResult } from "@/lib/search"
 import { CATALOG, type CatalogEntry } from "@/lib/unsupported-services"
 import { Tooltip } from "@/components/ui/tooltip"
+import { formatQuantity } from "@/lib/format"
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -431,7 +432,7 @@ function SearchResults({
           aria-live="polite"
           className="border-t border-border px-4 pt-2 font-mono text-xs text-fg-subtle"
         >
-          {flat.length} result{flat.length !== 1 ? "s" : ""}
+          {formatQuantity(flat.length, "result")}
           <span className="float-right hidden sm:block">
             ↑↓ Navigate · Enter Select · Esc Close
           </span>

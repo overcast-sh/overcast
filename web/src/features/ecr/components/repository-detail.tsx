@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { ResourceTable } from "@/components/ui/resource-table"
 import { Badge } from "@/components/ui/badge"
 import { CodeBlock, EmptyState, PageHeader, Spinner } from "@/components/ui/primitives"
-import { formatDate } from "@/lib/format"
+import { formatDate, formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 export function RepositoryDetail({ repositoryName }: { repositoryName: string }) {
@@ -105,8 +105,8 @@ export function RepositoryDetail({ repositoryName }: { repositoryName: string })
           <div>
             <h2 className="font-mono text-sm font-medium text-fg">Images</h2>
             <p className="text-sm text-fg-muted">
-              {data.images.length} image entr{data.images.length === 1 ? "y" : "ies"} tracked for
-              this repository.
+              {formatQuantity(data.images.length, "image entry", "image entries")} tracked for this
+              repository.
             </p>
           </div>
         </div>

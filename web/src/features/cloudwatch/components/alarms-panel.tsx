@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { QueryListState } from "@/components/ui/primitives"
 import { fieldLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
+import { formatQuantity } from "@/lib/format"
 
 function formatTimestamp(value?: Date): string {
   if (!value) return "—"
@@ -141,7 +142,7 @@ export function AlarmsPanel({
         <div>
           <h2 className="font-mono text-sm font-semibold text-fg">Alarms</h2>
           <p className="text-sm text-fg-muted">
-            {alarms.length} alarm{alarms.length === 1 ? "" : "s"}
+            {formatQuantity(alarms.length, "alarm")}
             {inAlarm > 0 ? ` · ${inAlarm} in ALARM` : ""}
           </p>
         </div>

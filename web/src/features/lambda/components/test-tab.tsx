@@ -28,6 +28,7 @@ import {
   useOptionalDebugSession,
   useOptionalDebugSessionState,
 } from "@/features/debugger/session/hooks"
+import { formatQuantity } from "@/lib/format"
 
 export function TestTab({
   name,
@@ -376,7 +377,7 @@ export function TestTab({
  * breakpoint — the next invoke finds them bound.
  */
 function noPauseExplanation(breakpoints: number, attachedDuringInvoke: boolean): string {
-  const count = `${breakpoints} breakpoint${breakpoints === 1 ? "" : "s"}`
+  const count = formatQuantity(breakpoints, "breakpoint")
   if (breakpoints === 0) {
     return "Finished without pausing — no breakpoints are set. Click a line's gutter on the Code tab to add one."
   }

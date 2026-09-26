@@ -20,7 +20,7 @@ import { ResourceLink } from "@/components/ui/arn-link"
 import { SectionLabel } from "@/components/ui/primitives"
 import { LogViewer } from "@/components/logs/log-viewer"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
-import { formatCount, formatDuration } from "@/lib/format"
+import { formatCount, formatDuration, formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import {
   lambdaFunctionQueryOptions,
@@ -529,7 +529,7 @@ function LogsBody({
       </div>
       <p className="flex items-center gap-2 text-2xs text-fg-subtle">
         <FileText className="h-3 w-3" />
-        {formatCount(windowEvents.length)} line{windowEvents.length === 1 ? "" : "s"}
+        {formatQuantity(windowEvents.length, "line")}
         {logsState.truncated &&
           ` · the window held more than ${formatCount(TASK_LOG_LIMIT)} events; open the log group for the rest`}
       </p>

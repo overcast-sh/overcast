@@ -26,6 +26,7 @@
 
 import type { StreamEvent } from "@/types"
 import { withResumePoint, DISCONNECTED, type ConnectionState } from "./event-stream.protocol"
+import { formatQuantity } from "@/lib/format"
 
 // ─── Backoff ───────────────────────────────────────────────────────────────
 
@@ -131,7 +132,7 @@ export class ReconnectingStream {
       const { attempt } = this.#state
       console.info(
         attempt > 0
-          ? `[event-stream] reconnected after ${attempt} ${attempt === 1 ? "attempt" : "attempts"}`
+          ? `[event-stream] reconnected after ${formatQuantity(attempt, "attempt")}`
           : "[event-stream] connected",
       )
       this.#publish({ connected: true, attempt: 0, lastConnectedAt: Date.now() })

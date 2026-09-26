@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils"
 import type { AslModel } from "../asl"
 import { formatDuration, runDuration, type ExecutionTrace, type StateRun } from "../execution-trace"
 import { STATUS_THEME, stateTypeTheme } from "../state-theme"
+import { formatQuantity } from "@/lib/format"
 
 interface Props {
   model?: AslModel
@@ -190,7 +191,7 @@ export function ExecutionTimeline({ model, trace, now, selectedState, onSelectRu
                       )}
                       {row.label}
                       <span className="ml-auto text-fg-subtle">
-                        {row.count} state{row.count === 1 ? "" : "s"}
+                        {formatQuantity(row.count, "state")}
                       </span>
                     </button>
                   </div>

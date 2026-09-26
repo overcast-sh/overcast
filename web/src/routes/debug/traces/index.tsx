@@ -34,6 +34,7 @@ import { useDebouncedTextParam } from "@/hooks/use-debounced-text-param"
 import { cn } from "@/lib/utils"
 import { useDebugEnabled } from "@/hooks/use-server-info"
 import type { TraceListResponse, TraceSummary } from "@/types"
+import { formatQuantity } from "@/lib/format"
 
 export const Route = createFileRoute("/debug/traces/")({
   head: () => ({ meta: [{ title: "Request Traces — Overcast" }] }),
@@ -267,7 +268,7 @@ function TracesPage() {
           <Spinner className="h-3 w-3" />
           <span>
             Searching bodies, hop errors and log lines for “{deep.query}”
-            {deep.scanned > 0 ? ` — ${deep.scanned} trace${deep.scanned === 1 ? "" : "s"} scanned` : ""}
+            {deep.scanned > 0 ? ` — ${formatQuantity(deep.scanned, "trace")} scanned` : ""}
             {deep.remaining > 0 ? `, ${deep.remaining} to go` : ""}
           </span>
         </div>
@@ -363,7 +364,7 @@ function TracesPage() {
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-1">
                           <Badge variant="outline" className="text-xs" style={{ borderColor: serviceColor(t.service || "") }}>{t.service || "—"}</Badge>
-                          {t.hopCount ? <span className="inline-flex items-center gap-0.5 text-2xs text-fg-muted" title={`${t.hopCount} hop${t.hopCount !== 1 ? "s" : ""}`}><GitFork className="h-3 w-3" />{t.hopCount}</span> : null}
+                          {t.hopCount ? <span className="inline-flex items-center gap-0.5 text-2xs text-fg-muted" title={formatQuantity(t.hopCount, "hop")}><GitFork className="h-3 w-3" />{t.hopCount}</span> : null}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-fg-muted text-xs">{t.operation ?? "—"}</td>

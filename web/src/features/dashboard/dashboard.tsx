@@ -12,6 +12,7 @@ import { DashboardSection } from "./components/dashboard-section"
 import { NotEmulatedChips } from "./components/not-emulated-chips"
 import { ServiceCard } from "./components/service-card"
 import { ServiceListView } from "./components/service-list-view"
+import { formatQuantity } from "@/lib/format"
 
 export const DASHBOARD_VIEW_STORAGE_KEY = "overcast.dashboard.view"
 
@@ -143,7 +144,7 @@ function DashboardFooter({ data }: { data: HealthResponse }) {
           }
         >
           <span className="ml-1 cursor-help border-b border-dotted border-fg-subtle">
-            ({overrideCount} override{overrideCount !== 1 ? "s" : ""})
+            ({formatQuantity(overrideCount, "override")})
           </span>
         </Tooltip>
       )}

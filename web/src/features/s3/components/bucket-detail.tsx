@@ -54,6 +54,7 @@ import {
 } from "@/features/s3/object-browser"
 import {
   HighlightedName,
+  LISTING_NOUNS,
   ObjectSearchBar,
   RowCheckbox,
   SelectionBar,
@@ -617,7 +618,7 @@ export function BucketDetail() {
         scanned={scanned}
         isScanning={isScanning}
         capped={reachedScanCap && !!hasNextPage}
-        noun={viewingVersions ? "versions" : "objects"}
+        noun={viewingVersions ? LISTING_NOUNS.versions : LISTING_NOUNS.objects}
       />
 
       <SelectionBar

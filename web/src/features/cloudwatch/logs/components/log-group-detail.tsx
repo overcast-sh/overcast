@@ -53,6 +53,7 @@ import { useEndpoint } from "@/hooks/use-endpoint"
 import { isResourceNotFound } from "@/lib/aws-error"
 import { formatLogDate } from "@/lib/log-format"
 import { cn } from "@/lib/utils"
+import { formatQuantity } from "@/lib/format"
 
 interface Props {
   groupName: string
@@ -167,7 +168,7 @@ export function LogGroupDetail({ groupName }: Props) {
       setSelectedStreams(new Set())
       setShowBulkDelete(false)
       toast({
-        title: `${names.length} stream${names.length !== 1 ? "s" : ""} deleted`,
+        title: `${formatQuantity(names.length, "stream")} deleted`,
         variant: "success",
       })
     },
@@ -321,7 +322,7 @@ export function LogGroupDetail({ groupName }: Props) {
         </Button>
         {activeFilter && !isFilterLoading && !filterError && (
           <span className="ml-1 shrink-0 text-xs text-fg-muted">
-            {filteredEvents.length} result{filteredEvents.length !== 1 ? "s" : ""}
+            {formatQuantity(filteredEvents.length, "result")}
           </span>
         )}
       </div>
@@ -372,7 +373,7 @@ export function LogGroupDetail({ groupName }: Props) {
       {selectedStreams.size > 0 && (
         <div className="flex items-center gap-3 rounded-md border border-border bg-bg-muted px-3 py-2">
           <span className="text-sm font-medium">
-            {selectedStreams.size} stream{selectedStreams.size !== 1 ? "s" : ""} selected
+            {formatQuantity(selectedStreams.size, "stream")} selected
           </span>
           <Button size="sm" variant="danger" onClick={() => setShowBulkDelete(true)}>
             <Trash2 className="mr-1 h-3.5 w-3.5" />
@@ -527,9 +528,7 @@ export function LogGroupDetail({ groupName }: Props) {
       <Dialog open={showBulkDelete} onOpenChange={(v) => !v && setShowBulkDelete(false)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Delete {selectedStreams.size} Log Stream{selectedStreams.size !== 1 ? "s" : ""}
-            </DialogTitle>
+            <DialogTitle>Delete {formatQuantity(selectedStreams.size, "Log Stream")}</DialogTitle>
           </DialogHeader>
           <DialogBody>
             <p className="text-sm text-fg-muted">
@@ -553,7 +552,7 @@ export function LogGroupDetail({ groupName }: Props) {
               disabled={bulkDeleteMut.isPending}
             >
               {bulkDeleteMut.isPending && <Spinner className="mr-2" />}
-              Delete {selectedStreams.size} Stream{selectedStreams.size !== 1 ? "s" : ""}
+              Delete {formatQuantity(selectedStreams.size, "Stream")}
             </Button>
           </DialogFooter>
         </DialogContent>

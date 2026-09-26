@@ -92,7 +92,7 @@ import { PageHeader, Spinner, EmptyState } from "@/components/ui/primitives"
 import { ApplicationOwnershipBanner } from "@/components/application-ownership-banner"
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/toast"
-import { formatDate } from "@/lib/format"
+import { formatDate, formatQuantity } from "@/lib/format"
 import { fieldLabel, sectionLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
 import { ArnText } from "@/components/ui/arn-link"
@@ -463,7 +463,7 @@ function PasswordPolicyCard({ pool, poolId }: { pool: PoolSummary; poolId: strin
             <PolicyRow label="Require symbols" value={current.requireSymbols ? "Yes" : "No"} />
             <PolicyRow
               label="Temp password validity"
-              value={`${current.temporaryPasswordValidityDays} day${current.temporaryPasswordValidityDays !== 1 ? "s" : ""}`}
+              value={formatQuantity(current.temporaryPasswordValidityDays, "day")}
             />
           </DefinitionList>
         )}
@@ -786,7 +786,7 @@ function SelfRegistrationCard({ pool, poolId }: { pool: PoolSummary; poolId: str
             />
             <PolicyRow
               label="Unused account expiry"
-              value={`${current.unusedAccountValidityDays} day${current.unusedAccountValidityDays !== 1 ? "s" : ""}`}
+              value={formatQuantity(current.unusedAccountValidityDays, "day")}
             />
           </DefinitionList>
         )}
