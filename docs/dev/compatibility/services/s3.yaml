@@ -2,7 +2,7 @@ service: s3
 status: in_progress
 priority: p0
 reference_policy: aws_docs_only_unless_user_approves_real_aws
-last_updated: 2026-09-23
+last_updated: 2026-09-26
 protocols: [rest_xml]
 implementation: [internal/services/s3]
 integration_tests: [tests/integration/s3]
@@ -845,6 +845,7 @@ findings:
     - CloudFormation AWS::S3::Bucket uses the S3 handlers for lifecycle, versioning, notifications, encryption, tags, CORS, and website configuration.
     - GetObject, GetObjectTagging and CopyObject's source lookup now answer NoSuchBucket for a bucket that does not exist, instead of NoSuchKey (#1635); HeadObject is wire-identical either way per AWS's own documented HEAD limitation.
     - DeleteObject and DeleteObjects honour If-Match, so a conditional delete no longer silently succeeds; a mismatch is 412 PreconditionFailed (per-key for DeleteObjects) and a missing key is 404 NoSuchKey rather than DeleteObject's usual idempotent 204 (#2037).
+    - Buckets named after a root the router shares between services — tags, applications, every S3 Tables root and iceberg — round-trip through the SDK, unsigned path-style and virtual-hosted; they were read as the wrong bucket, or answered by AppRegistry (#2098, tests/integration/router/shared_root_buckets_test.go).
   remaining_gaps:
     - S3 error documents omit HostId, which real AWS sends on every error. Not specific to InvalidRange; belongs in a change against the whole REST-XML envelope rather than one operation (noted while fixing #1864).
     - Bucket policies are stored and returned but never evaluated, so a policy authorises and denies nothing.

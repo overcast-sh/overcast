@@ -180,8 +180,14 @@ func detectService(r *http.Request, body ...[]byte) string {
 		// which resolves the route by the same signal. AppRegistry stays the
 		// answer for its own "servicecatalog" scope and for unsigned callers,
 		// which is what the web UI sends.
-		if svc := serviceFromAuthCredential(r); svc == "appconfig" {
+		//
+		// An S3-signed request is S3's: "applications" is a legal bucket name,
+		// and the router sends such a request there (sharedRoots, #2098).
+		switch svc := serviceFromAuthCredential(r); {
+		case svc == "appconfig":
 			return "appconfig"
+		case SignedForS3API(r, svc):
+			return "s3"
 		}
 		return "appregistry"
 	case r.URL.Path == "/configurationsessions":

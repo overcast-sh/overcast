@@ -1087,6 +1087,16 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		}
 	}
 
+	// ---- Shared roots ----------------------------------------------------------
+	// /applications, /tags, the S3 Tables roots and /iceberg below are each
+	// shared by more than one service, so the main router owns them and
+	// dispatches at request time. Every one is also a legal S3 bucket name, so
+	// they are mounted through sharedRoots, which sends an S3-signed request,
+	// and anything a dispatcher does not give to a service, to S3 on the whole
+	// request path (#2098). /v2/apis and /v1/tags need none of it: "v1" and
+	// "v2" are too short to be bucket names.
+	shared := newSharedRoots(r, operationRegistry, s3Router)
+
 	// ---- /applications service dispatch ------------------------------------
 	// AppConfig and Service Catalog AppRegistry both model the /applications
 	// tree, and the two overlap exactly where it hurts: POST /applications and
@@ -1105,23 +1115,17 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// error body at all. A chi sub-router owns its whole subtree, and that is
 	// the mechanism that made #854 silent in the first place.
 	{
-		applicationsFallback := restFallback(operationRegistry, s3Router)
 		var appconfigApps, appregistryApps chi.Router
 		if registeredForTest(cfg, "appconfig") {
-			appconfigApps = appconfigSvc.ApplicationsRouter()
-			delegateUnmatched(appconfigApps, applicationsFallback)
+			appconfigApps = shared.delegate(appconfigSvc.ApplicationsRouter())
 		}
 		if registeredForTest(cfg, "appregistry") {
-			appregistryApps = appregistrySvc.ApplicationsRouter()
-			delegateUnmatched(appregistryApps, applicationsFallback)
+			appregistryApps = shared.delegate(appregistrySvc.ApplicationsRouter())
 		}
 		dispatchMounts = recordDispatchMount(dispatchMounts, "/applications", "appconfig", appconfigApps)
 		dispatchMounts = recordDispatchFallback(dispatchMounts, "/applications", "appregistry", appregistryApps)
 		if appconfigApps != nil || appregistryApps != nil {
-			r.Route("/applications", func(sub chi.Router) {
-				sub.HandleFunc("/*", applicationsDispatch(appconfigApps, appregistryApps))
-				sub.HandleFunc("/", applicationsDispatch(appconfigApps, appregistryApps))
-			})
+			shared.mount("/applications", applicationsDispatch(appconfigApps, appregistryApps))
 		}
 	}
 
@@ -1134,32 +1138,22 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// else (unsigned traffic, S3-signed traffic, any other scope) reaches
 	// exactly the restFallback the "/*" route below would have given it, so a
 	// bucket named "tables" keeps working as it did before S3 Tables existed.
-	{
-		s3Fallback := wholePath(restFallback(operationRegistry, s3Router))
-		if registeredForTest(cfg, "s3tables") {
-			roots := s3tablesSvc.RootRouters()
-			for _, root := range s3tables.Roots {
-				sub := roots[root]
-				delegateUnmatched(sub, s3Fallback)
-				dispatchMounts = recordDispatchMount(dispatchMounts, root, "s3tables", sub)
-				dispatch := signingNameDispatch("s3tables", sub, s3Fallback)
-				// "/*" alone: it also matches the bare root, and a separate "/"
-				// would register "/namespaces", "/tables" and "/tag", paths no
-				// model binds (only their children are operations).
-				r.Route(root, func(m chi.Router) {
-					m.HandleFunc("/*", dispatch)
-				})
-			}
-			// The Iceberg REST catalog, which AWS serves under /iceberg on
-			// the same endpoint. "iceberg" is a legal bucket name too, so it is
-			// dispatched the same way. It is no model's binding, so it is not
-			// recorded as a dispatch mount; its unsigned twin lives under
-			// /_overcast/ (see s3tables.Service.RegisterRoutes).
-			icebergDispatch := signingNameDispatch("s3tables", s3tablesSvc.IcebergRouter(), s3Fallback)
-			r.Route(s3tables.IcebergRoot, func(m chi.Router) {
-				m.HandleFunc("/*", icebergDispatch)
-			})
+	if registeredForTest(cfg, "s3tables") {
+		roots := s3tablesSvc.RootRouters()
+		for _, root := range s3tables.Roots {
+			sub := shared.delegate(roots[root])
+			dispatchMounts = recordDispatchMount(dispatchMounts, root, "s3tables", sub)
+			// mount registers "/*" alone, which also matches the bare root; a
+			// separate "/" would register "/namespaces", "/tables" and "/tag",
+			// paths no model binds (only their children are operations).
+			shared.mount(root, signingNameDispatch("s3tables", sub, shared.s3))
 		}
+		// The Iceberg REST catalog, which AWS serves under /iceberg on the
+		// same endpoint. "iceberg" is a legal bucket name too, so it is
+		// dispatched the same way. It is no model's binding, so it is not
+		// recorded as a dispatch mount; its unsigned twin lives under
+		// /_overcast/ (see s3tables.Service.RegisterRoutes).
+		shared.mount(s3tables.IcebergRoot, signingNameDispatch("s3tables", s3tablesSvc.IcebergRouter(), shared.s3))
 	}
 
 	// ---- /v1/tags service dispatch -----------------------------------------
@@ -1250,9 +1244,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "backup", routes)
 		}
 		if len(tagRouters) > 0 {
-			r.Route("/tags", func(sub chi.Router) {
-				sub.HandleFunc("/*", tagsDispatch(tagRouters, restFallback(operationRegistry, s3Router)))
-			})
+			shared.mount("/tags", tagsDispatch(tagRouters, shared.s3))
 		}
 	}
 
@@ -1819,25 +1811,6 @@ func writeNotImplemented(w http.ResponseWriter, r *http.Request, claim awsapi.Cl
 // after every explicit service route, so a modeled binding reaches it only
 // when no implementation or disabled-service route claimed the request. S3 is
 // then the sole remaining legitimate catch-all.
-// s3ControlAccountHeader is sent by S3 Control on every operation and never by
-// S3 itself. It is what separates the two APIs, which share a signing name.
-const s3ControlAccountHeader = "X-Amz-Account-Id"
-
-// isS3APISigningName reports whether a SigV4 credential scope belongs to a
-// service that speaks the S3 object API itself, and whose traffic must
-// therefore reach S3's routes. Object Lambda and S3 Express are S3 under
-// another signing name.
-//
-// "s3-outposts" is deliberately absent. It signs the separate s3outposts
-// control API, whose modeled paths cannot be mistaken for an object path.
-func isS3APISigningName(credentialService string) bool {
-	switch strings.ToLower(credentialService) {
-	case "s3", "s3-object-lambda", "s3express":
-		return true
-	}
-	return false
-}
-
 // hasBearerAuthorization reports whether the caller authenticated with a bearer
 // token rather than SigV4. S3 has no bearer-token mode, so for an API modeled
 // without an aws.auth#sigv4 name this is the only evidence that separates it
@@ -1857,14 +1830,11 @@ func addressesNonS3(r *http.Request, credentialService string) bool {
 		// Unsigned traffic is S3's, unless it presents a bearer token — an auth
 		// scheme S3 has no mode for.
 		return hasBearerAuthorization(r)
-	case isS3APISigningName(credentialService):
-		// An S3-family scope is S3's, unless the caller also names the account
-		// that only S3 Control addresses.
-		return r.Header.Get(s3ControlAccountHeader) != ""
 	default:
-		// Every other AWS signing name: no SDK signs an S3 request as another
-		// service, so the scope alone settles it.
-		return true
+		// An S3-family scope is S3's, unless the caller also names the account
+		// that only S3 Control addresses. Every other AWS signing name: no SDK
+		// signs an S3 request as another service, so the scope alone settles it.
+		return !middleware.SignedForS3API(r, credentialService)
 	}
 }
 
@@ -2137,38 +2107,6 @@ func signingNameDispatch(signingName string, owner, fallback http.Handler) http.
 		}
 		http.NotFound(w, r)
 	}
-}
-
-// wholePath makes a handler reached from inside a chi mount route on the full
-// request path again. A mount shifts chi's routing path past its prefix, which
-// the next router then matches against; S3's router has absolute patterns, so
-// handed the shifted path it would read "/tables/key" as the object "key" in a
-// bucket that does not exist. Clearing RoutePath makes chi fall back to the
-// request URL, exactly as it does for the unmounted "/*" route.
-func wholePath(h http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if rctx := chi.RouteContext(r.Context()); rctx != nil {
-			rctx.RoutePath = ""
-		}
-		h.ServeHTTP(w, r)
-	}
-}
-
-// delegateUnmatched makes a dispatched sub-router hand requests it does not
-// serve back to the main router's REST fallback, instead of answering chi's
-// own bare 404 or 405.
-//
-// A chi sub-router owns its whole subtree: a path it does not match hits *its*
-// NotFound and never reaches the parent's "/*". That is why the modeled
-// AppConfig operations Overcast does not implement answered a bodiless 404
-// under AppRegistry's /applications rather than the generated registry's
-// protocol-correct 501 (docs/plans/manifest-enforcement.md records the fault).
-// MethodNotAllowed matters as much as NotFound: the model binds several
-// unimplemented operations to a method on a path that *is* registered, and chi
-// answers those 405.
-func delegateUnmatched(sub chi.Router, fallback http.HandlerFunc) {
-	sub.NotFound(fallback)
-	sub.MethodNotAllowed(fallback)
 }
 
 // tagsDispatch returns a handler that dispatches tag-route requests
