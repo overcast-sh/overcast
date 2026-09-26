@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1611,
+  "total_ops": 1613,
   "services": [
     {
       "service": "s3",
@@ -8251,7 +8251,8 @@
         {
           "operation": "ListDataCatalogs",
           "category": "DataCatalogs",
-          "status": "✅ Supported"
+          "status": "✅ Supported",
+          "notes": "As on AWS, s3tablescatalog/\u003cbucket\u003e catalogs are not listed unless registered"
         },
         {
           "operation": "UpdateDataCatalog",
@@ -8269,25 +8270,25 @@
           "operation": "GetDatabase",
           "category": "DataCatalogs",
           "status": "⚠️ Partial",
-          "notes": "Reads the Glue Data Catalog; LAMBDA and HIVE catalogs are not readable"
+          "notes": "Reads the Glue Data Catalog, s3tablescatalog/\u003cbucket\u003e included; LAMBDA and HIVE catalogs are not readable"
         },
         {
           "operation": "ListDatabases",
           "category": "DataCatalogs",
           "status": "⚠️ Partial",
-          "notes": "Reads the Glue Data Catalog; paginated"
+          "notes": "Reads the Glue Data Catalog, s3tablescatalog/\u003cbucket\u003e included; paginated"
         },
         {
           "operation": "GetTableMetadata",
           "category": "DataCatalogs",
           "status": "⚠️ Partial",
-          "notes": "Reads the Glue Data Catalog"
+          "notes": "Reads the Glue Data Catalog, s3tablescatalog/\u003cbucket\u003e included"
         },
         {
           "operation": "ListTableMetadata",
           "category": "DataCatalogs",
           "status": "⚠️ Partial",
-          "notes": "Reads the Glue Data Catalog; Expression is a name regex; paginated"
+          "notes": "Reads the Glue Data Catalog, s3tablescatalog/\u003cbucket\u003e included; Expression is a name regex; paginated"
         },
         {
           "operation": "TagResource",
@@ -8537,9 +8538,21 @@
     {
       "service": "glue",
       "display_name": "Glue",
-      "total_ops": 32,
-      "implemented_ops": 32,
+      "total_ops": 34,
+      "implemented_ops": 34,
       "operations": [
+        {
+          "operation": "GetCatalog",
+          "category": "Catalogs",
+          "status": "✅ Supported",
+          "notes": "The account's catalog, s3tablescatalog and one child per S3 Tables table bucket"
+        },
+        {
+          "operation": "GetCatalogs",
+          "category": "Catalogs",
+          "status": "⚠️ Partial",
+          "notes": "ParentCatalogId, IncludeRoot and Recursive; HasDatabases is not applied"
+        },
         {
           "operation": "CreateDatabase",
           "category": "Databases",
@@ -8550,13 +8563,13 @@
           "operation": "GetDatabase",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Returns the full database with CreateTime"
+          "notes": "Returns the full database with CreateTime; an S3 Tables namespace in s3tablescatalog/\u003cbucket\u003e"
         },
         {
           "operation": "GetDatabases",
           "category": "Databases",
           "status": "✅ Supported",
-          "notes": "Paginated with MaxResults and NextToken"
+          "notes": "Paginated; s3tablescatalog/\u003cbucket\u003e lists the bucket's namespaces"
         },
         {
           "operation": "UpdateDatabase",
@@ -8580,13 +8593,13 @@
           "operation": "GetTable",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Returns the full table with CreateTime, UpdateTime and VersionId"
+          "notes": "Returns the full table; an S3 Tables table in s3tablescatalog/\u003cbucket\u003e"
         },
         {
           "operation": "GetTables",
           "category": "Tables",
           "status": "✅ Supported",
-          "notes": "Expression is a name regex; paginated"
+          "notes": "Expression is a name regex; paginated; s3tablescatalog/\u003cbucket\u003e included"
         },
         {
           "operation": "UpdateTable",

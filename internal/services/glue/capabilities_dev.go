@@ -7,13 +7,19 @@ import "github.com/overcast-sh/overcast/internal/capabilities"
 func init() {
 	const svc = "glue"
 	capabilities.Default.Register(
+		// Catalogs
+		capabilities.Capability{Service: svc, Operation: "GetCatalog", Category: "Catalogs", Status: capabilities.StatusSupported,
+			Notes: "The account's catalog, s3tablescatalog and one child per S3 Tables table bucket"},
+		capabilities.Capability{Service: svc, Operation: "GetCatalogs", Category: "Catalogs", Status: capabilities.StatusPartial,
+			Notes: "ParentCatalogId, IncludeRoot and Recursive; HasDatabases is not applied"},
+
 		// Databases
 		capabilities.Capability{Service: svc, Operation: "CreateDatabase", Category: "Databases", Status: capabilities.StatusSupported,
 			Notes: "Keeps the whole DatabaseInput and Tags; duplicate names are AlreadyExistsException"},
 		capabilities.Capability{Service: svc, Operation: "GetDatabase", Category: "Databases", Status: capabilities.StatusSupported,
-			Notes: "Returns the full database with CreateTime"},
+			Notes: "Returns the full database with CreateTime; an S3 Tables namespace in s3tablescatalog/<bucket>"},
 		capabilities.Capability{Service: svc, Operation: "GetDatabases", Category: "Databases", Status: capabilities.StatusSupported,
-			Notes: "Paginated with MaxResults and NextToken"},
+			Notes: "Paginated; s3tablescatalog/<bucket> lists the bucket's namespaces"},
 		capabilities.Capability{Service: svc, Operation: "UpdateDatabase", Category: "Databases", Status: capabilities.StatusSupported,
 			Notes: "Replaces the definition; renaming is refused"},
 		capabilities.Capability{Service: svc, Operation: "DeleteDatabase", Category: "Databases", Status: capabilities.StatusSupported,
@@ -23,9 +29,9 @@ func init() {
 		capabilities.Capability{Service: svc, Operation: "CreateTable", Category: "Tables", Status: capabilities.StatusPartial,
 			Notes: "Keeps the whole TableInput; OpenTableFormatInput.IcebergInput writes no Iceberg metadata"},
 		capabilities.Capability{Service: svc, Operation: "GetTable", Category: "Tables", Status: capabilities.StatusSupported,
-			Notes: "Returns the full table with CreateTime, UpdateTime and VersionId"},
+			Notes: "Returns the full table; an S3 Tables table in s3tablescatalog/<bucket>"},
 		capabilities.Capability{Service: svc, Operation: "GetTables", Category: "Tables", Status: capabilities.StatusSupported,
-			Notes: "Expression is a name regex; paginated"},
+			Notes: "Expression is a name regex; paginated; s3tablescatalog/<bucket> included"},
 		capabilities.Capability{Service: svc, Operation: "UpdateTable", Category: "Tables", Status: capabilities.StatusPartial,
 			Notes: "VersionId concurrency and archiving; UpdateOpenTableFormatInput is not implemented"},
 		capabilities.Capability{Service: svc, Operation: "DeleteTable", Category: "Tables", Status: capabilities.StatusSupported,

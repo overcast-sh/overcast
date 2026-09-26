@@ -8,7 +8,9 @@
 // Parameters, PartitionKeys and the rest — because query engines (Trino's
 // Glue metastore, the Iceberg Glue catalogs) read them back.
 //
-// Catalog is the read-only view other services use.
+// Catalog is the read-only view other services use, and Catalogs resolves a
+// CatalogId to it. s3tablescatalog, S3 Tables' federated catalog, is read
+// live from S3 Tables (federation.go).
 package glue
 
 import (
@@ -40,6 +42,8 @@ type Service struct {
 	typedOp map[string]op.Operation
 	// bus receives table and partition changes; nil until InitBus.
 	bus *events.Bus
+	// s3tables is what s3tablescatalog is read from; nil until InitS3Tables.
+	s3tables events.S3TablesCatalog
 
 	// Locking. A write takes cascadeMu shared and then its record's stripe
 	// in locks (writeLock); a delete that cascades — DeleteDatabase,

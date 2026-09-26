@@ -36,6 +36,19 @@ func errPartitionNotFound() *protocol.AWSError {
 	return glueError(codeEntityNotFound, "Cannot find partition.")
 }
 
+func errCatalogNotFound(id string) *protocol.AWSError {
+	return glueError(codeEntityNotFound, "Catalog %s not found.", id)
+}
+
+// errNotImplemented is a 501 saying what Overcast does not implement.
+func errNotImplemented(format string, args ...any) *protocol.AWSError {
+	return &protocol.AWSError{
+		Code:       protocol.ErrNotImplemented.Code,
+		Message:    fmt.Sprintf(format, args...),
+		HTTPStatus: protocol.ErrNotImplemented.HTTPStatus,
+	}
+}
+
 func errInternal(err error) *protocol.AWSError {
 	return protocol.Wrap(protocol.ErrInternalError, err)
 }
