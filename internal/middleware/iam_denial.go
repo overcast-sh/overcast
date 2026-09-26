@@ -45,7 +45,8 @@ func writeIAMAccessDenied(w http.ResponseWriter, r *http.Request, op iamOperatio
 // writeRESTXMLAccessDenied answers a denied REST-XML request. S3 is modeled
 // with noErrorWrapping, so its error is a bare <Error>; every other REST-XML
 // service (CloudFront, Route 53) wraps it in <ErrorResponse>, and an SDK
-// reading a bare <Error> from one of them finds no error code at all.
+// reading a bare <Error> from one of them finds no error code at all. The
+// registry does not carry noErrorWrapping yet, so S3 is named here (#2265).
 func writeRESTXMLAccessDenied(w http.ResponseWriter, r *http.Request, op iamOperation) {
 	if op.service == "s3" {
 		protocol.WriteXMLError(w, r, accessDenied("Access Denied"))
