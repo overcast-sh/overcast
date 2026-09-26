@@ -53136,3 +53136,7 @@ var modelServices = []string{
 	"workspaces-web",
 	"xray",
 }
+
+var noErrorWrappingServices = []string{
+	"s3",
+}

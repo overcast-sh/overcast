@@ -68,6 +68,7 @@ name a stack output hands you is one you can dial. Set
 | Continuous deployment | `SingleWeight` and `SingleHeader` policies actually split traffic to the staging distribution |
 | Errors and geo | `CustomErrorResponses`, `ViewerProtocolPolicy`, and geo restriction on `CloudFront-Viewer-Country` |
 | Access logs | Written to the configured S3 bucket in W3C format when `Logging.Enabled` |
+| API errors | CloudFront's `ErrorResponse` envelope, not S3's bare `<Error>`. This includes the `501` for an operation Overcast has not implemented, a credential-scope mismatch, and a SigV4 rejection |
 
 ## Differences from AWS
 

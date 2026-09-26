@@ -132,6 +132,24 @@ func TestWriteRegistryIndexes_marksCollidingServicesAmbiguous(t *testing.T) {
 	}
 }
 
+func TestWriteRegistryIndexes_listsNoErrorWrappingServices(t *testing.T) {
+	// Given: one rest-xml service that sets noErrorWrapping and one that does not.
+	operations := []operation{
+		{Service: "wrapped", Name: "GetThing", Protocol: "RESTXML", HTTPMethod: "GET", URI: "/things/{id}"},
+		{Service: "bare", Name: "GetObject", Protocol: "RESTXML", HTTPMethod: "GET", URI: "/{Bucket}/{Key+}", NoErrorWrapping: true},
+		{Service: "bare", Name: "PutObject", Protocol: "RESTXML", HTTPMethod: "PUT", URI: "/{Bucket}/{Key+}", NoErrorWrapping: true},
+	}
+	var output bytes.Buffer
+
+	// When: the generator writes its immutable lookup indexes.
+	writeRegistryIndexes(&output, operations)
+
+	// Then: only the service that sets the trait is listed, once.
+	if want := "var noErrorWrappingServices = []string{\n\t\"bare\",\n}"; !strings.Contains(output.String(), want) {
+		t.Errorf("generated registry index missing %q:\n%s", want, output.String())
+	}
+}
+
 func TestGenerateManifest_rejectsEmptyModels(t *testing.T) {
 	if _, err := generateManifest(t.TempDir(), "test-revision"); err == nil {
 		t.Fatal("generateManifest() unexpectedly succeeded")

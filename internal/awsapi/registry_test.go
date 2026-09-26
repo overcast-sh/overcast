@@ -72,6 +72,41 @@ func TestRegistryClaimREST_modeledOperation(t *testing.T) {
 	}
 }
 
+// TestErrorProfileFor_readsNoErrorWrapping pins the rest-xml envelope to the
+// models' noErrorWrapping trait: S3 sets it and answers a bare <Error>; the
+// other rest-xml services do not, and wrap theirs in <ErrorResponse> (#2265).
+func TestErrorProfileFor_readsNoErrorWrapping(t *testing.T) {
+	for service, want := range map[string]ErrorProfile{
+		"s3":         ErrorProfileBareXML,
+		"cloudfront": ErrorProfileRESTXML,
+		"route-53":   ErrorProfileRESTXML,
+		"s3-control": ErrorProfileRESTXML,
+		"":           ErrorProfileRESTXML,
+	} {
+		if got := ErrorProfileFor(ProtocolRESTXML, service); got != want {
+			t.Errorf("ErrorProfileFor(restXml, %q) = %v, want %v", service, got, want)
+		}
+	}
+	if got := ErrorProfileFor(ProtocolRESTJSON, "s3"); got != ErrorProfileJSON {
+		t.Errorf("ErrorProfileFor(restJson1, s3) = %v, want JSON: the trait belongs to restXml", got)
+	}
+}
+
+// TestRegistryClaimREST_wrappedRESTXMLProfile holds a CloudFront and a Route 53
+// claim to the wrapped envelope their SDKs decode.
+func TestRegistryClaimREST_wrappedRESTXMLProfile(t *testing.T) {
+	registry := NewRegistry()
+	for _, path := range []string{"/2020-05-31/distribution", "/2013-04-01/hostedzone"} {
+		claim, ok := registry.ClaimREST("GET", path)
+		if !ok {
+			t.Fatalf("ClaimREST(GET %s) matched nothing", path)
+		}
+		if claim.ErrorProfile != ErrorProfileRESTXML {
+			t.Errorf("ClaimREST(GET %s) error profile = %v, want wrapped REST XML", path, claim.ErrorProfile)
+		}
+	}
+}
+
 func TestRegistryClaimREST_greedyLabelWithSuffix(t *testing.T) {
 	// Given: a modeled REST URI whose greedy label is followed by a literal.
 	registry := NewRegistry()
@@ -129,7 +164,7 @@ func TestSigningNameErrorProfile(t *testing.T) {
 	// Given: signing names of a restJson1 service, a restXml one, and no service
 	// When: each is looked up
 	// Then: each gets its protocol's envelope, and the non-name none
-	for name, want := range map[string]ErrorProfile{"s3tables": ErrorProfileJSON, "lambda": ErrorProfileJSON, "route53": ErrorProfileXML, "Route53": ErrorProfileXML} {
+	for name, want := range map[string]ErrorProfile{"s3tables": ErrorProfileJSON, "lambda": ErrorProfileJSON, "route53": ErrorProfileRESTXML, "Route53": ErrorProfileRESTXML} {
 		if got, ok := SigningNameErrorProfile(name); !ok || got != want {
 			t.Errorf("SigningNameErrorProfile(%q) = %v, %v; want %v", name, got, ok, want)
 		}
@@ -150,7 +185,7 @@ func TestSigningNameErrorProfile_isUnambiguous(t *testing.T) {
 		if name == "" || name == "s3" {
 			continue
 		}
-		profile := restErrorProfile(op.Protocol)
+		profile := ErrorProfileFor(op.Protocol, op.ModelService)
 		if prior, ok := seen[name]; ok && prior != profile {
 			t.Errorf("signing name %q has bindings in both REST protocols (%s %s)", name, op.ModelService, op.Operation)
 		}

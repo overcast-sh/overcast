@@ -28,11 +28,7 @@ func Recovery(logger *zap.Logger) func(http.Handler) http.Handler {
 					)
 					// Write a well-formed AWS error so the SDK gets a
 					// parseable response rather than an empty connection close.
-					if detectService(r) == "s3" {
-						protocol.WriteXMLError(w, r, protocol.ErrInternalError)
-					} else {
-						protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-					}
+					writeUnroutedError(w, r, protocol.ErrInternalError)
 				}
 			}()
 			next.ServeHTTP(w, r)

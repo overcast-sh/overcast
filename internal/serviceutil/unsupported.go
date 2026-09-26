@@ -22,24 +22,7 @@ var operationRegistry = awsapi.NewRegistry()
 // The router uses this for operations no service handler claimed; a service
 // that dispatches its own operations uses NotImplementedTarget.
 func WriteNotImplemented(w http.ResponseWriter, r *http.Request, claim awsapi.Claim) {
-	switch claim.ErrorProfile {
-	case awsapi.ErrorProfileJSON:
-		protocol.NotImplementedJSON(w, r)
-	case awsapi.ErrorProfileEC2QueryXML:
-		protocol.NotImplementedEC2QueryXML(w, r)
-	case awsapi.ErrorProfileQueryXML:
-		protocol.NotImplementedQueryXML(w, r)
-	case awsapi.ErrorProfileXML:
-		protocol.NotImplementedXML(w, r)
-	case awsapi.ErrorProfileRPCV2CBOR:
-		codec.RPCv2CBOR.WriteError(w, r, protocol.ErrNotImplemented)
-	case awsapi.ErrorProfileRPCV2JSON:
-		codec.RPCv2JSON.WriteError(w, r, protocol.ErrNotImplemented)
-	default:
-		// Keep a JSON fallback for a malformed zero-value Claim while every
-		// declared ErrorProfile remains explicit for exhaustive checking.
-		protocol.NotImplementedJSON(w, r)
-	}
+	WriteError(w, r, claim.ErrorProfile, protocol.ErrNotImplemented)
 }
 
 // NotImplementedTarget answers an X-Amz-Target that names a modeled AWS

@@ -76,7 +76,7 @@ before either authority is reached, so it is unaffected either way.
 | Listing | `ListResourceRecordSets` returns records in DNS order (names compared with labels reversed) and paginates on `name`/`type`/`identifier`/`maxitems` |
 | Deletion | `DeleteHostedZone` returns `HostedZoneNotEmpty` while non-default records exist; a successful delete cascades the default records and the zone's tags |
 | Identifiers | Zone and change IDs are stored and returned in AWS's path format — `/hostedzone/Z123…`, `/change/C123…` |
-| Errors | Route 53's `ErrorResponse` envelope (`Type`/`Code`/`Message`), not S3's bare `<Error>` shape |
+| Errors | Route 53's `ErrorResponse` envelope (`Type`/`Code`/`Message`), not S3's bare `<Error>` shape. This includes the `501` for an operation Overcast has not implemented, a credential-scope mismatch, and a SigV4 rejection |
 | Health checks | Configuration is stored with AWS's defaults and versioned by `UpdateHealthCheck` |
 
 Route 53 is a global service here, and domain and record names are

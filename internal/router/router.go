@@ -1842,27 +1842,11 @@ func scopeMismatchError(expectedSigningName string) *protocol.AWSError {
 }
 
 // writeScopeMismatch answers a scope-mismatched modeled binding in the error
-// envelope that operation's wire protocol expects — the same per-profile
-// dispatch writeNotImplemented uses, so a caller sees one consistent shape
-// from a service regardless of which of its errors it receives.
+// envelope that operation's wire protocol expects — the same envelope
+// writeNotImplemented uses, so a caller sees one consistent shape from a
+// service regardless of which of its errors it receives.
 func writeScopeMismatch(w http.ResponseWriter, r *http.Request, claim awsapi.Claim) {
-	aerr := scopeMismatchError(claim.SigningName)
-	switch claim.ErrorProfile {
-	case awsapi.ErrorProfileJSON:
-		protocol.WriteJSONError(w, r, aerr)
-	case awsapi.ErrorProfileEC2QueryXML:
-		protocol.WriteEC2QueryXMLError(w, r, aerr)
-	case awsapi.ErrorProfileQueryXML:
-		protocol.WriteQueryXMLError(w, r, aerr)
-	case awsapi.ErrorProfileXML:
-		protocol.WriteXMLError(w, r, aerr)
-	case awsapi.ErrorProfileRPCV2CBOR:
-		codec.RPCv2CBOR.WriteError(w, r, aerr)
-	case awsapi.ErrorProfileRPCV2JSON:
-		codec.RPCv2JSON.WriteError(w, r, aerr)
-	default:
-		protocol.WriteJSONError(w, r, aerr)
-	}
+	serviceutil.WriteError(w, r, claim.ErrorProfile, scopeMismatchError(claim.SigningName))
 }
 
 // v2APIsDispatch returns a handler that dispatches /v2/apis requests to either
