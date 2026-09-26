@@ -66,6 +66,9 @@ export function DiffViewer({
           // Wide enough for two JSON documents at 1024px; below that Monaco
           // stacks the sides, which reads better than two slivers.
           renderSideBySideInlineBreakpoint: 720,
+          // A table input is mostly unchanged between versions: fold the
+          // runs that match so the change is on screen without scrolling.
+          hideUnchangedRegions: { enabled: true, contextLineCount: 3 },
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           fontSize: 12,

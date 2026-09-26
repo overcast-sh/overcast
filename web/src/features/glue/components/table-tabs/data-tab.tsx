@@ -16,6 +16,7 @@ import { gluePreviewQueryOptions } from "../../data"
 import { tableLocation } from "../../table-format"
 import { QueryInAthenaButton } from "../query-in-athena"
 import { LocationObjects } from "./location-objects"
+import { ResultLocationAdvisory } from "./result-location-advisory"
 
 /**
  * The table's first rows. With the query engine running they come from
@@ -62,6 +63,7 @@ function AthenaPreview({ database, table }: { database: string; table: string })
 
   return (
     <div className="flex flex-col gap-3">
+      <ResultLocationAdvisory />
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" busy={preview.isFetching} busyLabel="Running" onClick={run}>
           <Play className="h-3.5 w-3.5" />

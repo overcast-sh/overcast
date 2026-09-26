@@ -92,7 +92,9 @@ export function DatabaseDetail({
             value={db.LocationUri && <S3UriLink uri={db.LocationUri} />}
           />
           <Definition label="Catalog" value={db.CatalogId} />
-          <Definition label="Description" value={db.Description} variant="prose" full />
+          {db.Description && (
+            <Definition label="Description" value={db.Description} variant="prose" full />
+          )}
         </DefinitionCard>
       ) : (
         <SkeletonRows rows={2} noun="database" />

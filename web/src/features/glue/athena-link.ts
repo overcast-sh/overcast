@@ -1,12 +1,13 @@
+import { ATHENA_TAB } from "@/components/ui/arn-routes"
 import { trinoIdentifier } from "@/lib/sql-quote"
 
 /**
- * Links from the Glue pages into the Athena editor.
+ * Links from the Glue pages into Athena.
  *
  * TODO(#2072): the Athena workspace publishes `athenaEditorLink` in
  * `@/features/athena/links`, with this signature and URL contract. When it
  * lands, import it from there and delete the local copy below. Until then
- * `/athena` declares no search params, so the link is typed the way
+ * `/athena` declares no search params, so both links here are typed the way
  * `ResolvedRoute` types a route to a page that does not yet.
  */
 
@@ -25,6 +26,14 @@ export function athenaEditorLink({ catalog, database, sql }: AthenaEditorLinkPar
   search: Record<string, string | undefined>
 } {
   return { to: "/athena", search: { tab: "editor", catalog, database, sql } }
+}
+
+/** The Athena workgroups tab, filtered to one workgroup: the link an ARN to it resolves to. */
+export function athenaWorkGroupLink(name: string): {
+  to: string
+  search: Record<string, string | undefined>
+} {
+  return { to: "/athena", search: { tab: ATHENA_TAB.workgroups, q: name } }
 }
 
 /** The first rows of a table, as Athena's own *Preview table* writes it. */

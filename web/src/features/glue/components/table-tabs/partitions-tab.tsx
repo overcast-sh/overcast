@@ -11,6 +11,7 @@ import { gluePartitionsQueryOptions } from "../../data"
 import { AddPartitionDialog } from "./add-partition-dialog"
 import { DiscoverPartitionsButton } from "./discover-partitions-button"
 import { ExpressionFilter } from "./expression-filter"
+import { ResultLocationAdvisory } from "./result-location-advisory"
 
 interface PartitionsTabProps {
   table: Table
@@ -49,6 +50,7 @@ export function PartitionsTab({ table, expression, onExpressionChange }: Partiti
   const add = <CreateAction onClick={() => setAdding(true)}>Add partition</CreateAction>
   return (
     <div className="flex flex-col gap-3">
+      <ResultLocationAdvisory />
       <div className="flex flex-wrap items-start gap-2">
         <ExpressionFilter
           // Remounts on a change from outside (Clear filter, Back), so the box shows it.
@@ -62,50 +64,53 @@ export function PartitionsTab({ table, expression, onExpressionChange }: Partiti
         <DiscoverPartitionsButton database={database} table={name} />
         {add}
       </div>
-      <ResourceTable<Partition>
-        query={{
-          data: partitions.data,
-          isLoading: partitions.isLoading,
-          // A parse error is shown under the box, where it was typed.
-          error: expression ? undefined : partitions.error,
-        }}
-        noun="partitions"
-        rowKey={(p) => (p.Values ?? []).join("\u0000")}
-        defaultSort={{ id: "values", desc: false }}
-        isFiltered={expression !== ""}
-        onClearFilter={() => onExpressionChange("")}
-        filteredEmptyTitle="No matching partitions"
-        filteredEmptyDescription="No partition satisfies the expression."
-        emptyIcon={FolderTree}
-        emptyTitle="No partitions yet"
-        emptyDescription="Add one, or discover them: MSCK REPAIR TABLE registers every key=value/ folder under the location."
-        emptyAction={add}
-        columns={[
-          {
-            id: "values",
-            header: "Partition",
-            sortValue: (p) => (p.Values ?? []).join("/"),
-            cell: (p) => keys.map((k, i) => `${k}=${p.Values?.[i] ?? ""}`).join(" / "),
-          },
-          {
-            id: "location",
-            header: "Location",
-            interactive: true,
-            cell: (p) =>
-              p.StorageDescriptor?.Location ? (
-                <S3UriLink uri={p.StorageDescriptor.Location} />
-              ) : (
-                <span className="text-fg-subtle">—</span>
-              ),
-          },
-          {
-            id: "created",
-            header: "Created",
-            sortValue: (p) => p.CreationTime,
-            cell: (p) => formatDate(p.CreationTime),
-          },
-        ]}
-      />
+      {/* An expression the service could not parse has its error under the box,
+          where it was typed; a table beneath it would only repeat it as "no matches". */}
+      {!(expression && partitions.error) && (
+        <ResourceTable<Partition>
+          query={{
+            data: partitions.data,
+            isLoading: partitions.isLoading,
+            error: partitions.error,
+          }}
+          noun="partitions"
+          rowKey={(p) => (p.Values ?? []).join("\u0000")}
+          defaultSort={{ id: "values", desc: false }}
+          isFiltered={expression !== ""}
+          onClearFilter={() => onExpressionChange("")}
+          filteredEmptyTitle="No matching partitions"
+          filteredEmptyDescription="No partition satisfies the expression."
+          emptyIcon={FolderTree}
+          emptyTitle="No partitions yet"
+          emptyDescription="Add one, or discover them: MSCK REPAIR TABLE registers every key=value/ folder under the location."
+          emptyAction={add}
+          columns={[
+            {
+              id: "values",
+              header: "Partition",
+              sortValue: (p) => (p.Values ?? []).join("/"),
+              cell: (p) => keys.map((k, i) => `${k}=${p.Values?.[i] ?? ""}`).join(" / "),
+            },
+            {
+              id: "location",
+              header: "Location",
+              interactive: true,
+              cell: (p) =>
+                p.StorageDescriptor?.Location ? (
+                  <S3UriLink uri={p.StorageDescriptor.Location} />
+                ) : (
+                  <span className="text-fg-subtle">—</span>
+                ),
+            },
+            {
+              id: "created",
+              header: "Created",
+              sortValue: (p) => p.CreationTime,
+              cell: (p) => formatDate(p.CreationTime),
+            },
+          ]}
+        />
+      )}
       <AddPartitionDialog table={table} open={adding} onOpenChange={setAdding} />
     </div>
   )

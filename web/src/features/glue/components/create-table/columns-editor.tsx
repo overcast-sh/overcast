@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FieldLabel } from "@/components/ui/primitives"
 import { RowAction } from "@/components/ui/resource-list-page"
+import { cn } from "@/lib/utils"
 import { draftColumn, type DraftColumn } from "./draft-column"
 
 /** The Hive types offered as suggestions; any other type string is accepted as typed. */
@@ -58,7 +59,8 @@ export function ColumnsEditor({ label, columns, onChange, fixedNames }: ColumnsE
         <div key={column.id} className="grid grid-cols-[1fr_1fr_1.75rem] items-center gap-x-2">
           <Input
             aria-label={`${label} ${i + 1} name`}
-            className="h-8 font-mono text-xs"
+            // A fixed name reads as a fact, not a field waiting for input.
+            className={cn("h-8 font-mono text-xs", fixedNames && "bg-bg text-fg-muted")}
             value={column.name}
             readOnly={fixedNames}
             onChange={(e) => update(column.id, { name: e.target.value })}

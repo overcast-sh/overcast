@@ -54,7 +54,7 @@ export function TablesTable({ database, ...props }: TablesTableProps) {
           interactive: true,
           cell: (t) => {
             const location = tableLocation(t)
-            return location ? <S3UriLink uri={location} /> : <Muted />
+            return location ? <S3UriLink uri={location} className="whitespace-nowrap" /> : <Muted />
           },
         },
         {

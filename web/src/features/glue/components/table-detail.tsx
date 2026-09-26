@@ -40,9 +40,13 @@ const TAB_LABELS: Record<TableTab, string> = {
   properties: "Properties",
 }
 
+/**
+ * An Iceberg table keeps its partition spec in its own metadata, not as Glue
+ * partitions, so it gets the Iceberg tab in place of Partitions.
+ */
 function tabsFor(table: Table): TableTab[] {
-  const all = Object.keys(TAB_LABELS) as TableTab[]
-  return isIcebergTable(table) ? all : all.filter((t) => t !== "iceberg")
+  const skip: TableTab = isIcebergTable(table) ? "partitions" : "iceberg"
+  return (Object.keys(TAB_LABELS) as TableTab[]).filter((t) => t !== skip)
 }
 
 function Overview({ table }: { table: Table }) {
@@ -70,7 +74,9 @@ function Overview({ table }: { table: Table }) {
       <Definition label="Created" value={formatDate(table.CreateTime)} />
       <Definition label="Updated" value={formatDate(table.UpdateTime)} />
       <Definition label="Version" value={table.VersionId} />
-      <Definition label="Description" value={table.Description} variant="prose" full />
+      {table.Description && (
+        <Definition label="Description" value={table.Description} variant="prose" full />
+      )}
     </DefinitionCard>
   )
 }

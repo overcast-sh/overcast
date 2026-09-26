@@ -2,6 +2,7 @@ import {
   BatchGetNamedQueryCommand,
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
+  GetWorkGroupCommand,
   StartQueryExecutionCommand,
   paginateListNamedQueries,
   paginateListWorkGroups,
@@ -9,6 +10,7 @@ import {
   type NamedQuery,
   type QueryExecution,
   type StartQueryExecutionInput,
+  type WorkGroup,
   type WorkGroupSummary,
 } from "@aws-sdk/client-athena"
 import type { AthenaEngineStatus } from "@/types"
@@ -50,6 +52,11 @@ export const athena = {
       workGroups.map((wg) => athena.listNamedQueries(wg.Name ?? "")),
     )
     return perWorkGroup.flat()
+  },
+
+  getWorkGroup: async (name: string): Promise<WorkGroup> => {
+    const out = await awsClients.athena().send(new GetWorkGroupCommand({ WorkGroup: name }))
+    return out.WorkGroup ?? { Name: name }
   },
 
   // ─── Query executions ──────────────────────────────────────────────────

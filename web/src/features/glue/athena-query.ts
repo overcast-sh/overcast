@@ -10,6 +10,9 @@ import { athena } from "@/services/api"
  * watched as it runs.
  */
 
+/** The workgroup the Glue pages' queries run in: the service's own default. */
+export const QUERY_WORKGROUP = "primary"
+
 /** How often a query the page is waiting on is polled. */
 const POLL_MS = 250
 
@@ -44,7 +47,11 @@ export async function runQuery(
   context: QueryExecutionContext,
   signal?: AbortSignal,
 ): Promise<QueryExecution> {
-  const id = await athena.startQueryExecution({ QueryString: sql, QueryExecutionContext: context })
+  const id = await athena.startQueryExecution({
+    QueryString: sql,
+    QueryExecutionContext: context,
+    WorkGroup: QUERY_WORKGROUP,
+  })
   for (;;) {
     const execution = await athena.getQueryExecution(id)
     if (FINISHED.has(execution.Status?.State ?? "")) return execution

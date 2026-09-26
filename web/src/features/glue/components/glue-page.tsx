@@ -134,7 +134,7 @@ export function GluePage({ filter, onFilterChange, sort, onSortChange, wizard }:
             interactive: true,
             cell: (db) =>
               db.LocationUri ? (
-                <S3UriLink uri={db.LocationUri} />
+                <S3UriLink uri={db.LocationUri} className="whitespace-nowrap" />
               ) : (
                 <span className="text-fg-subtle">—</span>
               ),
