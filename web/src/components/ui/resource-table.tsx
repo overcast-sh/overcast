@@ -619,6 +619,11 @@ export function ResourceTable<T extends RowData, TVars = string>({
     onColumnVisibilityChange: handleVisibilityChange,
     onPaginationChange: handlePaginationChange,
     onExpandedChange: handleExpandedChange,
+    // Rows are identified by `rowKey`, so an open panel still names the right
+    // row when the data changes. v9's default resets expansion after the row
+    // model rebuilds on new data — which undid a `defaultExpanded` seed made
+    // as the rows first arrived, so a deep link to one row opened nothing.
+    autoResetExpanded: false,
     // Without this every row reports `getCanExpand() === false`: v9 answers it
     // from `subRows`, which a flat resource list never has.
     getRowCanExpand: (row) => canExpandRef.current?.(row.original) ?? true,

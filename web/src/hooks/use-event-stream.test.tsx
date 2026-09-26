@@ -239,7 +239,11 @@ describe("useEventStreamSubscription > data-lake events", () => {
   // makes stale.
   it.each([
     ["athena:QueryStateChanged", "athena", [athenaKeys.executions()]],
-    ["glue:TableChanged", "glue", [glueKeys.tables(), glueKeys.partitions()]],
+    [
+      "glue:TableChanged",
+      "glue",
+      [glueKeys.tables(), glueKeys.partitions(), athenaKeys.metadata()],
+    ],
     ["glue:PartitionsChanged", "glue", [glueKeys.partitions()]],
     [
       "s3tables:TableCreated",

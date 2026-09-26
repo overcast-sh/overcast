@@ -30,7 +30,7 @@ export interface AthenaSearch {
   sort?: string
   /** One query execution, expanded in History. */
   execution?: string
-  /** One workgroup, open in the Workgroups tab. */
+  /** In Workgroups, the workgroup open in detail; in an editor link, the one the new tab runs in. */
   workgroup?: string
   /** Deep link into the editor: the query context and SQL for a new query tab. */
   catalog?: string

@@ -143,8 +143,7 @@ export function traceListQuery(params?: TraceListParams): string {
 }
 
 export const debugTrace = {
-  get: (requestId: string) =>
-    apiFetch<TraceEntry>(`/debug/trace/${encodeURIComponent(requestId)}`),
+  get: (requestId: string) => apiFetch<TraceEntry>(`/debug/trace/${encodeURIComponent(requestId)}`),
 
   list: (params?: TraceListParams): Promise<TraceListResponse> =>
     apiFetch<TraceListResponse>(`/debug/traces${traceListQuery(params)}`),

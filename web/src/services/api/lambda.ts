@@ -47,8 +47,7 @@ import type {
 import type { ChartRangeToken } from "@/features/monitoring/types"
 
 export type InvokeEvent =
-  | { type: "progress"; step: string }
-  | { type: "result"; data: InvokeResult }
+  { type: "progress"; step: string } | { type: "result"; data: InvokeResult }
 
 export const lambdaInstances = {
   list: () =>

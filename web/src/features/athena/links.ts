@@ -4,7 +4,8 @@
  * The editor deep link is a contract shared with the Glue and S3 Tables
  * pages: `/athena?tab=editor&catalog=<name>&database=<name>&sql=<SQL>`
  * opens a new query tab holding the SQL, with that query context set, and
- * does not run it.
+ * does not run it. `workgroup=<name>` optionally names the workgroup it runs
+ * in, for SQL that belongs to one (a saved query, a past execution).
  */
 
 import { linkOptions } from "@tanstack/react-router"
@@ -14,6 +15,8 @@ export interface AthenaEditorLinkParams {
   catalog?: string
   /** The database the query runs in. The editor's current one when omitted. */
   database?: string
+  /** The workgroup the query runs in. The editor's current one when omitted. */
+  workGroup?: string
   /** The SQL for the new query tab. */
   sql: string
 }
@@ -28,9 +31,9 @@ export interface AthenaEditorLinkParams {
  * </Link>
  * ```
  */
-export function athenaEditorLink({ catalog, database, sql }: AthenaEditorLinkParams) {
+export function athenaEditorLink({ catalog, database, workGroup, sql }: AthenaEditorLinkParams) {
   return linkOptions({
     to: "/athena",
-    search: { tab: "editor", catalog, database, sql },
+    search: { tab: "editor", catalog, database, workgroup: workGroup, sql },
   })
 }
