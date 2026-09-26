@@ -9,7 +9,7 @@ import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs
 import { SERVICES } from "@/lib/service-registry"
 
 /** The emulated services whose console pages are still to be built. */
-export type PendingConsoleService = "athena" | "glue" | "s3tables"
+export type PendingConsoleService = "athena" | "glue"
 
 export interface ConsolePendingPageProps {
   /** The service's SERVICES key: the page takes its name, glyph and docs from there. */
