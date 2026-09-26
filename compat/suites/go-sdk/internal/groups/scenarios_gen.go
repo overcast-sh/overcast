@@ -16,6 +16,7 @@ func scenarioGroups(c *clients.Clients) []ServiceGroup {
 		ScenariosAuthoredIamGroups(c),
 		ScenariosAuthoredIamPolicies(c),
 		ScenariosAuthoredIamRoles(c),
+		ScenariosAuthoredIamSimulate(c),
 		ScenariosAuthoredIamUsers(c),
 		ScenariosAuthoredKinesisRecords(c),
 		ScenariosAuthoredKinesisShards(c),

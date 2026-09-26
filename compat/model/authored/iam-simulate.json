@@ -1,0 +1,280 @@
+{
+  "$comment": "Authored port of the hand-written registry group iam-simulate (docs/plans/compat-coverage-modelgen.md §3.11, G6, #1116). One spec in place of six per-language implementations (go-sdk, python-sdk, node-js-sdk, cli, java-sdk, dotnet-sdk) and of the one that was never written: rust-sdk carries 5 rows of parity debt for this group, which the port closes. It runs today under the shadow name iam-simulate-shadow, beside the natives, so the nightly can compare the two per (suite, test); the flip PR renames this group to iam-simulate, points the hand-written registry entry at this file, and deletes the native code. The clauses are the union of what the six natives assert - see compat/model/README.md § Authored scenarios. Every policy document here is an INPUT (PolicyInputList, PutUserPolicy's PolicyDocument), passed as the JSON text the API takes; no response carries a document, so there is no equalsJSON.",
+  "version": 1,
+  "service": "iam",
+  "client": {
+    "sdkId": "IAM",
+    "endpointPrefix": "iam",
+    "signingName": "iam",
+    "protocol": "awsQuery",
+    "apiVersion": "2010-05-08",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Setup creates one user with one inline policy, as all six natives do: CreateUser under `$name` \"user\", then PutUserPolicy \"sim-allow-read\" (the policy name every native uses) allowing s3:GetObject on arn:aws:s3:::<sim>/*, where <sim> is `$name` \"sim\". The natives spell that run-scoped bucket six ways (go-sdk oc-sim-<runId>, python-sdk/node-js-sdk/dotnet-sdk <runId>-sim, java-sdk compat-sim-<runId>, cli a harness namer over \"iam-sim-b\"); nothing creates the bucket - simulation evaluates policy text against an ARN - so only its consistency within the group matters, and `$concat` around `$name` gives that. The same document is the PolicyInputList of the two custom-policy tests that reuse it, and every test simulates against the one resource arn:aws:s3:::<sim>/report.csv. CreateUser exports the user's Arn, and the principal tests pass it as PolicySourceArn. Every native instead builds arn:aws:iam::000000000000:user/<name> by hand, which only holds for an emulator whose account is 000000000000; the exported Arn is the principal on any account. Setup's PutUserPolicy is not read back before the tests, as in every native and as in iam-policies' setup role; the first principal test is the first read of it. Teardown removes the inline policy and then the user, as all six natives do; each call is individually wrapped.",
+      "name": "iam-simulate-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateUser",
+          "params": {
+            "UserName": {
+              "$name": "user"
+            }
+          },
+          "export": {
+            "user.arn": "$.User.Arn"
+          }
+        },
+        {
+          "op": "PutUserPolicy",
+          "params": {
+            "UserName": {
+              "$name": "user"
+            },
+            "PolicyName": "sim-allow-read",
+            "PolicyDocument": {
+              "$concat": [
+                "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::",
+                {
+                  "$name": "sim"
+                },
+                "/*\"}]}"
+              ]
+            }
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "All six natives read EvaluationResults[0] and assert its EvalDecision; the port finds the result by EvalActionName and EvalDecision together with listContains instead of assuming list order. One action against one resource yields exactly one result, so the two readings agree whenever the call is well formed. All six assert EvalDecision allowed; go-sdk, python-sdk, node-js-sdk, cli, java-sdk and dotnet-sdk also assert EvalActionName s3:GetObject, which the where clause carries. The policy allows s3:GetObject on <sim>/*, and the request is that action on <sim>/report.csv.",
+          "name": "SimulateCustomPolicyAllowed",
+          "op": "SimulateCustomPolicy",
+          "call": {
+            "op": "SimulateCustomPolicy",
+            "params": {
+              "PolicyInputList": [
+                {
+                  "$concat": [
+                    "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::",
+                    {
+                      "$name": "sim"
+                    },
+                    "/*\"}]}"
+                  ]
+                }
+              ],
+              "ActionNames": [
+                "s3:GetObject"
+              ],
+              "ResourceArns": [
+                {
+                  "$concat": [
+                    "arn:aws:s3:::",
+                    {
+                      "$name": "sim"
+                    },
+                    "/report.csv"
+                  ]
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.EvaluationResults",
+              "where": {
+                "$.EvalActionName": "s3:GetObject",
+                "$.EvalDecision": "allowed"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "All six natives read EvaluationResults[0] and assert its EvalDecision; the port finds the result by EvalActionName and EvalDecision together with listContains instead of assuming list order. One action against one resource yields exactly one result, so the two readings agree whenever the call is well formed. All six ask for s3:PutObject under the same s3:GetObject-only policy and assert implicitDeny: no statement matches, and nothing denies it explicitly (IAM User Guide, reference_policies_evaluation-logic.html).",
+          "name": "SimulateCustomPolicyImplicitDeny",
+          "op": "SimulateCustomPolicy",
+          "call": {
+            "op": "SimulateCustomPolicy",
+            "params": {
+              "PolicyInputList": [
+                {
+                  "$concat": [
+                    "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"arn:aws:s3:::",
+                    {
+                      "$name": "sim"
+                    },
+                    "/*\"}]}"
+                  ]
+                }
+              ],
+              "ActionNames": [
+                "s3:PutObject"
+              ],
+              "ResourceArns": [
+                {
+                  "$concat": [
+                    "arn:aws:s3:::",
+                    {
+                      "$name": "sim"
+                    },
+                    "/report.csv"
+                  ]
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.EvaluationResults",
+              "where": {
+                "$.EvalActionName": "s3:PutObject",
+                "$.EvalDecision": "implicitDeny"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "All six natives read EvaluationResults[0] and assert its EvalDecision; the port finds the result by EvalActionName and EvalDecision together with listContains instead of assuming list order. One action against one resource yields exactly one result, so the two readings agree whenever the call is well formed. All six pass the same two-statement document - Allow s3:* on *, Deny s3:DeleteObject on * - and assert explicitDeny for s3:DeleteObject: an explicit deny wins over any allow. The natives differ only in whitespace (java-sdk and python-sdk add some); this is the compact spelling go-sdk, cli and dotnet-sdk send.",
+          "name": "SimulateCustomPolicyExplicitDeny",
+          "op": "SimulateCustomPolicy",
+          "call": {
+            "op": "SimulateCustomPolicy",
+            "params": {
+              "PolicyInputList": [
+                "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:*\",\"Resource\":\"*\"},{\"Effect\":\"Deny\",\"Action\":\"s3:DeleteObject\",\"Resource\":\"*\"}]}"
+              ],
+              "ActionNames": [
+                "s3:DeleteObject"
+              ],
+              "ResourceArns": [
+                {
+                  "$concat": [
+                    "arn:aws:s3:::",
+                    {
+                      "$name": "sim"
+                    },
+                    "/report.csv"
+                  ]
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.EvaluationResults",
+              "where": {
+                "$.EvalActionName": "s3:DeleteObject",
+                "$.EvalDecision": "explicitDeny"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "All six natives read EvaluationResults[0] and assert its EvalDecision; the port finds the result by EvalActionName and EvalDecision together with listContains instead of assuming list order. One action against one resource yields exactly one result, so the two readings agree whenever the call is well formed. All six assert EvalDecision allowed for s3:GetObject against the setup user, and that the result's MatchedStatements names the inline policy by SourcePolicyId \"sim-allow-read\"; that second clause reads EvaluationResults[0].MatchedStatements, the one result the first clause found. No native asserts EvalActionName here; the where clause adds it, since the request names exactly one action.",
+          "name": "SimulatePrincipalPolicyAllowed",
+          "op": "SimulatePrincipalPolicy",
+          "call": {
+            "op": "SimulatePrincipalPolicy",
+            "params": {
+              "PolicySourceArn": {
+                "$ref": "user.arn"
+              },
+              "ActionNames": [
+                "s3:GetObject"
+              ],
+              "ResourceArns": [
+                {
+                  "$concat": [
+                    "arn:aws:s3:::",
+                    {
+                      "$name": "sim"
+                    },
+                    "/report.csv"
+                  ]
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.EvaluationResults",
+              "where": {
+                "$.EvalActionName": "s3:GetObject",
+                "$.EvalDecision": "allowed"
+              }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.EvaluationResults[0].MatchedStatements",
+              "where": {
+                "$.SourcePolicyId": "sim-allow-read"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "All six natives read EvaluationResults[0] and assert its EvalDecision; the port finds the result by EvalActionName and EvalDecision together with listContains instead of assuming list order. One action against one resource yields exactly one result, so the two readings agree whenever the call is well formed. All six ask for s3:DeleteObject against the setup user, whose only policy allows s3:GetObject, and assert implicitDeny.",
+          "name": "SimulatePrincipalPolicyImplicitDeny",
+          "op": "SimulatePrincipalPolicy",
+          "call": {
+            "op": "SimulatePrincipalPolicy",
+            "params": {
+              "PolicySourceArn": {
+                "$ref": "user.arn"
+              },
+              "ActionNames": [
+                "s3:DeleteObject"
+              ],
+              "ResourceArns": [
+                {
+                  "$concat": [
+                    "arn:aws:s3:::",
+                    {
+                      "$name": "sim"
+                    },
+                    "/report.csv"
+                  ]
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.EvaluationResults",
+              "where": {
+                "$.EvalActionName": "s3:DeleteObject",
+                "$.EvalDecision": "implicitDeny"
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteUserPolicy",
+          "params": {
+            "UserName": {
+              "$name": "user"
+            },
+            "PolicyName": "sim-allow-read"
+          }
+        },
+        {
+          "op": "DeleteUser",
+          "params": {
+            "UserName": {
+              "$name": "user"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
