@@ -62,7 +62,7 @@ type ColumnError struct {
 // columnStatisticsTarget names a table, or one partition of it when
 // PartitionValues is set, whose statistics a request reads or writes.
 type columnStatisticsTarget struct {
-	CatalogId       string   `json:"CatalogId" cbor:"CatalogId"`
+	catalogRef
 	DatabaseName    string   `json:"DatabaseName" cbor:"DatabaseName"`
 	TableName       string   `json:"TableName" cbor:"TableName"`
 	PartitionValues []string `json:"PartitionValues" cbor:"PartitionValues"`

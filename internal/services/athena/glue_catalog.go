@@ -5,16 +5,18 @@ import (
 	"errors"
 	"maps"
 	"regexp"
+	"strings"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/services/glue"
 )
 
-// InitGlueCatalog wires the Glue Data Catalog that AwsDataCatalog — and any
+// InitGlueCatalog wires the Glue Data Catalog: AwsDataCatalog — and any
 // GLUE catalog registered for this account — reads its databases and tables
-// from, and that Athena's DDL writes to.
-func (s *Service) InitGlueCatalog(c glue.Catalog, w glue.CatalogWriter) {
-	s.catalog, s.catalogWriter = c, w
+// through cs, as do S3 Tables' "s3tablescatalog/<bucket>" catalogs, and
+// Athena's DDL writes to the account's own catalog through w.
+func (s *Service) InitGlueCatalog(cs glue.Catalogs, w glue.CatalogWriter) {
+	s.catalogs, s.catalog, s.catalogWriter = cs, cs.Default(), w
 }
 
 var errCatalogNotWired = errors.New("athena: glue catalog not wired")
@@ -66,27 +68,57 @@ type listTableMetadataResp struct {
 	NextToken         string          `json:"NextToken,omitempty"`
 }
 
-// glueCatalog resolves a catalog name to the Glue catalog it reads. Only
-// GLUE catalogs for this account are readable: the others are backed by a
-// Lambda connector or a Hive metastore Overcast does not run.
+// glueCatalog resolves a catalog name to the Glue catalog it reads.
 func (s *Service) glueCatalog(ctx context.Context, name string) (glue.Catalog, *protocol.AWSError) {
-	if name == "" {
-		return nil, errRequired("CatalogName")
-	}
-	c, aerr := s.requireDataCatalog(ctx, name)
+	id, aerr := s.glueCatalogID(ctx, name)
 	if aerr != nil {
 		return nil, aerr
 	}
-	if c.Type != catalogTypeGlue {
-		return nil, errNotEmulated("Reading metadata from a %s data catalog needs its connector, which Overcast does not run.", c.Type)
-	}
-	if id := c.Parameters["catalog-id"]; id != s.cfg.AccountID {
-		return nil, errNotEmulated("Data catalog %s reads account %s's Glue catalog; Overcast emulates only account %s.", c.Name, id, s.cfg.AccountID)
-	}
-	if s.catalog == nil {
+	if s.catalogs == nil {
 		return nil, errInternal(errCatalogNotWired)
 	}
-	return s.catalog, nil
+	cat, found, err := s.catalogs.Resolve(ctx, id)
+	if err != nil {
+		return nil, errInternal(err)
+	}
+	if !found {
+		return nil, errDataCatalogNotFound(name)
+	}
+	return cat, nil
+}
+
+// glueCatalogID is the Glue CatalogId a catalog name reads. A table bucket's
+// catalog is addressed as "s3tablescatalog/<bucket>" without being
+// registered, as on AWS, where ListDataCatalogs does not list it either.
+// Any other name is a data catalog, and only GLUE catalogs for this account
+// are readable: the others are backed by a Lambda connector or a Hive
+// metastore Overcast does not run.
+func (s *Service) glueCatalogID(ctx context.Context, name string) (string, *protocol.AWSError) {
+	if name == "" {
+		return "", errRequired("CatalogName")
+	}
+	if isS3TablesCatalog(name) {
+		return s.cfg.AccountID + ":" + name, nil
+	}
+	c, aerr := s.requireDataCatalog(ctx, name)
+	if aerr != nil {
+		return "", aerr
+	}
+	if c.Type != catalogTypeGlue {
+		return "", errNotEmulated("Reading metadata from a %s data catalog needs its connector, which Overcast does not run.", c.Type)
+	}
+	id := c.Parameters["catalog-id"]
+	if account, _, _ := strings.Cut(id, ":"); account != s.cfg.AccountID {
+		return "", errNotEmulated("Data catalog %s reads account %s's Glue catalog; Overcast emulates only account %s.", c.Name, account, s.cfg.AccountID)
+	}
+	return id, nil
+}
+
+// isS3TablesCatalog reports whether a catalog name is a table bucket's
+// catalog, "s3tablescatalog/<bucket>".
+func isS3TablesCatalog(name string) bool {
+	parent, _, child := strings.Cut(name, "/")
+	return child && strings.EqualFold(parent, glue.S3TablesCatalogName)
 }
 
 func errDatabaseNotFound(name string) *protocol.AWSError {

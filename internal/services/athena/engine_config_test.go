@@ -3,6 +3,7 @@ package athena
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,6 +47,34 @@ func TestRenderEngineFiles_catalogsPointAtOvercast(t *testing.T) {
 	}
 	if !strings.Contains(files["catalog/awsdatacatalog.properties"], "hive.iceberg-catalog-name=awsdatacatalog_iceberg\n") {
 		t.Error("the Hive catalog does not redirect Iceberg tables")
+	}
+}
+
+func TestRenderEngineFiles_leavesThePluginDirectoryAlone(t *testing.T) {
+	// The engine loads whatever the image installs under its plugin
+	// directory — only hive and iceberg in the default image — so nothing
+	// redirects Trino elsewhere.
+	files := renderEngineFiles(engineSettings{Overcast: "http://o:1", Region: "eu-west-1", AccountID: "1", Memory: 1 << 30})
+	if strings.Contains(files["config.properties"], "plugin.dir=") {
+		t.Errorf("config.properties overrides the plugin directory:\n%s", files["config.properties"])
+	}
+}
+
+func TestEngineConfigArchive_holdsOnlyTheRenderedFiles(t *testing.T) {
+	// Given: two rendered files
+	files := map[string]string{"node.properties": "a=1\n", "catalog/c.properties": "b=2\n"}
+
+	// When: they are archived for the container
+	archive, err := engineConfigArchive(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Then: the archive holds each of them under engineEtcDir, and nothing
+	// else — untar fails on any entry that is not a regular file
+	want := map[string]string{"etc/athena/node.properties": "a=1\n", "etc/athena/catalog/c.properties": "b=2\n"}
+	if got := untar(t, archive); !maps.Equal(got, want) {
+		t.Errorf("archive = %q, want %q", got, want)
 	}
 }
 
