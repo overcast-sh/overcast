@@ -40,6 +40,7 @@
     <PackageReference Include="AWSSDK.CognitoIdentityProvider" Version="4.0.0" />
     <PackageReference Include="AWSSDK.Core" Version="4.0.102.3" />
     <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.0" />
+    <PackageReference Include="AWSSDK.ECR" Version="4.0.0" />
     <PackageReference Include="AWSSDK.ElasticLoadBalancing" Version="4.0.100.12" />
     <PackageReference Include="AWSSDK.EventBridge" Version="4.0.0" />
     <PackageReference Include="AWSSDK.IdentityManagement" Version="4.0.103.4" />

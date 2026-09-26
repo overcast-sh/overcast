@@ -45,6 +45,15 @@ describe("checks", () => {
     );
   });
 
+  it("nonEmpty holds on a timestamp, which the SDK hands back as a Date", () => {
+    // A Date has no enumerable own properties, so it must not be mistaken for
+    // `{}` — README § Values: `nonEmpty` holds on every form a timestamp takes.
+    assert.equal(
+      evaluateChecks({ F: new Date(0) }, { "$.F": { nonEmpty: true } }, ctx),
+      null,
+    );
+  });
+
   it("nonEmpty on a missing path reports <missing>", () => {
     const mismatch = evaluateChecks({}, { "$.F": { nonEmpty: true } }, ctx);
     assert.equal(mismatch?.actual, "<missing>");

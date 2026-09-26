@@ -78,6 +78,10 @@
          this suite runs against AppConfig. Versioned by the BOM like every
          client above; 2.43.0 declares every operation those groups call. -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>appconfig</artifactId></dependency>
+    <!-- G6 wave 3 (#1116): the authored ecr-* scenarios are the first thing
+         this suite runs against ECR, whose hand-written groups exist only in
+         the cli suite. -->
+    <dependency><groupId>software.amazon.awssdk</groupId><artifactId>ecr</artifactId></dependency>
     <!-- URL connection client (no Apache HTTP, keeps image small) -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>url-connection-client</artifactId></dependency>
     <!-- Async HTTP client — required by LambdaAsyncClient (InvokeWithResponseStream) -->

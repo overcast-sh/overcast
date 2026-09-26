@@ -333,6 +333,8 @@ class TestBotocoreServiceName(unittest.TestCase):
             "monitoring": "cloudwatch",
             "email": "ses",
             "states": "stepfunctions",
+            # ECR's endpoint prefix is a host label, not a service name.
+            "api.ecr": "ecr",
         }.items():
             self.assertEqual(botocore_service(prefix), want, prefix)
 
@@ -346,7 +348,7 @@ class TestBotocoreServiceName(unittest.TestCase):
         # (§7.3) asks the first backend needing an override to land.
         import boto3
 
-        for name in ("elb", "cloudwatch", "ses", "stepfunctions"):
+        for name in ("elb", "cloudwatch", "ses", "stepfunctions", "ecr"):
             client = boto3.client(
                 name,
                 region_name="us-east-1",

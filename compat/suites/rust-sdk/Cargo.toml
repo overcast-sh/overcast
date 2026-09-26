@@ -26,6 +26,12 @@ aws-sdk-cloudwatchlogs = "=1.57.0"
 # ^1.7.3), which the exact pins below meet.
 aws-sdk-cognitoidentityprovider = "=1.59.0"
 aws-sdk-dynamodb = "=1.56.0"
+# G6 wave 3 (#1116): the authored ecr-* scenarios are the first thing this
+# suite runs against ECR, whose hand-written groups exist only in the cli
+# suite. 1.53.0 was published the same day as aws-sdk-kinesis 1.52.0 and
+# declares identical requirements (aws-smithy-types ^1.2.9,
+# aws-smithy-runtime-api ^1.7.3), which the exact pins below meet.
+aws-sdk-ecr = "=1.53.0"
 aws-sdk-elasticloadbalancing = "=1.111.0"
 aws-sdk-eventbridge = "=1.54.0"
 # Newer than its neighbours on purpose: emit_rust.go writes a call for every
