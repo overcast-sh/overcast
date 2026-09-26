@@ -1,0 +1,193 @@
+{
+  "$comment": "Authored port of the hand-written registry group appconfig-applications (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group had one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 7 rows each, which the port closes. It runs today under the shadow name appconfig-applications-shadow, beside the cli native, so the nightly can compare the two per (suite, test); the flip PR renames this group to appconfig-applications, points the hand-written registry entry at this file, and deletes the native code. With one native the union is that native's assertions, plus read-backs of documented effects where it asserted little, each stated in its test's $comment. The cli native signs every AppConfig call because Overcast tells AppConfig from Service Catalog AppRegistry (which models the same /applications paths) by the SigV4 credential scope; every scenario backend signs with the service's own scope already, so nothing here has to ask for it. The cli native also asserts the HTTP status of every error (400, 404) beside its code. The IR's error clause has no status, so only the code is carried: the model binds each of these errors to exactly that status (smithy.api#httpError), and the code is what a caller branches on.",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One application, created by the CreateApplication test and deleted by DeleteApplication, as the native does and as registry.json's depends describe. It is named by $name, so it is {runId}-appconfig-applications-shadow-app and never collides with another group's. There is no setup; teardown deletes the application in case DeleteApplication never ran. No clause is wrapped in `eventually`: the native reads every write back immediately, and AppConfig documents no consistency window for an application.",
+      "name": "appconfig-applications-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "The native asserts the response carries an Id and Name is the requested name, then reads the application back with GetApplication and asserts Name and Description are the ones sent. Both halves are carried. The Id is exported because every later test addresses the application by it.",
+          "name": "CreateApplication",
+          "op": "CreateApplication",
+          "call": {
+            "op": "CreateApplication",
+            "params": {
+              "Name": { "$name": "app" },
+              "Description": "compat applications group"
+            },
+            "export": { "app.id": "$.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "nonEmpty": true },
+                "$.Name": { "equals": { "$name": "app" } }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetApplication",
+                "params": { "ApplicationId": { "$ref": "app.id" } }
+              },
+              "checks": {
+                "$.Name": { "equals": { "$name": "app" } },
+                "$.Description": { "equals": "compat applications group" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native asserts Id is the id CreateApplication returned and Name the name it was created with. Carried as written.",
+          "name": "GetApplication",
+          "op": "GetApplication",
+          "call": {
+            "op": "GetApplication",
+            "params": { "ApplicationId": { "$ref": "app.id" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "equals": { "$ref": "app.id" } },
+                "$.Name": { "equals": { "$name": "app" } }
+              }
+            }
+          ],
+          "depends": ["CreateApplication"]
+        },
+        {
+          "$comment": "The native lists unfiltered and asserts the page is non-empty and holds an item with the application's Id whose Name is the application's name. listContains with both in `where` is that: a page holding the item is non-empty. ListApplications takes no name filter, so the page is unfiltered here too; on an account with more than one page of applications the first page need not hold this one, which the native accepts as well.",
+          "name": "ListApplications",
+          "op": "ListApplications",
+          "call": {
+            "op": "ListApplications",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Items",
+              "where": {
+                "$.Id": { "$ref": "app.id" },
+                "$.Name": { "$name": "app" }
+              }
+            }
+          ],
+          "depends": ["CreateApplication"]
+        },
+        {
+          "$comment": "The native sends only a new Description and asserts it three ways: in the response, in a GetApplication read-back, and that the read-back's Name is unchanged — an omitted member must leave the stored value alone (UpdateApplication's reference: both members are optional). All three are carried.",
+          "name": "UpdateApplication",
+          "op": "UpdateApplication",
+          "call": {
+            "op": "UpdateApplication",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "Description": "updated by compat"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Description": { "equals": "updated by compat" } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetApplication",
+                "params": { "ApplicationId": { "$ref": "app.id" } }
+              },
+              "checks": {
+                "$.Description": { "equals": "updated by compat" },
+                "$.Name": { "equals": { "$name": "app" } }
+              }
+            }
+          ],
+          "depends": ["CreateApplication"]
+        },
+        {
+          "$comment": "The native deletes the application and asserts GetApplication then raises ResourceNotFoundException (and 404, which the IR cannot state — see the file's $comment). That is carried. The port adds the other half of a delete's documented effect, that the application is no longer listed, in the same unfiltered page ListApplications reads.",
+          "name": "DeleteApplication",
+          "op": "DeleteApplication",
+          "call": {
+            "op": "DeleteApplication",
+            "params": { "ApplicationId": { "$ref": "app.id" } }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetApplication",
+                "params": { "ApplicationId": { "$ref": "app.id" } }
+              },
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListApplications",
+                "params": {}
+              },
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "app.id" } }
+            }
+          ],
+          "depends": ["CreateApplication"]
+        },
+        {
+          "$comment": "The native asks for an application id no application has and requires ResourceNotFoundException. zzzzzzz is the native's stand-in: AppConfig's model constrains an Id to [a-z0-9]{4,7}, so a probe has to look like one or it is refused as a malformed request before any lookup. No depends, as in the registry.",
+          "name": "GetApplicationNotFound",
+          "op": "GetApplication",
+          "call": {
+            "op": "GetApplication",
+            "params": { "ApplicationId": "zzzzzzz" }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            }
+          ]
+        },
+        {
+          "$comment": "The native passes the CLI's --starting-token compat-not-a-real-token --page-size 1, which the CLI sends as the NextToken and MaxResults members, and requires BadRequestException: a token the service never issued is refused, not read as a restart from the first page. The port sends those two members directly.",
+          "name": "ListApplicationsInvalidToken",
+          "op": "ListApplications",
+          "call": {
+            "op": "ListApplications",
+            "params": {
+              "NextToken": "compat-not-a-real-token",
+              "MaxResults": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "BadRequestException", "code": "BadRequestException" }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteApplication",
+          "params": { "ApplicationId": { "$ref": "app.id" } }
+        }
+      ]
+    }
+  ]
+}

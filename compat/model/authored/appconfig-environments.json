@@ -1,0 +1,222 @@
+{
+  "$comment": "Authored port of the hand-written registry group appconfig-environments (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group had one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 7 rows each, which the port closes. It runs today under the shadow name appconfig-environments-shadow, beside the cli native, so the nightly can compare the two per (suite, test); the flip PR renames this group to appconfig-environments, points the hand-written registry entry at this file, and deletes the native code. With one native the union is that native's assertions, plus read-backs of documented effects where it asserted little, each stated in its test's $comment. Every scenario backend signs with AppConfig's own credential scope, which is how Overcast tells AppConfig from Service Catalog AppRegistry on the shared /applications paths — the reason the cli native signs. The native also asserts each error's HTTP status (404) beside its code; the IR's error clause has no status, so only the code is carried, and the model binds ResourceNotFoundException to exactly 404 (smithy.api#httpError).",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Setup creates the application every environment lives under, as the native's setup hook does, and exports its id. The environment itself is created by the CreateEnvironment test and deleted by DeleteEnvironment, as the native does and as registry.json's depends describe. Both are named by $name, so they belong to this group alone. Teardown deletes the environment (in case DeleteEnvironment never ran) and then the application, in the native's order; each call is individually wrapped. No clause is wrapped in `eventually`: the native reads every write back immediately, and AppConfig documents no consistency window for an environment.",
+      "name": "appconfig-environments-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateApplication",
+          "params": { "Name": { "$name": "app" } },
+          "export": { "app.id": "$.Id" }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The native asserts the response carries an Id, that Name is the requested name and ApplicationId the parent's id, and that State is READY_FOR_DEPLOYMENT — an environment nothing has been deployed to (Environment.State in the API reference). It then reads the environment back and asserts the Name. All of it is carried; the Id is exported because every later test addresses the environment by it.",
+          "name": "CreateEnvironment",
+          "op": "CreateEnvironment",
+          "call": {
+            "op": "CreateEnvironment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "Name": { "$name": "env" },
+              "Description": "compat environments group"
+            },
+            "export": { "env.id": "$.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "nonEmpty": true },
+                "$.Name": { "equals": { "$name": "env" } },
+                "$.ApplicationId": { "equals": { "$ref": "app.id" } },
+                "$.State": { "equals": "READY_FOR_DEPLOYMENT" }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetEnvironment",
+                "params": {
+                  "ApplicationId": { "$ref": "app.id" },
+                  "EnvironmentId": { "$ref": "env.id" }
+                }
+              },
+              "checks": { "$.Name": { "equals": { "$name": "env" } } }
+            }
+          ]
+        },
+        {
+          "$comment": "The native asserts Id is the id CreateEnvironment returned and Name its name. Carried as written.",
+          "name": "GetEnvironment",
+          "op": "GetEnvironment",
+          "call": {
+            "op": "GetEnvironment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": { "$ref": "env.id" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "equals": { "$ref": "env.id" } },
+                "$.Name": { "equals": { "$name": "env" } }
+              }
+            }
+          ],
+          "depends": ["CreateEnvironment"]
+        },
+        {
+          "$comment": "The native lists the application's environments and asserts an item with the environment's Id whose Name is its name. listContains with both in `where` is exactly that.",
+          "name": "ListEnvironments",
+          "op": "ListEnvironments",
+          "call": {
+            "op": "ListEnvironments",
+            "params": { "ApplicationId": { "$ref": "app.id" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Items",
+              "where": {
+                "$.Id": { "$ref": "env.id" },
+                "$.Name": { "$name": "env" }
+              }
+            }
+          ],
+          "depends": ["CreateEnvironment"]
+        },
+        {
+          "$comment": "The native sends a new Description and asserts it in the response and in a GetEnvironment read-back. Both are carried. The port adds that the read-back's Name is unchanged: UpdateEnvironment's members are all optional, so one it was not sent must keep its stored value — the claim the cli native makes for UpdateApplication, made here too. Overcast does not implement UpdateEnvironment yet, so today this test is unimplemented in the native and the shadow alike.",
+          "name": "UpdateEnvironment",
+          "op": "UpdateEnvironment",
+          "call": {
+            "op": "UpdateEnvironment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": { "$ref": "env.id" },
+              "Description": "updated by compat"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Description": { "equals": "updated by compat" } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetEnvironment",
+                "params": {
+                  "ApplicationId": { "$ref": "app.id" },
+                  "EnvironmentId": { "$ref": "env.id" }
+                }
+              },
+              "checks": {
+                "$.Description": { "equals": "updated by compat" },
+                "$.Name": { "equals": { "$name": "env" } }
+              }
+            }
+          ],
+          "depends": ["CreateEnvironment"]
+        },
+        {
+          "$comment": "The native deletes the environment and asserts both halves of the effect: GetEnvironment raises ResourceNotFoundException, and the environment is no longer in ListEnvironments. Both are carried.",
+          "name": "DeleteEnvironment",
+          "op": "DeleteEnvironment",
+          "call": {
+            "op": "DeleteEnvironment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": { "$ref": "env.id" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetEnvironment",
+                "params": {
+                  "ApplicationId": { "$ref": "app.id" },
+                  "EnvironmentId": { "$ref": "env.id" }
+                }
+              },
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListEnvironments",
+                "params": { "ApplicationId": { "$ref": "app.id" } }
+              },
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "env.id" } }
+            }
+          ],
+          "depends": ["CreateEnvironment"]
+        },
+        {
+          "$comment": "The native asks the group's own application for an environment id no environment has and requires ResourceNotFoundException. zzzzzzz is the native's stand-in, shaped like an AppConfig Id ([a-z0-9]{4,7}) so the request is well-formed. No depends, as in the registry: the application comes from setup.",
+          "name": "GetEnvironmentNotFound",
+          "op": "GetEnvironment",
+          "call": {
+            "op": "GetEnvironment",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "EnvironmentId": "zzzzzzz"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            }
+          ]
+        },
+        {
+          "$comment": "The native lists the environments of an application that does not exist and requires ResourceNotFoundException, not an empty page. Same stand-in id as above.",
+          "name": "ListEnvironmentsApplicationNotFound",
+          "op": "ListEnvironments",
+          "call": {
+            "op": "ListEnvironments",
+            "params": { "ApplicationId": "zzzzzzz" }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteEnvironment",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "EnvironmentId": { "$ref": "env.id" }
+          }
+        },
+        {
+          "op": "DeleteApplication",
+          "params": { "ApplicationId": { "$ref": "app.id" } }
+        }
+      ]
+    }
+  ]
+}

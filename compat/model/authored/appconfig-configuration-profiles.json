@@ -1,0 +1,253 @@
+{
+  "$comment": "Authored port of the hand-written registry group appconfig-configuration-profiles (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group had one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 7 rows each, which the port closes. It runs today under the shadow name appconfig-configuration-profiles-shadow, beside the cli native, so the nightly can compare the two per (suite, test); the flip PR renames this group to appconfig-configuration-profiles, points the hand-written registry entry at this file, and deletes the native code. With one native the union is that native's assertions, plus read-backs of documented effects where it asserted little, each stated in its test's $comment. Every scenario backend signs with AppConfig's own credential scope, which is how Overcast tells AppConfig from Service Catalog AppRegistry on the shared /applications paths — the reason the cli native signs. The native also asserts each error's HTTP status (404) beside its code; the IR's error clause has no status, so only the code is carried, and the model binds ResourceNotFoundException to exactly 404 (smithy.api#httpError).",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Setup creates the application the profiles live under, as the native's setup hook does. It also creates the second profile ListConfigurationProfilesByType filters for — a hosted AWS.AppConfig.FeatureFlags profile — which the native creates inside that test instead: a clause may not write, so a resource a test needs beyond its own primary call is made in setup, where it exists for the whole group. Nothing earlier in the group observes it (ListConfigurationProfiles asserts only that the AWS.Freeform profile is listed), so the move changes no verdict. The AWS.Freeform profile is created by the CreateConfigurationProfile test and deleted by DeleteConfigurationProfile, as the native does and as registry.json's depends describe. Every name is a $name, so the resources belong to this group alone. Teardown deletes both profiles and then the application, in the native's order; each call is individually wrapped. No clause is wrapped in `eventually`: the native reads every write back immediately, and AppConfig documents no consistency window for a profile.",
+      "name": "appconfig-configuration-profiles-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateApplication",
+          "params": { "Name": { "$name": "app" } },
+          "export": { "app.id": "$.Id" }
+        },
+        {
+          "op": "CreateConfigurationProfile",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "Name": { "$name": "flags" },
+            "LocationUri": "hosted",
+            "Type": "AWS.AppConfig.FeatureFlags"
+          },
+          "export": { "flags.id": "$.Id" }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The native creates a hosted AWS.Freeform profile and asserts the response carries an Id, that Name is the requested name and LocationUri is hosted, then reads it back and asserts Name and Type. All of it is carried; the Id is exported because every later test addresses the profile by it.",
+          "name": "CreateConfigurationProfile",
+          "op": "CreateConfigurationProfile",
+          "call": {
+            "op": "CreateConfigurationProfile",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "Name": { "$name": "prof" },
+              "LocationUri": "hosted",
+              "Type": "AWS.Freeform",
+              "Description": "compat configuration profiles group"
+            },
+            "export": { "prof.id": "$.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "nonEmpty": true },
+                "$.Name": { "equals": { "$name": "prof" } },
+                "$.LocationUri": { "equals": "hosted" }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetConfigurationProfile",
+                "params": {
+                  "ApplicationId": { "$ref": "app.id" },
+                  "ConfigurationProfileId": { "$ref": "prof.id" }
+                }
+              },
+              "checks": {
+                "$.Name": { "equals": { "$name": "prof" } },
+                "$.Type": { "equals": "AWS.Freeform" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native asserts Id is the id CreateConfigurationProfile returned and Name its name. Carried as written.",
+          "name": "GetConfigurationProfile",
+          "op": "GetConfigurationProfile",
+          "call": {
+            "op": "GetConfigurationProfile",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "ConfigurationProfileId": { "$ref": "prof.id" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "equals": { "$ref": "prof.id" } },
+                "$.Name": { "equals": { "$name": "prof" } }
+              }
+            }
+          ],
+          "depends": ["CreateConfigurationProfile"]
+        },
+        {
+          "$comment": "The native lists the application's profiles and asserts an item with the profile's Id whose Name is its name. listContains with both in `where` is exactly that.",
+          "name": "ListConfigurationProfiles",
+          "op": "ListConfigurationProfiles",
+          "call": {
+            "op": "ListConfigurationProfiles",
+            "params": { "ApplicationId": { "$ref": "app.id" } }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Items",
+              "where": {
+                "$.Id": { "$ref": "prof.id" },
+                "$.Name": { "$name": "prof" }
+              }
+            }
+          ],
+          "depends": ["CreateConfigurationProfile"]
+        },
+        {
+          "$comment": "The native lists with Type AWS.AppConfig.FeatureFlags and asserts the feature-flag profile is on the page and the AWS.Freeform profile is not — that the filter filters. Both are carried; the feature-flag profile comes from setup (see the group's $comment).",
+          "name": "ListConfigurationProfilesByType",
+          "op": "ListConfigurationProfiles",
+          "call": {
+            "op": "ListConfigurationProfiles",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "Type": "AWS.AppConfig.FeatureFlags"
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "flags.id" } }
+            },
+            {
+              "kind": "absent",
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "prof.id" } }
+            }
+          ],
+          "depends": ["CreateConfigurationProfile"]
+        },
+        {
+          "$comment": "The native sends a new Description and asserts it in the response and in a GetConfigurationProfile read-back. Both are carried. The port adds that the read-back's Name is unchanged: UpdateConfigurationProfile's members other than the two ids are all optional, so one it was not sent must keep its stored value — the claim the cli native makes for UpdateApplication, made here too. Overcast does not implement UpdateConfigurationProfile yet, so today this test is unimplemented in the native and the shadow alike.",
+          "name": "UpdateConfigurationProfile",
+          "op": "UpdateConfigurationProfile",
+          "call": {
+            "op": "UpdateConfigurationProfile",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "ConfigurationProfileId": { "$ref": "prof.id" },
+              "Description": "updated by compat"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Description": { "equals": "updated by compat" } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetConfigurationProfile",
+                "params": {
+                  "ApplicationId": { "$ref": "app.id" },
+                  "ConfigurationProfileId": { "$ref": "prof.id" }
+                }
+              },
+              "checks": {
+                "$.Description": { "equals": "updated by compat" },
+                "$.Name": { "equals": { "$name": "prof" } }
+              }
+            }
+          ],
+          "depends": ["CreateConfigurationProfile"]
+        },
+        {
+          "$comment": "The native deletes the profile and asserts both halves of the effect: GetConfigurationProfile raises ResourceNotFoundException, and the profile is no longer in ListConfigurationProfiles. Both are carried.",
+          "name": "DeleteConfigurationProfile",
+          "op": "DeleteConfigurationProfile",
+          "call": {
+            "op": "DeleteConfigurationProfile",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "ConfigurationProfileId": { "$ref": "prof.id" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetConfigurationProfile",
+                "params": {
+                  "ApplicationId": { "$ref": "app.id" },
+                  "ConfigurationProfileId": { "$ref": "prof.id" }
+                }
+              },
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListConfigurationProfiles",
+                "params": { "ApplicationId": { "$ref": "app.id" } }
+              },
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "prof.id" } }
+            }
+          ],
+          "depends": ["CreateConfigurationProfile"]
+        },
+        {
+          "$comment": "The native asks the group's own application for a profile id no profile has and requires ResourceNotFoundException. zzzzzzz is the native's stand-in, shaped like an AppConfig Id ([a-z0-9]{4,7}) so the request is well-formed. No depends, as in the registry: the application comes from setup.",
+          "name": "GetConfigurationProfileNotFound",
+          "op": "GetConfigurationProfile",
+          "call": {
+            "op": "GetConfigurationProfile",
+            "params": {
+              "ApplicationId": { "$ref": "app.id" },
+              "ConfigurationProfileId": "zzzzzzz"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteConfigurationProfile",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "ConfigurationProfileId": { "$ref": "prof.id" }
+          }
+        },
+        {
+          "op": "DeleteConfigurationProfile",
+          "params": {
+            "ApplicationId": { "$ref": "app.id" },
+            "ConfigurationProfileId": { "$ref": "flags.id" }
+          }
+        },
+        {
+          "op": "DeleteApplication",
+          "params": { "ApplicationId": { "$ref": "app.id" } }
+        }
+      ]
+    }
+  ]
+}

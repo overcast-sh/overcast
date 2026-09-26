@@ -8,6 +8,21 @@ use std::sync::Arc;
 use crate::clients::AwsClients;
 use crate::groups::ServiceGroup;
 
+#[path = "scenarios_authored_appconfig_applications_gen.rs"]
+mod scenarios_authored_appconfig_applications_gen;
+
+#[path = "scenarios_authored_appconfig_configuration_profiles_gen.rs"]
+mod scenarios_authored_appconfig_configuration_profiles_gen;
+
+#[path = "scenarios_authored_appconfig_deployments_gen.rs"]
+mod scenarios_authored_appconfig_deployments_gen;
+
+#[path = "scenarios_authored_appconfig_environments_gen.rs"]
+mod scenarios_authored_appconfig_environments_gen;
+
+#[path = "scenarios_authored_appconfig_tags_gen.rs"]
+mod scenarios_authored_appconfig_tags_gen;
+
 #[path = "scenarios_authored_cognito_userpools_gen.rs"]
 mod scenarios_authored_cognito_userpools_gen;
 
@@ -85,6 +100,11 @@ mod scenarios_sqs_gen;
 
 pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> {
     vec![
+        Box::new(scenarios_authored_appconfig_applications_gen::ScenariosAuthoredAppconfigApplications::new(clients)),
+        Box::new(scenarios_authored_appconfig_configuration_profiles_gen::ScenariosAuthoredAppconfigConfigurationProfiles::new(clients)),
+        Box::new(scenarios_authored_appconfig_deployments_gen::ScenariosAuthoredAppconfigDeployments::new(clients)),
+        Box::new(scenarios_authored_appconfig_environments_gen::ScenariosAuthoredAppconfigEnvironments::new(clients)),
+        Box::new(scenarios_authored_appconfig_tags_gen::ScenariosAuthoredAppconfigTags::new(clients)),
         Box::new(scenarios_authored_cognito_userpools_gen::ScenariosAuthoredCognitoUserpools::new(clients)),
         Box::new(scenarios_authored_eventbridge_buses_gen::ScenariosAuthoredEventbridgeBuses::new(clients)),
         Box::new(scenarios_authored_eventbridge_events_gen::ScenariosAuthoredEventbridgeEvents::new(clients)),

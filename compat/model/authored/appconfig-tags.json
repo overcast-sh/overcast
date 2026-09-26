@@ -1,0 +1,155 @@
+{
+  "$comment": "Authored port of the hand-written registry group appconfig-tags (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group had one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 5 rows each, which the port closes. It runs today under the shadow name appconfig-tags-shadow, beside the cli native, so the nightly can compare the two per (suite, test); the flip PR renames this group to appconfig-tags, points the hand-written registry entry at this file, and deletes the native code. With one native the union is that native's assertions, plus read-backs of documented effects where it asserted little, each stated in its test's $comment. Every scenario backend signs with AppConfig's own credential scope, as the cli native does. The native also asserts the not-found error's HTTP status (404) beside its code; the IR's error clause has no status, so only the code is carried, and the model binds ResourceNotFoundException to exactly 404 (smithy.api#httpError).",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One application, created with two inline tags by the CreateApplicationWithTags test, as the native does and as registry.json's depends describe; teardown deletes it. The tag operations address it by ARN, and no AppConfig response carries an application's ARN — Application is Id, Name and Description — so every tag call spells it as arn:aws:appconfig:us-east-1:000000000000:application/<id>, with `$concat` around the exported id. The native builds the same ARN from the run's region and the emulator's account 000000000000. The IR has no value for either, so both are literals here: right for the region the compat runner defaults to (cmd/compat --region, us-east-1) and for Overcast's account, and wrong against any other, exactly as the native is. No clause is wrapped in `eventually`: the native reads every tag write back immediately.",
+      "name": "appconfig-tags-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "The native creates the application with Tags Owner=compat and Team=platform, asserts the response carries an Id, and reads the tags back through ListTagsForResource: both pairs must be stored. All of it is carried; the Id is exported to build the ARN every later test uses.",
+          "name": "CreateApplicationWithTags",
+          "op": "CreateApplication",
+          "call": {
+            "op": "CreateApplication",
+            "params": {
+              "Name": { "$name": "app" },
+              "Tags": { "Owner": "compat", "Team": "platform" }
+            },
+            "export": { "app.id": "$.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Id": { "nonEmpty": true } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListTagsForResource",
+                "params": {
+                  "ResourceArn": { "$concat": ["arn:aws:appconfig:us-east-1:000000000000:application/", { "$ref": "app.id" }] }
+                }
+              },
+              "checks": {
+                "$.Tags.Owner": { "equals": "compat" },
+                "$.Tags.Team": { "equals": "platform" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native tags Stage=beta and Owner=compat-updated and reads the tags back, asserting three things: the new key is there, the existing Owner was overwritten rather than kept, and Team, which the call did not name, survived. All three are carried.",
+          "name": "TagResource",
+          "op": "TagResource",
+          "call": {
+            "op": "TagResource",
+            "params": {
+              "ResourceArn": { "$concat": ["arn:aws:appconfig:us-east-1:000000000000:application/", { "$ref": "app.id" }] },
+              "Tags": { "Stage": "beta", "Owner": "compat-updated" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListTagsForResource",
+                "params": {
+                  "ResourceArn": { "$concat": ["arn:aws:appconfig:us-east-1:000000000000:application/", { "$ref": "app.id" }] }
+                }
+              },
+              "checks": {
+                "$.Tags.Stage": { "equals": "beta" },
+                "$.Tags.Owner": { "equals": "compat-updated" },
+                "$.Tags.Team": { "equals": "platform" }
+              }
+            }
+          ],
+          "depends": ["CreateApplicationWithTags"]
+        },
+        {
+          "$comment": "The native asserts the tag map is non-empty and holds Team=platform; a map holding that pair is non-empty, so the one check says both. It runs after TagResource (its only depends) and before UntagResource, so the port adds the two pairs TagResource wrote: the full tag set the application has at this point.",
+          "name": "ListTagsForResource",
+          "op": "ListTagsForResource",
+          "call": {
+            "op": "ListTagsForResource",
+            "params": {
+              "ResourceArn": { "$concat": ["arn:aws:appconfig:us-east-1:000000000000:application/", { "$ref": "app.id" }] }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Tags.Team": { "equals": "platform" },
+                "$.Tags.Stage": { "equals": "beta" },
+                "$.Tags.Owner": { "equals": "compat-updated" }
+              }
+            }
+          ],
+          "depends": ["TagResource"]
+        },
+        {
+          "$comment": "The native removes Team and reads the tags back, asserting Team is gone and Owner is still there. Both are carried; Owner's value is the one TagResource wrote, so the port states it rather than only its presence.",
+          "name": "UntagResource",
+          "op": "UntagResource",
+          "call": {
+            "op": "UntagResource",
+            "params": {
+              "ResourceArn": { "$concat": ["arn:aws:appconfig:us-east-1:000000000000:application/", { "$ref": "app.id" }] },
+              "TagKeys": ["Team"]
+            }
+          },
+          "assert": [
+            {
+              "kind": "readback",
+              "call": {
+                "op": "ListTagsForResource",
+                "params": {
+                  "ResourceArn": { "$concat": ["arn:aws:appconfig:us-east-1:000000000000:application/", { "$ref": "app.id" }] }
+                }
+              },
+              "checks": {
+                "$.Tags.Team": { "missing": true },
+                "$.Tags.Owner": { "equals": "compat-updated" }
+              }
+            }
+          ],
+          "depends": ["TagResource"]
+        },
+        {
+          "$comment": "The native lists the tags of an application ARN that names no application and requires ResourceNotFoundException, not an empty map from some other service's ARN-keyed store. The id is the native's stand-in zzzzzzz, shaped like an AppConfig Id; the ARN is spelled as the group's $comment describes. No depends, as in the registry.",
+          "name": "ListTagsForResourceNotFound",
+          "op": "ListTagsForResource",
+          "call": {
+            "op": "ListTagsForResource",
+            "params": { "ResourceArn": "arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz" }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteApplication",
+          "params": { "ApplicationId": { "$ref": "app.id" } }
+        }
+      ]
+    }
+  ]
+}
