@@ -1704,10 +1704,14 @@ func (c *Config) TLSAuto() bool {
 // configured hostname.
 //
 // One-level wildcards are a TLS constraint, not a choice: "*.<base>" matches
-// exactly one label, so deeper host-routed names with a variable middle
-// (e.g. "{id}.execute-api.{region}.<base>") cannot be enumerated here and
-// are not covered. The S3 level is included explicitly because
-// "{bucket}.s3.<base>" is the common two-label shape.
+// exactly one label. The S3 level is included explicitly because
+// "{bucket}.s3.<base>" is the common two-label shape; deeper host-routed
+// names with a variable middle ("{id}.execute-api.{region}.<base>") cannot be
+// enumerated at all — their middle is the cross product of every host-route
+// label with every region — and are covered at handshake time instead, by
+// trust.CertSource minting for the SNI the client actually presents. This
+// list therefore stays the *enumerable* set: what the on-disk leaf carries
+// and what a client sending no SNI is served. See TLSWildcardBases.
 func (c *Config) TLSAutoSANs() []string {
 	sans := []string{"localhost", "127.0.0.1", "::1"}
 	seen := map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
@@ -1732,14 +1736,54 @@ func (c *Config) TLSAutoSANs() []string {
 		add("*." + base)
 		add("*.s3." + base)
 	}
-	for _, base := range WildcardDNSDomains {
+	for _, base := range c.tlsDomains() {
 		addDomain(base)
 	}
-	for _, base := range c.SplitHorizonHosts {
-		addDomain(base)
-	}
-	addDomain(c.Hostname)
 	return sans
+}
+
+// TLSWildcardBases returns the domains below which the auto TLS mode will
+// mint a certificate on demand: every wildcard DNS domain, every extra
+// split-horizon host, and OVERCAST_HOSTNAME — each lower-cased, with IP
+// literals and blanks dropped.
+//
+// The list is normalised here rather than in trust.CertSource, which matches
+// against it verbatim: one set of rules, next to the SAN list built from the
+// same domains.
+//
+// This is the "names we own" test the handshake applies (see
+// trust.CertSource). A name at least one label below one of these is one
+// Overcast routes to itself — a host-routed invoke URL, a virtual-hosted
+// bucket, a dotted bucket in either — so minting for it certifies nothing the
+// enumerated SANs would not have certified had the middle labels been
+// enumerable. A name outside all of them is somebody else's, and the daemon
+// will not sign for it.
+func (c *Config) TLSWildcardBases() []string {
+	bases := make([]string, 0, len(WildcardDNSDomains)+len(c.SplitHorizonHosts)+1)
+	seen := make(map[string]bool, cap(bases))
+	for _, base := range c.tlsDomains() {
+		base = strings.ToLower(strings.TrimSpace(base))
+		// An IP literal has no subdomains to mint for; a wildcard over one is
+		// meaningless (and unparseable as a DNS name).
+		if base == "" || seen[base] || net.ParseIP(base) != nil {
+			continue
+		}
+		seen[base] = true
+		bases = append(bases, base)
+	}
+	return bases
+}
+
+// tlsDomains is the raw base-domain list both TLS name helpers work from, in
+// precedence-free declaration order: the built-in wildcard DNS domains, the
+// operator's extra split-horizon hosts, then the configured hostname. Kept in
+// one place so the enumerated SANs and the mintable bases can never come to
+// disagree about which domains are Overcast's.
+func (c *Config) tlsDomains() []string {
+	domains := make([]string, 0, len(WildcardDNSDomains)+len(c.SplitHorizonHosts)+1)
+	domains = append(domains, WildcardDNSDomains...)
+	domains = append(domains, c.SplitHorizonHosts...)
+	return append(domains, c.Hostname)
 }
 
 // allServices is the canonical list of supported service names.

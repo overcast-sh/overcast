@@ -46,6 +46,12 @@ reaches bucket `mybucket`. **Paths stay case-sensitive**, as on AWS:
 `/_overcast/cloudfront/distributions/{distributionId}/...` and every other
 path-style route must match exactly.
 
+**Every one of these works over HTTPS.** A TLS wildcard matches exactly one
+label, so a name with a variable middle (`{apiId}.execute-api.{region}.{base}`)
+can never be covered by a fixed certificate; with `OVERCAST_TLS=auto` the local
+CA mints one for it during the handshake instead — see
+[How the local CA works](../https/how-it-works.md#which-names-the-certificate-covers).
+
 ## How Overcast decides who owns a Host
 
 S3 virtual-hosted addressing and the services above share one hostname space,
