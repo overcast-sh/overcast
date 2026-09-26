@@ -5,17 +5,26 @@ import { useState, useCallback } from "react"
  *
  * Handles corrupt/missing values gracefully and catches write failures
  * (e.g. QuotaExceededError in private browsing).
+ *
+ * `defaultValue` may be a function, called once when nothing is stored — for
+ * a default that must not be rebuilt each render (one with generated ids).
+ * `restore` checks and repairs what was stored, which may be from an older
+ * shape, before it is trusted; it runs once, on the first render.
  */
 export function useLocalStorage<T>(
   key: string,
-  defaultValue: T,
+  defaultValue: T | (() => T),
+  restore?: (stored: unknown) => T,
 ): [T, (value: T | ((prev: T) => T)) => void] {
   const [stored, setStored] = useState<T>(() => {
+    const fallback = () => (defaultValue instanceof Function ? defaultValue() : defaultValue)
     try {
       const raw = localStorage.getItem(key)
-      return raw !== null ? (JSON.parse(raw) as T) : defaultValue
+      if (raw === null) return fallback()
+      const parsed: unknown = JSON.parse(raw)
+      return restore ? restore(parsed) : (parsed as T)
     } catch {
-      return defaultValue
+      return fallback()
     }
   })
 

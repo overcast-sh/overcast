@@ -23,12 +23,23 @@ import type * as Monaco from "monaco-editor"
 type Disposable = { dispose(): void }
 type MouseHandler = (e: Monaco.editor.IEditorMouseEvent) => void
 
-/** What the fake `monaco` namespace carries: the enums and constructors CodeBrowser reads. */
+/**
+ * What the fake `monaco` namespace carries: the enums and constructors
+ * CodeBrowser and the Athena SQL editor read, and the global registrations
+ * (completion providers, markers) as spies.
+ */
 export const fakeMonacoNamespace = {
   editor: {
     MouseTargetType: { GUTTER_GLYPH_MARGIN: 2, GUTTER_LINE_NUMBERS: 3, CONTENT_TEXT: 6 },
     TrackedRangeStickiness: { NeverGrowsWhenTypingAtEdges: 1 },
+    setModelMarkers: vi.fn(),
   },
+  languages: {
+    CompletionItemKind: { Keyword: 17, Function: 1, Module: 8, Struct: 6, Field: 3 },
+    registerCompletionItemProvider: vi.fn(() => ({ dispose() {} })),
+  },
+  MarkerSeverity: { Error: 8 },
+  KeyMod: { CtrlCmd: 2048, Shift: 1024 },
   Range: class {
     startLineNumber: number
     startColumn: number
@@ -46,7 +57,7 @@ export const fakeMonacoNamespace = {
       this.endColumn = endColumn
     }
   },
-  KeyCode: { F9: 67 },
+  KeyCode: { F9: 67, Enter: 3, Escape: 9 },
 } as unknown as typeof Monaco
 
 export class FakeEditor {
@@ -102,6 +113,29 @@ export class FakeEditor {
   onDidChangeModel(handler: () => void): Disposable {
     this.modelChange.push(handler)
     return { dispose() {} }
+  }
+
+  /** Context keys the component created, by name, and their current values. */
+  readonly contextKeys = new Map<string, unknown>()
+
+  createContextKey<T extends Monaco.editor.ContextKeyValue>(
+    name: string,
+    value: T,
+  ): Monaco.editor.IContextKey<T> {
+    this.contextKeys.set(name, value)
+    return {
+      set: (next: T) => void this.contextKeys.set(name, next),
+      get: () => this.contextKeys.get(name) as T,
+      reset: () => void this.contextKeys.set(name, value),
+    }
+  }
+
+  onDidDispose(): Disposable {
+    return { dispose() {} }
+  }
+
+  getSelection() {
+    return null
   }
 
   addAction(action: Monaco.editor.IActionDescriptor): Disposable {

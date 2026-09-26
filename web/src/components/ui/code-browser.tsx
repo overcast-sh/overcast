@@ -26,6 +26,7 @@ import { useState, useCallback, useEffect, useMemo, useRef, type ReactNode } fro
 import Editor, { type OnMount } from "@monaco-editor/react"
 import type * as Monaco from "monaco-editor"
 import { ChevronRight, ChevronDown, FileCode, FolderOpen, Folder, X } from "lucide-react"
+import { MONACO_BASE_OPTIONS, monacoTheme } from "@/components/ui/monaco-setup"
 import { useIsDarkTheme } from "@/hooks/use-theme"
 import { languageForPath } from "@/lib/language-for-path"
 import { sectionLabel } from "@/lib/typography"
@@ -749,7 +750,7 @@ export function CodeBrowser({
               path={activeFile}
               defaultLanguage={currentLanguage}
               defaultValue={currentValue}
-              theme={isDark ? "vs-dark" : "light"}
+              theme={monacoTheme(isDark)}
               onChange={(val) => {
                 dirtyRef.current.add(activeFile)
                 onChange?.(activeFile, val ?? "")
@@ -757,19 +758,9 @@ export function CodeBrowser({
               onMount={handleMount}
               saveViewState
               options={{
-                fontSize: 13,
+                ...MONACO_BASE_OPTIONS,
                 readOnly: currentReadOnly,
                 glyphMargin: wantsGutter,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                wordWrap: "on",
-                lineNumbers: "on",
-                renderLineHighlight: "line",
-                padding: { top: 8, bottom: 8 },
-                automaticLayout: true,
-                cursorBlinking: "smooth",
-                smoothScrolling: true,
-                renderWhitespace: "selection",
               }}
             />
           )}

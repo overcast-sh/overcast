@@ -14,6 +14,7 @@ import {
 } from "@/features/stepfunctions/data"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
 import { useMediaQuery } from "@/hooks/use-media-query"
+import { useNow } from "@/hooks/use-now"
 import { executionArnFor } from "@/services/api/stepfunctions"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -57,17 +58,6 @@ interface Props {
   onStateChange: (state: string | undefined) => void
   tab: ExecutionTab
   onTabChange: (tab: ExecutionTab) => void
-}
-
-/** A clock that ticks while `active`, so running durations count up on screen. */
-function useNow(active: boolean, intervalMs = 250): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!active) return
-    const id = window.setInterval(() => setNow(Date.now()), intervalMs)
-    return () => window.clearInterval(id)
-  }, [active, intervalMs])
-  return now
 }
 
 /**
@@ -121,7 +111,7 @@ export function ExecutionDetail({
   const model = parsed.model
   const trace = useMemo(() => buildTrace(events, model), [events, model])
   const [iterations, setIterations] = useState<IterationSelection>({})
-  const now = useNow(live)
+  const now = useNow(live, 250)
   const clock = live ? now : (trace.end ?? detail?.stopDate?.getTime() ?? now)
 
   const [showStop, setShowStop] = useState(false)
