@@ -63,13 +63,25 @@ import (
 // does not fit is the one that argues for the next raise, as a reviewed
 // decision rather than inside its own rebase.
 //
+// Reviewed 2026-09-26 for G6 wave 3 (#1116), ahead of its ports: the groups
+// left with the largest parity debt exist only in the cli suite, so each port
+// closes debt in six suites, and their services are outside the corpus. At
+// revision 56df161c, appconfig adds 73,364 bytes over 56 operations (1,310
+// B/op), backup 175,704 over 115 (1,527), ecr 90,437 over 58 (1,559) and
+// s3tables 65,920 over 49 (1,345), all inside the 1,608 B/op gate. That takes
+// the snapshot to 17 services / 1,565,218 bytes, 6.2% of the 24 MiB fleet
+// ceiling. The cap goes to 1,920 KiB, ~1.26x that total, the headroom factor
+// every raise before it used. eks (2,115 B/op), kafka (2,309) and opensearch
+// (1,937) were measured in the same pass and are not added: like s3, ecs and
+// rds, they need structural pruning or a reviewed per-op exception first.
+//
 // **Raise this constant deliberately, as a reviewer, never automatically.** It
 // is the enforcement half of §4.6's size gate: growing it is how the fleet
 // budget gets spent, and the projection that budget rests on is in §4.6. A
 // failure here means the snapshot grew — decide whether the growth is scope
 // (a service was added to models/aws/shapes-services.txt, which is a review
 // decision) or encoding drift (which is a bug), and say which in the PR.
-const maxShapeSnapshotBytes = 1200 * 1024
+const maxShapeSnapshotBytes = 1920 * 1024
 
 // shapeSnapshotDir is the committed snapshot, relative to this package.
 var shapeSnapshotDir = filepath.Join("..", "..", "models", "aws", "shapes")
