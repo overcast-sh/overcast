@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -15,7 +16,8 @@ import (
 // name or ID; a prepared statement by "<workgroup>/<name>", which is
 // unambiguous because a workgroup name cannot hold a slash. Idempotency
 // tokens are keyed "<operation>/<token>", since a token only has to be
-// unique per operation.
+// unique per operation. Each workgroup's recent-queries entry (see
+// recent_queries.go) is keyed by the workgroup's name.
 const (
 	nsWorkGroups         = "athena:workgroups"
 	nsQueries            = "athena:queries"
@@ -23,6 +25,7 @@ const (
 	nsPreparedStatements = "athena:prepared-statements"
 	nsDataCatalogs       = "athena:data-catalogs"
 	nsIdempotency        = "athena:idempotency"
+	nsRecentQueries      = "athena:recent-queries"
 )
 
 // workGroupRecord is a WorkGroup as persisted: the wire shape plus its tags.
@@ -56,6 +59,16 @@ type idempotencyRecord struct {
 type athenaStore struct {
 	store state.Store
 	log   *serviceutil.ServiceLogger
+
+	// recentMu serialises each read-modify-write of a recent-queries entry,
+	// and a rebuild of them all against any of those.
+	recentMu sync.Mutex
+	// recentFresh is whether the recent-queries entries account for every
+	// stored execution. It is false until this process first rebuilds them —
+	// a previous one may have stopped between storing an execution and its
+	// entry, or predate the entries — and again once one cannot be read.
+	// Guarded by recentMu.
+	recentFresh bool
 }
 
 func newAthenaStore(s state.Store, log *serviceutil.ServiceLogger) *athenaStore {
@@ -89,11 +102,17 @@ func (s *athenaStore) get(ctx context.Context, ns, key string, v any) (bool, err
 	if !found {
 		return false, nil
 	}
+	return s.decode(ns, key, raw, v), nil
+}
+
+// decode unmarshals the record at ns/key into v, logging and reporting false
+// when it cannot be decoded.
+func (s *athenaStore) decode(ns, key, raw string, v any) bool {
 	if err := json.Unmarshal([]byte(raw), v); err != nil {
 		s.log.Warn("skipping malformed record", zap.String("namespace", ns), zap.String("key", key), zap.Error(err))
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 func (s *athenaStore) delete(ctx context.Context, ns, key string) error {
@@ -106,20 +125,24 @@ func (s *athenaStore) delete(ctx context.Context, ns, key string) error {
 // scan decodes every record under ns/prefix, skipping (and logging) any that
 // fail, so one corrupt record never fails a list.
 func scan[T any](ctx context.Context, s *athenaStore, ns, prefix string) ([]*T, error) {
+	out, _, err := scanCounting[T](ctx, s, ns, prefix)
+	return out, err
+}
+
+// scanCounting is scan, also reporting how many records it skipped.
+func scanCounting[T any](ctx context.Context, s *athenaStore, ns, prefix string) ([]*T, int, error) {
 	pairs, err := s.store.Scan(ctx, ns, prefix)
 	if err != nil {
-		return nil, fmt.Errorf("athena: scan %s %q: %w", ns, prefix, err)
+		return nil, 0, fmt.Errorf("athena: scan %s %q: %w", ns, prefix, err)
 	}
 	out := make([]*T, 0, len(pairs))
 	for _, kv := range pairs {
 		var v T
-		if err := json.Unmarshal([]byte(kv.Value), &v); err != nil {
-			s.log.Warn("skipping malformed record", zap.String("namespace", ns), zap.String("key", kv.Key), zap.Error(err))
-			continue
+		if s.decode(ns, kv.Key, kv.Value, &v) {
+			out = append(out, &v)
 		}
-		out = append(out, &v)
 	}
-	return out, nil
+	return out, len(pairs) - len(out), nil
 }
 
 // getRecord is get for a typed record, returning nil when it is absent.
@@ -155,8 +178,16 @@ func (s *athenaStore) listWorkGroups(ctx context.Context) ([]*workGroupRecord, e
 	return out, err
 }
 
+// putQuery stores an execution, then folds it into its workgroup's
+// recent-queries entry. The entry follows the record and is derived from it,
+// so only the record's write can fail the call: an entry that could not be
+// kept up to date is rebuilt on the next map fetch instead.
 func (s *athenaStore) putQuery(ctx context.Context, qe *QueryExecution) error {
-	return s.put(ctx, nsQueries, qe.QueryExecutionId, qe)
+	if err := s.put(ctx, nsQueries, qe.QueryExecutionId, qe); err != nil {
+		return err
+	}
+	s.recordRecentQuery(ctx, qe)
+	return nil
 }
 
 // getQuery reads one execution. Records written before workgroups were
@@ -176,6 +207,108 @@ func (s *athenaStore) listQueries(ctx context.Context) ([]*QueryExecution, error
 		qe.normalize()
 	}
 	return out, err
+}
+
+// recordRecentQuery folds a stored execution into its workgroup's
+// recent-queries entry. An entry that cannot be read, or written, is left
+// for the next rebuild rather than replaced by one that knows only this
+// execution.
+func (s *athenaStore) recordRecentQuery(ctx context.Context, qe *QueryExecution) {
+	s.recentMu.Lock()
+	defer s.recentMu.Unlock()
+	workGroup := orPrimary(qe.WorkGroup)
+	entry := &recentQueries{WorkGroup: workGroup}
+	raw, found, err := s.store.Get(ctx, nsRecentQueries, workGroup)
+	switch {
+	case err != nil:
+		s.recentStale(workGroup, err)
+	case found && !s.decode(nsRecentQueries, workGroup, raw, entry):
+		s.recentFresh = false
+	default:
+		entry.record(qe)
+		if err := s.put(ctx, nsRecentQueries, workGroup, entry); err != nil {
+			s.recentStale(workGroup, err)
+		}
+	}
+}
+
+// recentStale marks the recent-queries entries for a rebuild after a store
+// error left workGroup's behind. Its caller holds recentMu.
+func (s *athenaStore) recentStale(workGroup string, err error) {
+	s.log.Warn("recent-queries entry left for a rebuild", zap.String("workGroup", workGroup), zap.Error(err))
+	s.recentFresh = false
+}
+
+// recentQueries is every workgroup's recent-queries entry, by workgroup. The
+// entries are rebuilt from the executions the first time this process reads
+// them, and whenever one of them cannot be read.
+func (s *athenaStore) recentQueries(ctx context.Context) (map[string]recentQueries, error) {
+	s.recentMu.Lock()
+	defer s.recentMu.Unlock()
+	if !s.recentFresh {
+		if err := s.rebuildRecentQueries(ctx); err != nil {
+			return nil, err
+		}
+	}
+	entries, skipped, err := scanCounting[recentQueries](ctx, s, nsRecentQueries, "")
+	if err != nil {
+		return nil, err
+	}
+	if skipped > 0 {
+		if err := s.rebuildRecentQueries(ctx); err != nil {
+			return nil, err
+		}
+		if entries, err = scan[recentQueries](ctx, s, nsRecentQueries, ""); err != nil {
+			return nil, err
+		}
+	}
+	out := make(map[string]recentQueries, len(entries))
+	for _, e := range entries {
+		out[e.WorkGroup] = *e
+	}
+	return out, nil
+}
+
+// rebuildRecentQueries replaces every recent-queries entry with one built
+// from the stored executions — the one read of them all. Its caller holds
+// recentMu.
+func (s *athenaStore) rebuildRecentQueries(ctx context.Context) error {
+	queries, err := s.listQueries(ctx)
+	if err != nil {
+		return err
+	}
+	entries := recentQueriesOf(queries)
+	stale, err := s.store.List(ctx, nsRecentQueries, "")
+	if err != nil {
+		return fmt.Errorf("athena: list %s: %w", nsRecentQueries, err)
+	}
+	for _, key := range stale {
+		if entries[key] == nil {
+			if err := s.delete(ctx, nsRecentQueries, key); err != nil {
+				return err
+			}
+		}
+	}
+	for key, entry := range entries {
+		if err := s.put(ctx, nsRecentQueries, key, entry); err != nil {
+			return err
+		}
+	}
+	s.recentFresh = true
+	return nil
+}
+
+// forgetRecentQueries drops a workgroup's recent-queries entry once its
+// executions have been deleted with it. The entries are rebuilt on the next
+// map fetch too: a state change that raced the delete may have stored an
+// execution again, and the executions are the truth.
+func (s *athenaStore) forgetRecentQueries(ctx context.Context, workGroup string) {
+	s.recentMu.Lock()
+	defer s.recentMu.Unlock()
+	if err := s.delete(ctx, nsRecentQueries, workGroup); err != nil {
+		s.log.Warn("recent-queries entry left for a rebuild", zap.String("workGroup", workGroup), zap.Error(err))
+	}
+	s.recentFresh = false
 }
 
 func (s *athenaStore) putNamedQuery(ctx context.Context, nq *NamedQuery) error {

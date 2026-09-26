@@ -134,6 +134,7 @@ var namespaceTiers = map[string]Tier{
 	"athena:named-queries":       TierHot,
 	"athena:prepared-statements": TierHot,
 	"athena:data-catalogs":       TierHot,
+	"athena:recent-queries":      TierHot,
 	"athena:queries":             TierCached,
 	"athena:idempotency":         TierCached,
 	"athena:results":             TierCached,
