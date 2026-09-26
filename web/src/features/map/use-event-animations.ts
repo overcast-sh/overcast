@@ -12,10 +12,17 @@
  * (e.g. `sqs::my-queue`) which is matched against actual topology nodes.
  */
 
-import { useEffect, useRef, useReducer, useCallback } from "react"
+import { useEffect, useRef, useReducer, useCallback, useMemo, useState } from "react"
 import { useEventStream } from "@/hooks/use-event-stream"
 import { EventType } from "@/services/event-types"
 import type { StreamEvent, TopologyEdge, TopologyNode } from "@/types"
+import {
+  applyLakeEvent,
+  EMPTY_OVERLAY,
+  expireOverlay,
+  runEdgeEffects,
+  type DataLakeOverlay,
+} from "./data-lake-overlay"
 
 const GLOW_TTL = 1200 // ms — how long an edge glows after an event
 
@@ -46,6 +53,8 @@ export interface AnimationState {
    * volumes on storage nodes even when writes happen faster than the eye can follow.
    */
   nodeWriteBurstCounts: Record<string, number>
+  /** Athena, Glue and S3 Tables row overlays: see data-lake-overlay.ts. */
+  dataLake: DataLakeOverlay
 }
 
 // ─── Event descriptor registry ─────────────────────────────────────────────
@@ -455,7 +464,151 @@ export function useEventAnimations(nodes: TopologyNode[], edges: TopologyEdge[])
     return () => clearInterval(id)
   }, [])
 
-  return state
+  const { overlay: dataLake, heldEdges } = useDataLakeEvents(edges, glow)
+  const glowingEdges = useMemo(
+    () =>
+      heldEdges.size === 0 ? state.glowingEdges : new Set([...state.glowingEdges, ...heldEdges]),
+    [state.glowingEdges, heldEdges],
+  )
+  return { ...state, glowingEdges, dataLake }
+}
+
+// ─── Data-lake overlay ─────────────────────────────────────────────────────
+
+/** How often expired ghosts, bursts and finished queries are swept (ms). */
+const LAKE_SWEEP_INTERVAL = 1_000
+
+const LAKE_SOURCES = ["athena", "glue", "s3tables"]
+
+type LakeAction =
+  { type: "events"; events: StreamEvent[]; now: number } | { type: "expire"; now: number }
+
+function lakeReducer(o: DataLakeOverlay, action: LakeAction): DataLakeOverlay {
+  if (action.type === "expire") return expireOverlay(o, action.now)
+  return action.events.reduce((acc, ev) => applyLakeEvent(acc, ev, action.now), o)
+}
+
+/**
+ * How far behind the newest of a batch of unseen events an event may be and
+ * still be live. A live batch spans a moment; the history a reconnect loads
+ * spans much longer, and only its last moment is replayed. Measured between
+ * the events' own timestamps, so a server clock that differs from the
+ * browser's does not matter.
+ */
+const LAKE_LIVE_SPAN = 10_000
+
+/** The events of `batch` within `LAKE_LIVE_SPAN` of its newest. */
+function recent(batch: StreamEvent[]): StreamEvent[] {
+  const newest = Math.max(...batch.map((ev) => Date.parse(ev.time)))
+  return batch.filter((ev) => newest - Date.parse(ev.time) <= LAKE_LIVE_SPAN)
+}
+
+/** A running query's glowing `queries` edges, and since when. */
+interface Hold {
+  edgeIds: string[]
+  since: number
+}
+
+/** A hold whose query never reported finishing is let go after this long (ms). */
+const MAX_HOLD = 10 * 60_000
+
+const NO_EDGES: ReadonlySet<string> = new Set()
+
+/**
+ * The data-lake overlay, fed by every Athena, Glue and S3 Tables event rather
+ * than only the latest: a fast query's QUEUED, RUNNING and SUCCEEDED can
+ * arrive in one batch, and the row has to show all three, in order. Also
+ * holds a running query's `queries` edge glowing until it finishes — at
+ * least `GLOW_TTL`, so a query faster than that still visibly lights it.
+ *
+ * A query's first run against a database, or a workgroup's first result, has
+ * no edge yet: the topology refetch that draws it lands after the event. Such
+ * an event is tried again whenever the edges change, for `RETRY_TTL`.
+ */
+function useDataLakeEvents(edges: TopologyEdge[], glow: (edgeIds: string[]) => void) {
+  const { events } = useEventStream({ source: LAKE_SOURCES })
+  const [overlay, dispatch] = useReducer(lakeReducer, EMPTY_OVERLAY)
+  const [heldEdges, setHeldEdges] = useState(NO_EDGES)
+  const holds = useRef(new Map<string, Hold>())
+  /** Queries that have finished, and when, so a late edge match only flashes. */
+  const finished = useRef(new Map<string, number>())
+  /** Events whose edges were not on the map yet, and until when to retry them. */
+  const pending = useRef(new Map<StreamEvent, number>())
+  // Null until the first render has seen what the buffer already held.
+  const seen = useRef<WeakSet<StreamEvent> | null>(null)
+  const edgesRef = useRef(edges)
+
+  const syncHeld = useCallback(() => {
+    const ids = [...holds.current.values()].flatMap((h) => h.edgeIds)
+    setHeldEdges(ids.length === 0 ? NO_EDGES : new Set(ids))
+  }, [])
+
+  /** Applies an event's edge effects; false when the edges it needs are not drawn yet. */
+  const applyEdges = useCallback(
+    (ev: StreamEvent, now: number): boolean => {
+      const effects = runEdgeEffects(ev, edgesRef.current)
+      if (effects.pulse.length > 0) glow(effects.pulse)
+      const id = (ev.payload as { queryExecutionId?: string } | undefined)?.queryExecutionId
+      if (id && effects.hold.length > 0) {
+        if (finished.current.has(id)) glow(effects.hold)
+        else holds.current.set(id, { edgeIds: effects.hold, since: now })
+      } else if (id && effects.release) {
+        finished.current.set(id, now)
+        const hold = holds.current.get(id)
+        // Dilate only a hold too short to have been seen.
+        if (hold && now - hold.since < GLOW_TTL) glow(hold.edgeIds)
+        holds.current.delete(id)
+      }
+      return !effects.unmatched
+    },
+    [glow],
+  )
+
+  useEffect(() => {
+    // What the buffer held when the map opened already happened.
+    if (seen.current === null) {
+      seen.current = new WeakSet(events)
+      return
+    }
+    const known = seen.current
+    const fresh = recent(events.filter((ev) => !known.has(ev)))
+    for (const ev of events) known.add(ev)
+    if (fresh.length === 0) return
+    const now = Date.now()
+    dispatch({ type: "events", events: fresh, now })
+    for (const ev of fresh) {
+      if (!applyEdges(ev, now)) pending.current.set(ev, now + RETRY_TTL)
+    }
+    syncHeld()
+  }, [events, applyEdges, syncHeld])
+
+  useEffect(() => {
+    edgesRef.current = edges
+    if (pending.current.size === 0) return
+    const now = Date.now()
+    for (const [ev, deadline] of pending.current) {
+      if (now > deadline || applyEdges(ev, now)) pending.current.delete(ev)
+    }
+    syncHeld()
+  }, [edges, applyEdges, syncHeld])
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const now = Date.now()
+      dispatch({ type: "expire", now })
+      let dropped = false
+      for (const [run, hold] of holds.current) {
+        if (now - hold.since > MAX_HOLD) dropped = holds.current.delete(run)
+      }
+      for (const [run, at] of finished.current) {
+        if (now - at > MAX_HOLD) finished.current.delete(run)
+      }
+      if (dropped) syncHeld()
+    }, LAKE_SWEEP_INTERVAL)
+    return () => clearInterval(id)
+  }, [syncHeld])
+
+  return { overlay, heldEdges }
 }
 
 /** Decrements every value by 1, dropping entries that reach zero. */

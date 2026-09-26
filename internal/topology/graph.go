@@ -125,6 +125,10 @@ type stackTag struct {
 	stackName string
 }
 
+type absorption struct {
+	node, into Ref
+}
+
 // Graph collects one contributor's part of the map. It is not safe for
 // concurrent use: give each contributor its own and merge them with Build.
 type Graph struct {
@@ -134,6 +138,7 @@ type Graph struct {
 	links    []Link
 	edges    []Edge
 	stacks   []stackTag
+	absorbed []absorption
 }
 
 // AddNode adds a node, and registers it under each alias (CFN or Image refs)
@@ -167,6 +172,16 @@ func (g *Graph) AddEdge(e Edge) {
 	g.edges = append(g.edges, e)
 }
 
+// Absorb folds another service's node into one of this contributor's: when
+// both exist, Build leaves node off the map and resolves every ref to it —
+// an edge, an alias, a stack — to into instead. It is for a resource that is
+// an implementation detail of another, such as the S3 bucket S3 Tables keeps a
+// table's files in, which would otherwise be drawn twice. Both refs must be
+// node refs.
+func (g *Graph) Absorb(node, into Ref) {
+	g.absorbed = append(g.absorbed, absorption{node: node, into: into})
+}
+
 // SetStack records that the resource r refers to belongs to a CloudFormation
 // stack. Build copies the name onto the resolved node's StackName.
 func (g *Graph) SetStack(r Ref, stackName string) {
@@ -196,6 +211,7 @@ func Build(regionFilter string, graphs ...*Graph) Response {
 	}
 
 	r := newResolver(index, graphs)
+	nodes = r.absorb(nodes, graphs)
 	for _, g := range graphs {
 		for _, an := range g.anchored {
 			if r.resolvesAll(an.anchors) {
@@ -255,6 +271,8 @@ func Build(regionFilter string, graphs ...*Graph) Response {
 type resolver struct {
 	index   map[string]int
 	aliases map[Ref]string
+	// into maps an absorbed node's ID to the node it was folded into.
+	into map[string]string
 	// byName maps "<kind>::<name>" to every kept node ID with that suffix,
 	// sorted, for AnyRegion fallback.
 	byName map[string][]string
@@ -276,7 +294,8 @@ func newResolver(index map[string]int, graphs []*Graph) *resolver {
 	return r
 }
 
-// reindex rebuilds byName from index.
+// reindex rebuilds byName from index, with each absorbed node's name
+// standing for the node it was folded into.
 func (r *resolver) reindex() {
 	clear(r.byName)
 	for id := range r.index {
@@ -284,14 +303,55 @@ func (r *resolver) reindex() {
 			r.byName[name] = append(r.byName[name], id)
 		}
 	}
+	for from, into := range r.into {
+		if _, name, ok := strings.Cut(from, "::"); ok {
+			r.byName[name] = append(r.byName[name], into)
+		}
+	}
 	for _, ids := range r.byName {
 		slices.Sort(ids)
 	}
 }
 
+// absorb applies every graph's absorptions whose two nodes both exist: the
+// absorbed nodes are dropped from nodes, which is returned, and resolve maps
+// their IDs to the nodes they were folded into from then on.
+func (r *resolver) absorb(nodes []Node, graphs []*Graph) []Node {
+	for _, g := range graphs {
+		for _, a := range g.absorbed {
+			from, into := r.resolve(a.node), r.resolve(a.into)
+			if a.node.kind == refNode && a.into.kind == refNode && from != "" && into != "" && from != into {
+				if r.into == nil {
+					r.into = make(map[string]string)
+				}
+				r.into[from] = into
+			}
+		}
+	}
+	if len(r.into) == 0 {
+		return nodes
+	}
+	kept := nodes[:0]
+	clear(r.index)
+	for _, n := range nodes {
+		if _, gone := r.into[n.ID]; gone {
+			continue
+		}
+		if _, dup := r.index[n.ID]; !dup {
+			r.index[n.ID] = len(kept)
+		}
+		kept = append(kept, n)
+	}
+	r.reindex()
+	return kept
+}
+
 func (r *resolver) resolve(ref Ref) string {
 	switch ref.kind {
 	case refNode:
+		if into, ok := r.into[ref.key]; ok {
+			return into
+		}
 		if _, ok := r.index[ref.key]; ok {
 			return ref.key
 		}
@@ -304,7 +364,11 @@ func (r *resolver) resolve(ref Ref) string {
 		}
 		return ""
 	case refCFN, refImage:
-		return r.aliases[ref]
+		id := r.aliases[ref]
+		if into, ok := r.into[id]; ok {
+			return into
+		}
+		return id
 	case refNone:
 		return ""
 	}

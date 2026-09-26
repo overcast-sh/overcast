@@ -2,6 +2,7 @@ package s3tables
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -143,7 +144,7 @@ func TestIcebergCommit_publishesTableCommittedOnceWithTheSnapshot(t *testing.T) 
 	out, aerr := s.icebergCommitTableTyped(context.Background(), commitRequest(bucketARN, "t",
 		icebergmeta.Update{Action: "add-snapshot", Snapshot: &icebergmeta.Snapshot{
 			SnapshotID: bigSnapshotID, SequenceNumber: 1, TimestampMS: 1, ManifestList: "s3://m.avro",
-			Summary: map[string]string{"operation": "append"},
+			Summary: map[string]string{"operation": "append", "added-records": "42"},
 		}},
 		icebergmeta.Update{Action: "set-snapshot-ref", RefName: icebergmeta.MainBranch,
 			SnapshotRef: icebergmeta.SnapshotRef{SnapshotID: bigSnapshotID, Type: icebergmeta.RefBranch}}))
@@ -152,18 +153,21 @@ func TestIcebergCommit_publishesTableCommittedOnceWithTheSnapshot(t *testing.T) 
 	}
 
 	// Then: one commit event says where the pointer moved and what the new
-	// current snapshot did, its id exact as a string
+	// current snapshot did — its id exact as a string, and the records it
+	// added
 	e := wantOnly(t, bus, events.S3TablesTableCommitted)[events.S3TablesTableCommitted]
 	wantTable(t, e, e.ResourceARN, "t")
 	p := e.Payload.(events.S3TablesCommitPayload)
+	added := int64(42)
 	want := events.S3TablesCommitPayload{
 		S3TablesTablePayload:     p.S3TablesTablePayload,
 		PreviousMetadataLocation: created.MetadataLocation,
 		MetadataLocation:         out.MetadataLocation,
 		SnapshotID:               "9007199254740993",
 		Operation:                "append",
+		AddedRecords:             &added,
 	}
-	if p != want {
+	if !reflect.DeepEqual(p, want) {
 		t.Fatalf("payload = %+v, want %+v", p, want)
 	}
 }

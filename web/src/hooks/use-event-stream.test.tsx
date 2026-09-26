@@ -236,15 +236,15 @@ describe("useEventStreamSubscription > data-lake events", () => {
   })
 
   // #2085: what each event the Athena, Glue and S3 Tables services publish
-  // makes stale.
+  // makes stale. Each also changes a node on the map (#2089).
   it.each([
-    ["athena:QueryStateChanged", "athena", [athenaKeys.executions()]],
-    ["glue:TableChanged", "glue", [glueKeys.tables(), glueKeys.partitions()]],
-    ["glue:PartitionsChanged", "glue", [glueKeys.partitions()]],
+    ["athena:QueryStateChanged", "athena", [athenaKeys.executions(), topologyKey]],
+    ["glue:TableChanged", "glue", [glueKeys.tables(), glueKeys.partitions(), topologyKey]],
+    ["glue:PartitionsChanged", "glue", [glueKeys.partitions(), topologyKey]],
     ["s3tables:TableCreated", "s3tables", [s3tablesKeys.tables(), topologyKey]],
     ["s3tables:TableDeleted", "s3tables", [s3tablesKeys.tables(), topologyKey]],
     ["s3tables:TableRenamed", "s3tables", [s3tablesKeys.tables(), topologyKey]],
-    ["s3tables:TableCommitted", "s3tables", [s3tablesKeys.tables()]],
+    ["s3tables:TableCommitted", "s3tables", [s3tablesKeys.tables(), topologyKey]],
   ])("invalidates what %s makes stale", (type, source, keys) => {
     const client = makeClient()
     const invalidate = vi.spyOn(client, "invalidateQueries")

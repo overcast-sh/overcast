@@ -688,6 +688,14 @@ export interface TopologyNode {
   desiredCount?: number
   /** ECS service only — currently running task count */
   runningCount?: number
+  /** Athena workgroup only — its latest executions, newest first */
+  recentQueries?: TopologyQueryRun[]
+  /** Athena workgroup only — the query engine's state while it cannot run a query yet */
+  engineState?: string
+  /** Glue only — whether this node is a database or a federated catalog */
+  glueResourceType?: TopologyGlueResourceType
+  /** Glue database and S3 Tables bucket only — the tables it holds */
+  tables?: TopologyDataTable[]
 }
 
 /**
@@ -715,6 +723,90 @@ export interface TopologyEdge {
  * Generated from Go `topology.ECSResourceType` (internal/topology/types.go).
  */
 export type TopologyECSResourceType = "cluster" | "service" | "task"
+
+/**
+ * GlueResourceType says which kind of Data Catalog resource a Glue node is:
+ * one of the constants below. The Map page draws and routes each differently.
+ *
+ * Generated from Go `topology.GlueResourceType` (internal/topology/types.go).
+ */
+export type TopologyGlueResourceType = "database" | "catalog"
+
+/**
+ * QueryRun is one Athena query execution, as a workgroup node lists it.
+ *
+ * Generated from Go `topology.QueryRun` (internal/topology/types.go).
+ */
+export interface TopologyQueryRun {
+  id: string
+  /**
+   * State is the execution's state: QUEUED, RUNNING, SUCCEEDED, FAILED or
+   * CANCELLED.
+   */
+  state: string
+  /** Query is the start of the SQL, on one line. */
+  query: string
+  /**
+   * SubmittedAt and CompletedAt are Unix milliseconds; CompletedAt is zero
+   * until the execution finishes.
+   */
+  submittedAt: number
+  completedAt?: number
+}
+
+/**
+ * DataTable is one table inside a Glue database or S3 Tables bucket node.
+ *
+ * Generated from Go `topology.DataTable` (internal/topology/types.go).
+ */
+export interface TopologyDataTable {
+  name: string
+  /** Namespace is the S3 Tables namespace the table is in. */
+  namespace?: string
+  /** ID is the S3 Tables table id, which its console route names. */
+  id?: string
+  /**
+   * Format is what a Glue table holds: ICEBERG, PARQUET, ORC, AVRO, JSON,
+   * CSV or VIEW, and empty when nothing on the table says.
+   */
+  format?: string
+  /**
+   * Location is where the table's files are: a Glue table's storage
+   * location, an S3 Tables table's warehouse.
+   */
+  location?: string
+  /** Partitions is how many partitions a Glue table has. */
+  partitions?: number
+  /**
+   * Snapshots is how many snapshots an Iceberg table's current metadata
+   * keeps, when that metadata could be read.
+   */
+  snapshots?: number
+  /** LastCommit is the Iceberg table's current snapshot. */
+  lastCommit?: TopologyTableCommit
+}
+
+/**
+ * TableCommit is an Iceberg snapshot, as the Map's latest-commit peek shows it.
+ *
+ * Generated from Go `topology.TableCommit` (internal/topology/types.go).
+ */
+export interface TopologyTableCommit {
+  /**
+   * SnapshotID is decimal: Iceberg's 64-bit ids do not survive a
+   * JavaScript number.
+   */
+  snapshotId: string
+  operation?: string
+  /**
+   * AddedRecords and DeletedRecords are from the snapshot summary, when it
+   * records them.
+   */
+  addedRecords?: number
+  deletedRecords?: number
+  /** CommittedAt is the snapshot's timestamp, in Unix milliseconds. */
+  committedAt: number
+}
 
 /**
  * CapturedMessage holds a single message captured by the mock SMTP server or

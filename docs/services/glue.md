@@ -56,6 +56,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Tags | `Tags` on `CreateDatabase`, and `TagResource`, `UntagResource` and `GetTags` on database and table ARNs |
 | S3 Tables | `s3tablescatalog`, with one catalog per table bucket, through `GetCatalog`, `GetCatalogs` and the database and table reads |
 | CloudFormation | `AWS::Glue::Database`, `AWS::Glue::Table` and `AWS::Glue::Partition` |
+| System map | A database node lists its tables with their format and partitions, and previews a table's first rows |
 
 A stored table keeps everything `TableInput` carries — `StorageDescriptor`
 with its columns, serde and `Location`, `PartitionKeys`, `Parameters` such as

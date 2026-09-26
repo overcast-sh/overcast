@@ -1,8 +1,14 @@
 import {
   BatchGetNamedQueryCommand,
+  GetQueryExecutionCommand,
+  GetQueryResultsCommand,
+  StartQueryExecutionCommand,
   paginateListNamedQueries,
   paginateListWorkGroups,
+  type GetQueryResultsOutput,
   type NamedQuery,
+  type QueryExecution,
+  type StartQueryExecutionInput,
   type WorkGroupSummary,
 } from "@aws-sdk/client-athena"
 import { awsClients } from "../aws-clients"
@@ -43,4 +49,30 @@ export const athena = {
     )
     return perWorkGroup.flat()
   },
+
+  // ─── Query executions ──────────────────────────────────────────────────
+
+  startQueryExecution: async (input: StartQueryExecutionInput): Promise<string> => {
+    const out = await awsClients.athena().send(new StartQueryExecutionCommand(input))
+    return out.QueryExecutionId ?? ""
+  },
+
+  getQueryExecution: async (id: string): Promise<QueryExecution> => {
+    const out = await awsClients
+      .athena()
+      .send(new GetQueryExecutionCommand({ QueryExecutionId: id }))
+    return out.QueryExecution ?? { QueryExecutionId: id }
+  },
+
+  /** One page of a result, from `token` (none for the first). */
+  getQueryResults: (
+    id: string,
+    token: string | undefined,
+    signal?: AbortSignal,
+  ): Promise<GetQueryResultsOutput> =>
+    awsClients
+      .athena()
+      .send(new GetQueryResultsCommand({ QueryExecutionId: id, NextToken: token }), {
+        abortSignal: signal,
+      }),
 }

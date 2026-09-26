@@ -70,6 +70,9 @@ type Service struct {
 
 	// bus receives table creates, renames, deletes and commits; nil until InitBus.
 	bus *events.Bus
+
+	// snapshots is the system map's memory of each metadata file's snapshots.
+	snapshots snapshotCache
 }
 
 // New returns a configured S3 Tables Service. It does no I/O.

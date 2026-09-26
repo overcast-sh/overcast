@@ -66,6 +66,12 @@ import { IgwNode } from "./igw-node"
 import { SERVICE_THEME, EDGE_THEME, FALLBACK_COLOR } from "./map-theme"
 import { useEndpoint } from "@/hooks/use-endpoint"
 import type { LambdaInstance, TopologyNode } from "@/types"
+import { AthenaWorkgroupNode } from "./athena-workgroup-node"
+import { DataCatalogNode } from "./data-catalog-node"
+import { DataLakeOverlayContext, DataLakePeekContext, type DataLakePeek } from "./data-lake-context"
+import { DataLakePeeks } from "./data-lake-peeks"
+import { tableList, tableListHeight, workgroupHeight } from "./data-lake-layout"
+import { nodeSuffix, type DataLakeOverlay } from "./data-lake-overlay"
 
 const NODE_TYPES = {
   serviceNode: ServiceNode,
@@ -76,7 +82,21 @@ const NODE_TYPES = {
   vpcGroup: VpcGroupNode,
   vpcNetworkNode: VpcNetworkNode,
   igwNode: IgwNode,
+  athenaWorkgroup: AthenaWorkgroupNode,
+  dataCatalog: DataCatalogNode,
 }
+
+/** Node types that draw their own handles from `hasTarget` / `hasSource`. */
+const HANDLED_TYPES = new Set([
+  "serviceNode",
+  "vpcNetworkNode",
+  "igwNode",
+  "athenaWorkgroup",
+  "dataCatalog",
+])
+
+/** Node types that render the live topology node rather than the layout's copy of it. */
+const DATA_LAKE_TYPES = new Set(["athenaWorkgroup", "dataCatalog"])
 const EDGE_TYPES = { topologyEdge: TopologyEdge }
 
 /** Group containers: never dimmed, never a hover target. */
@@ -244,14 +264,24 @@ const NODE_R = 7
 
 // ── Pure transform helpers for the rfNodes pipeline ──────────────────────
 
-/** Compute per-node size overrides for lambda groups and expanded SQS nodes. */
+/** Compute per-node size overrides for lambda groups, expanded SQS nodes and data-lake lists. */
 function computeSizeOverrides(
   topologyNodes: TopologyNode[],
   instancesByFunction: InstancesByFunction,
   ghostInstances: Map<string, Ghost<LambdaInstance>>,
+  lakeGhosts: DataLakeOverlay["ghosts"],
 ): Record<string, { width: number; height: number }> {
   const overrides: Record<string, { width: number; height: number }> = {}
   for (const n of topologyNodes) {
+    if (n.service === "athena") {
+      overrides[n.id] = { width: NODE_WIDTH, height: workgroupHeight(n.recentQueries?.length ?? 0) }
+      continue
+    }
+    if (n.service === "glue" || n.service === "s3tables") {
+      const list = tableList(n.tables ?? [], lakeGhosts[nodeSuffix(n.id)])
+      overrides[n.id] = { width: NODE_WIDTH, height: tableListHeight(list) }
+      continue
+    }
     if (n.service === "lambda") {
       const liveInsts = instancesByFunction[n.label] ?? []
       const ghostCount = [...ghostInstances.values()].filter(
@@ -306,6 +336,8 @@ function expandFlowNodes(
     seenNodeIds: Set<string>
     onPeek: (target: LogStreamTarget) => void
     onPeekStream: (target: LogStreamTarget) => void
+    /** The topology's nodes by ID, fresher than the copies the layout holds. */
+    liveNodes: Map<string, TopologyNode>
   },
 ): Node[] {
   const result: Node[] = []
@@ -313,6 +345,23 @@ function expandFlowNodes(
     // Group container nodes pass through without modification.
     if (n.type === "regionGroup" || n.type === "stackGroup" || n.type === "vpcGroup") {
       result.push(n)
+      continue
+    }
+    // The layout re-runs only when sizes or connections change, so a data-lake
+    // node reads its rows from the live topology node instead of its copy.
+    if (DATA_LAKE_TYPES.has(n.type ?? "")) {
+      const live = ctx.liveNodes.get(n.id)
+      // Gone from the topology, and the layout has not caught up yet.
+      if (!live) continue
+      result.push({
+        ...n,
+        style: { ...n.style, transition: NODE_TRANSITION },
+        data: {
+          ...n.data,
+          topologyNode: live,
+          isNew: !ctx.isInitialLoad && !ctx.seenNodeIds.has(n.id),
+        },
+      })
       continue
     }
     const isLambda = (n.data as { service?: string }).service === "lambda"
@@ -614,6 +663,8 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
   const [peekTarget, setPeekTarget] = useState<LogStreamTarget | null>(null)
   const onPeek = useCallback((target: LogStreamTarget) => setPeekTarget(target), [])
   const onPeekClose = useCallback(() => setPeekTarget(null), [])
+  const [lakePeek, setLakePeek] = useState<DataLakePeek | null>(null)
+  const onLakePeekClose = useCallback(() => setLakePeek(null), [])
 
   // ── Ghost lambda instances ───────────────────────────────────────────────
   // When a running instance disappears from the live list it lingers as a
@@ -660,21 +711,37 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
 
   // Trigger layout when the inputs change.  requestLayoutAsync deduplicates
   // internally — skips when the content hash matches the previous request.
+  const {
+    glowingEdges,
+    nodeCounts,
+    nodeWriteCounts,
+    edgeBurstCounts,
+    nodeWriteBurstCounts,
+    dataLake,
+  } = useEventAnimations(topologyNodes, topologyEdges)
+  // Only a dropped table's ghost changes a node's size; flashes and ticks do not.
+  const lakeGhosts = dataLake.ghosts
+
   useEffect(() => {
     if (topologyNodes.length === 0) return
-    const sizes = computeSizeOverrides(topologyNodes, instancesByFunction, ghostInstances)
+    const sizes = computeSizeOverrides(
+      topologyNodes,
+      instancesByFunction,
+      ghostInstances,
+      lakeGhosts,
+    )
     requestLayoutAsync(topologyNodes, topologyEdges, sizes, effectiveRegion, collapsedStacks)
   }, [
     topologyNodes,
     topologyEdges,
     instancesByFunction,
     ghostInstances,
+    lakeGhosts,
     effectiveRegion,
     collapsedStacks,
   ])
 
-  const { glowingEdges, nodeCounts, nodeWriteCounts, edgeBurstCounts, nodeWriteBurstCounts } =
-    useEventAnimations(topologyNodes, topologyEdges)
+  const liveNodes = useMemo(() => new Map(topologyNodes.map((n) => [n.id, n])), [topologyNodes])
 
   // Expand positioned layout into final React Flow nodes with event counts
   // and injected hasTarget/hasSource booleans from the edge lookup sets.
@@ -693,17 +760,19 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
       seenNodeIds: seenNodeIds.current,
       onPeek,
       onPeekStream: onPeek,
+      liveNodes,
     })
     const targetNodes = new Set(topologyEdges.map((e) => e.target))
     const sourceNodes = new Set(topologyEdges.map((e) => e.source))
     for (const n of expanded) {
-      if (n.type === "serviceNode" || n.type === "vpcNetworkNode" || n.type === "igwNode") {
+      if (HANDLED_TYPES.has(n.type ?? "")) {
         n.data = { ...n.data, hasTarget: targetNodes.has(n.id), hasSource: sourceNodes.has(n.id) }
       }
     }
     return expanded
   }, [
     positionedNodes,
+    liveNodes,
     topologyEdges,
     instancesByFunction,
     ghostInstances,
@@ -865,33 +934,42 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
         )}
 
         {!isLoading && !isError && rfNodes.length > 0 && (
-          <ReactFlow
-            onlyRenderVisibleElements
-            nodes={displayNodes}
-            edges={rfEdges}
-            nodeTypes={NODE_TYPES}
-            edgeTypes={EDGE_TYPES}
-            fitView
-            fitViewOptions={{ padding: 0.2, maxZoom: 1.2 }}
-            // React Flow's default floor of 0.5 stops a map of any real size
-            // from ever fitting a laptop viewport.
-            minZoom={0.1}
-            nodesDraggable
-            nodesConnectable={false}
-            edgesFocusable={false}
-            onViewportChange={handleViewportChange}
-            onNodeMouseEnter={onNodeMouseEnter}
-            onNodeMouseLeave={onNodeMouseLeave}
-            className="bg-bg"
-          >
-            <FitViewOnResize />
-            <FitViewOnDataChange dataCount={topologyNodes.length} />
-            <FitViewOnCollapse collapsedStacks={collapsedStacks} />
-            <FitViewOnRegionChange region={effectiveRegion} hasRegionGroups={hasRegionGroups} />
-            <Background variant={BackgroundVariant.Dots} gap={20} size={1} className="opacity-20" />
-            <Controls showInteractive={false} />
-            <CustomMiniMap />
-          </ReactFlow>
+          <DataLakePeekContext value={setLakePeek}>
+            <DataLakeOverlayContext value={dataLake}>
+              <ReactFlow
+                onlyRenderVisibleElements
+                nodes={displayNodes}
+                edges={rfEdges}
+                nodeTypes={NODE_TYPES}
+                edgeTypes={EDGE_TYPES}
+                fitView
+                fitViewOptions={{ padding: 0.2, maxZoom: 1.2 }}
+                // React Flow's default floor of 0.5 stops a map of any real size
+                // from ever fitting a laptop viewport.
+                minZoom={0.1}
+                nodesDraggable
+                nodesConnectable={false}
+                edgesFocusable={false}
+                onViewportChange={handleViewportChange}
+                onNodeMouseEnter={onNodeMouseEnter}
+                onNodeMouseLeave={onNodeMouseLeave}
+                className="bg-bg"
+              >
+                <FitViewOnResize />
+                <FitViewOnDataChange dataCount={topologyNodes.length} />
+                <FitViewOnCollapse collapsedStacks={collapsedStacks} />
+                <FitViewOnRegionChange region={effectiveRegion} hasRegionGroups={hasRegionGroups} />
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  gap={20}
+                  size={1}
+                  className="opacity-20"
+                />
+                <Controls showInteractive={false} />
+                <CustomMiniMap />
+              </ReactFlow>
+            </DataLakeOverlayContext>
+          </DataLakePeekContext>
         )}
 
         {/* Legend — only the connection types on this map; hover one to pick it out */}
@@ -938,6 +1016,7 @@ export function MapPage({ focusRegion }: { focusRegion?: string }) {
 
         {/* Log-stream peek panel */}
         <LogStreamPeek target={peekTarget} onClose={onPeekClose} />
+        <DataLakePeeks peek={lakePeek} nodes={liveNodes} onClose={onLakePeekClose} />
       </div>
     </div>
   )

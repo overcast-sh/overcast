@@ -141,3 +141,48 @@ func TestBuild_regionFilterKeepsOnlyThatRegion(t *testing.T) {
 		t.Errorf("empty region: got nodes %+v, regions %v", empty.Nodes, empty.Regions)
 	}
 }
+
+func TestBuild_absorbFoldsANodeIntoAnother(t *testing.T) {
+	// Given: an S3 bucket that is a table bucket's warehouse, an edge to it
+	// from another service (by exact ID and by a stale region), and an
+	// absorption whose target does not exist.
+	s3, tables, glue := &Graph{}, &Graph{}, &Graph{}
+	s3.AddNode(node("us-east-1", "s3", "wh--table-s3"), CFN("us-east-1", "AWS::S3::Bucket", "wh--table-s3"))
+	s3.AddNode(node("us-east-1", "s3", "orphan--table-s3"))
+	tables.AddNode(node("us-east-1", "s3tables", "lake"))
+	tables.Absorb(ID("us-east-1", "s3", "wh--table-s3"), ID("us-east-1", "s3tables", "lake"))
+	tables.Absorb(ID("us-east-1", "s3", "orphan--table-s3"), ID("us-east-1", "s3tables", "gone"))
+	glue.AddNode(node("us-east-1", "glue", "db"))
+	glue.AddLink(Link{Source: ID("us-east-1", "glue", "db"), Target: ID("us-east-1", "s3", "wh--table-s3"), IDPrefix: "loc"})
+	glue.AddLink(Link{Source: ID("us-east-1", "glue", "db"), Target: ID("eu-west-1", "s3", "wh--table-s3").AnyRegion(), ID: "stale"})
+	glue.AddLink(Link{Source: ID("us-east-1", "glue", "db"), Target: CFN("us-east-1", "AWS::S3::Bucket", "wh--table-s3"), ID: "alias"})
+	glue.SetStack(CFN("us-east-1", "AWS::S3::Bucket", "wh--table-s3"), "lake-stack")
+
+	// When: the graphs are built.
+	resp := Build("", s3, tables, glue)
+
+	// Then: the warehouse is gone, and every edge and the stack that named
+	// it land on the table bucket; the absorption with no target leaves its
+	// node alone.
+	var labels []string
+	for _, n := range resp.Nodes {
+		labels = append(labels, n.Label)
+	}
+	if !slices.Equal(labels, []string{"orphan--table-s3", "lake", "db"}) {
+		t.Errorf("nodes: got %v", labels)
+	}
+	for _, e := range resp.Edges {
+		if e.Target != "us-east-1::s3tables::lake" {
+			t.Errorf("edge %s: target %s, want the table bucket", e.ID, e.Target)
+		}
+	}
+	if len(resp.Edges) != 3 {
+		t.Errorf("edges: got %v", edgeIDs(resp))
+	}
+	if lake := resp.Nodes[1]; lake.StackName == nil || *lake.StackName != "lake-stack" {
+		t.Errorf("table bucket's stack: got %v", lake.StackName)
+	}
+	if resp.Nodes[0].StackName != nil {
+		t.Errorf("stack landed on %s", resp.Nodes[0].ID)
+	}
+}

@@ -40,130 +40,11 @@ import {
 } from "./sqs-visual-messages"
 import { CopyButton } from "@/components/ui/copy-button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useEndpoint } from "@/hooks/use-endpoint"
-import { endpointStore } from "@/services/endpoint-store"
 import { SERVICE_THEME, FALLBACK_COLOR, toSweep } from "./map-theme"
 import "./map-animations.css"
-import type { FileRoutesByTo } from "@/routeTree.gen"
 import { Tooltip } from "@/components/ui/tooltip"
 import { TriggerEventViewer } from "./trigger-event-viewer"
-
-interface NodeRoute {
-  to: keyof FileRoutesByTo
-  params?: Record<string, string>
-  search?: Record<string, string>
-}
-
-function routeHref(route: NodeRoute, search?: Record<string, string | undefined>): string {
-  let href = route.to as string
-  for (const [key, value] of Object.entries(route.params ?? {})) {
-    href = href.replace(`$${key}`, encodeURIComponent(value))
-  }
-  const params = new URLSearchParams()
-  for (const [key, value] of Object.entries({ ...(route.search ?? {}), ...(search ?? {}) })) {
-    if (value) params.set(key, value)
-  }
-  const query = params.toString()
-  return query ? `${href}?${query}` : href
-}
-
-function openRouteInNewTab(route: NodeRoute, search?: Record<string, string | undefined>) {
-  window.open(routeHref(route, search), "_blank", "noopener,noreferrer")
-}
-
-/**
- * Returns the deepest available route for a given service+resource name,
- * or null if there is no per-resource page.
- */
-interface NodeRouteInput {
-  service: string
-  label: string
-  nodeId?: string
-  protocolType?: string
-  ecsResourceType?: ServiceNodeData["ecsResourceType"]
-  clusterName?: string
-  taskId?: string
-  scope?: string
-}
-
-function nodeRoute({
-  service,
-  label,
-  nodeId,
-  protocolType,
-  ecsResourceType,
-  clusterName,
-  taskId,
-  scope,
-}: NodeRouteInput): NodeRoute | null {
-  switch (service) {
-    case "s3":
-      return { to: "/s3/$bucket", params: { bucket: label } }
-    case "sqs":
-      return { to: "/sqs/$queue", params: { queue: label } }
-    case "dynamodb":
-      return { to: "/dynamodb/$tableName", params: { tableName: label } }
-    case "sns":
-      return { to: "/sns/$topic", params: { topic: label } }
-    case "lambda":
-      return { to: "/lambda/$name", params: { name: label } }
-    case "logs":
-      return { to: "/cloudwatch/logs/group" as const, search: { groupName: label } }
-    case "ecs":
-      if (ecsResourceType === "task" && clusterName && taskId) {
-        return {
-          to: "/ecs/$cluster/tasks/$taskId",
-          params: { cluster: clusterName, taskId },
-        }
-      }
-      if (ecsResourceType === "service" && clusterName) {
-        return {
-          to: "/ecs/$cluster",
-          params: { cluster: clusterName },
-          search: { tab: "services", service: label },
-        }
-      }
-      return { to: "/ecs/$cluster", params: { cluster: clusterName ?? label } }
-    case "ecr":
-      return { to: "/ecr/$repositoryName", params: { repositoryName: label } }
-    case "waf": {
-      const webAclId = nodeId?.split("::")[2]
-      return webAclId && scope
-        ? {
-            to: "/waf/$scope/$webAclId/$name",
-            params: { scope, webAclId, name: label },
-          }
-        : { to: "/waf" }
-    }
-    case "ec2":
-      return { to: "/ec2/$instanceId", params: { instanceId: label } }
-    case "rds":
-      return { to: "/rds/$instance", params: { instance: label } }
-    case "apigateway": {
-      // Node ID format: "region::apigateway::apiId" — extract the API ID.
-      const apiId = nodeId?.split("::")[2]
-      if (!apiId) return { to: "/apigateway" }
-      if (protocolType === "REST") {
-        return { to: "/apigateway/rest/$apiId", params: { apiId } }
-      }
-      return { to: "/apigateway/http/$apiId", params: { apiId } }
-    }
-    case "appsync": {
-      // Node ID format: "region::appsync::apiId" — extract the API ID.
-      const apiId = nodeId?.split("::")[2]
-      return apiId ? { to: "/appsync/$apiId", params: { apiId } } : { to: "/appsync" }
-    }
-    case "cognito": {
-      // Node ID format: "region::cognito::poolId" — extract the pool ID.
-      const poolId = nodeId?.split("::")[2]
-      return poolId ? { to: "/cognito/$poolId", params: { poolId } } : { to: "/cognito" }
-    }
-    case "msk":
-      return { to: "/msk" }
-    default:
-      return null
-  }
-}
+import { nodeRoute, openRouteInNewTab, useNodeNavigation, type NodeRoute } from "./node-route"
 
 export interface ServiceNodeData extends Record<string, unknown> {
   service: string
@@ -1272,8 +1153,6 @@ export const ServiceNode = memo(function ServiceNode({ data }: NodeProps) {
   const sqsMessages = useSqsEventMessages(service === "sqs" ? label : "")
   const { events: sqsEvents } = useEventStream({ source: "sqs" })
 
-  const navigate = useNavigate()
-  const endpoint = useEndpoint()
   const nodeId = useNodeId()
   const route = nodeRoute({
     service,
@@ -1285,23 +1164,9 @@ export const ServiceNode = memo(function ServiceNode({ data }: NodeProps) {
     taskId,
     scope,
   })
-  const nodeRegion = (data as ServiceNodeData).region
-  const handleClick = useCallback(() => {
-    if (!route) return
-    // Switch region first if this resource lives in a different region.
-    if (nodeRegion && nodeRegion !== endpoint.region) {
-      endpointStore.set({ ...endpoint, region: nodeRegion })
-    }
-    void navigate({ to: route.to, params: route.params, search: route.search })
-  }, [navigate, route, nodeRegion, endpoint])
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (!route || e.button !== 1) return
-      e.preventDefault()
-      e.stopPropagation()
-      openRouteInNewTab(route, { region: nodeRegion ?? endpoint.region })
-    },
-    [route, nodeRegion, endpoint.region],
+  const { open: handleClick, openInNewTab: handleMouseDown } = useNodeNavigation(
+    route,
+    (data as ServiceNodeData).region,
   )
 
   const { hasTarget, hasSource } = data as ServiceNodeData

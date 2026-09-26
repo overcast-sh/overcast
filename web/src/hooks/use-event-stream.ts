@@ -537,17 +537,20 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
     [EventType.waf.WebACLCreated]: [wafKeys.webACLs(), topologyKey],
     [EventType.waf.WebACLDeleted]: [wafKeys.webACLs(), topologyKey],
     // ── Athena ─────────────────────────────────────────────────────────
-    [EventType.athena.QueryStateChanged]: [athenaKeys.executions()],
+    // A workgroup's node lists its latest executions (athena/topology.go).
+    [EventType.athena.QueryStateChanged]: [athenaKeys.executions(), topologyKey],
     // ── Glue ───────────────────────────────────────────────────────────
-    // Deleting a table deletes its partitions with it.
-    [EventType.glue.TableChanged]: [glueKeys.tables(), glueKeys.partitions()],
-    [EventType.glue.PartitionsChanged]: [glueKeys.partitions()],
+    // Deleting a table deletes its partitions with it. A database's node
+    // lists its tables and their partition counts (glue/topology.go).
+    [EventType.glue.TableChanged]: [glueKeys.tables(), glueKeys.partitions(), topologyKey],
+    [EventType.glue.PartitionsChanged]: [glueKeys.partitions(), topologyKey],
     // ── S3 Tables ──────────────────────────────────────────────────────
-    // Tables are nodes on the map (internal/services/s3tables/topology.go).
+    // A table bucket's node lists its tables and their snapshots
+    // (s3tables/topology.go).
     [EventType.s3tables.TableCreated]: [s3tablesKeys.tables(), topologyKey],
     [EventType.s3tables.TableDeleted]: [s3tablesKeys.tables(), topologyKey],
     [EventType.s3tables.TableRenamed]: [s3tablesKeys.tables(), topologyKey],
-    [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables()],
+    [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables(), topologyKey],
   }
 }
 

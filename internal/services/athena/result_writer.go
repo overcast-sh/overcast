@@ -10,6 +10,7 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 // result_writer.go — a query's result, written to its OutputLocation as
@@ -96,7 +97,7 @@ type resultUpload struct {
 // open starts the result object at location, an "s3://bucket/key" object
 // URI. The put runs until the object is closed or abandoned.
 func (w resultWriter) open(ctx context.Context, location string) (*resultUpload, *protocol.AWSError) {
-	bucket, key, ok := splitS3URI(location)
+	bucket, key, ok := serviceutil.SplitS3URI(location)
 	if !ok {
 		return nil, errInvalidRequest("Result location %s is not an S3 URI.", location)
 	}
@@ -158,16 +159,6 @@ func (o *resultUpload) close(ctx context.Context, columns []ColumnInfo) *protoco
 func (o *resultUpload) abandon() {
 	o.body.CloseWithError(errResultAbandoned)
 	<-o.done
-}
-
-// splitS3URI splits "s3://bucket/key" into its bucket and key.
-func splitS3URI(uri string) (bucket, key string, ok bool) {
-	rest, found := strings.CutPrefix(uri, "s3://")
-	if !found {
-		return "", "", false
-	}
-	bucket, key, found = strings.Cut(rest, "/")
-	return bucket, key, found && bucket != ""
 }
 
 // resultWriteFailure is how a query whose result could not be written to
