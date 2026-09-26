@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input"
 // eslint-disable-next-line local/prefer-resource-table -- the raw backing store: its paging is driven by the virtual window and the selected row is an attribute on the `<tr>`
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { sectionLabel } from "@/lib/typography"
-import { cn } from "@/lib/utils"
+import { cn, isRecord } from "@/lib/utils"
 import { useCopyToClipboard } from "@/hooks/use-clipboard"
 import {
   debugNamespaceInfiniteQueryOptions,
@@ -30,9 +30,16 @@ import {
   groupDebugNamespaces,
   serviceForDebugNamespace,
 } from "./namespaces"
+import { formatCount, formatQuantity } from "@/lib/format"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 const MAX_HIGHLIGHTED_JSON_BYTES = 256 * 1024
 const MAX_NESTED_JSON_DECODE_BYTES = 1024 * 1024
+
+const KEY_VIEWS = [
+  { value: "flat", label: "Flat" },
+  { value: "tree", label: "Tree" },
+] as const satisfies readonly SegmentedOption<"flat" | "tree">[]
 
 /**
  * Row height estimate for both the virtualized flat table and the
@@ -312,28 +319,16 @@ export function DebugPage({
                     placeholder="Search keys"
                     className="h-8"
                   />
-                  <div className="flex rounded-md border border-border p-0.5">
-                    <Button
-                      variant={keyView === "flat" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setKeyView("flat")}
-                    >
-                      Flat
-                    </Button>
-                    <Button
-                      variant={keyView === "tree" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => setKeyView("tree")}
-                    >
-                      Tree
-                    </Button>
-                  </div>
+                  <SegmentedControl
+                    label="Key layout"
+                    value={keyView}
+                    options={KEY_VIEWS}
+                    onChange={setKeyView}
+                    size="md"
+                  />
                 </div>
                 <p className="mt-2 text-xs text-fg-muted">
-                  Showing {rows.length.toLocaleString()} of {totalKeys.toLocaleString()} record
-                  {totalKeys !== 1 ? "s" : ""} in{" "}
+                  Showing {formatCount(rows.length)} of {formatQuantity(totalKeys, "record")} in{" "}
                   <span className="font-mono">{activeNamespace}</span>
                   {loadedCount < totalKeys && (
                     <span className="text-fg-subtle">
@@ -870,7 +865,7 @@ function decodeNestedJSON(value: unknown, depth = 0): unknown {
     return value
   }
   if (Array.isArray(value)) return value.map((item) => decodeNestedJSON(item, depth + 1))
-  if (value && typeof value === "object") {
+  if (isRecord(value)) {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [key, decodeNestedJSON(item, depth + 1)]),
     )

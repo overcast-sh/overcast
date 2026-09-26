@@ -13,11 +13,22 @@ import {
 import { Spinner } from "@/components/ui/primitives"
 import type { DynamoItem, DynamoAttrValue } from "@/types"
 import { createId } from "@/lib/id"
-import { cn } from "@/lib/utils"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
+import { isRecord } from "@/lib/utils"
 
 type AttrType = "S" | "N" | "BOOL" | "NULL" | "SS" | "NS" | "L" | "M"
 type InputMode = "form" | "json"
 type JsonFormat = "unmarshalled" | "marshalled"
+
+const INPUT_MODES = [
+  { value: "form", label: "Form" },
+  { value: "json", label: "JSON" },
+] as const satisfies readonly SegmentedOption<InputMode>[]
+
+const JSON_FORMATS = [
+  { value: "unmarshalled", label: "Unmarshalled" },
+  { value: "marshalled", label: "Marshalled" },
+] as const satisfies readonly SegmentedOption<JsonFormat>[]
 
 interface AttrRow {
   id: string
@@ -73,9 +84,9 @@ function marshalValue(v: unknown): DynamoAttrValue {
   if (typeof v === "number") return { N: String(v) }
   if (typeof v === "string") return { S: v }
   if (Array.isArray(v)) return { L: v.map(marshalValue) }
-  if (typeof v === "object") {
+  if (isRecord(v)) {
     const m: Record<string, DynamoAttrValue> = {}
-    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    for (const [k, val] of Object.entries(v)) {
       m[k] = marshalValue(val)
     }
     return { M: m }
@@ -234,7 +245,7 @@ export function ItemEditorDialog({
     }
     try {
       const parsed = JSON.parse(value)
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      if (!isRecord(parsed)) {
         setJsonError("Must be a JSON object { … }")
       } else {
         setJsonError(null)
@@ -364,26 +375,14 @@ export function ItemEditorDialog({
         </DialogHeader>
 
         {/* Mode toggle */}
-        <div className="flex w-fit items-center gap-1 rounded-md border border-border bg-bg-subtle p-0.5">
-          <button
-            onClick={() => (inputMode === "json" ? switchToForm() : undefined)}
-            className={cn(
-              "rounded px-3 py-1 text-xs font-medium transition-colors",
-              inputMode === "form" ? "bg-bg text-fg shadow-sm" : "text-fg-muted hover:text-fg",
-            )}
-          >
-            Form
-          </button>
-          <button
-            onClick={() => (inputMode === "form" ? switchToJson(jsonFormat) : undefined)}
-            className={cn(
-              "rounded px-3 py-1 text-xs font-medium transition-colors",
-              inputMode === "json" ? "bg-bg text-fg shadow-sm" : "text-fg-muted hover:text-fg",
-            )}
-          >
-            JSON
-          </button>
-        </div>
+        <SegmentedControl
+          label="Input mode"
+          value={inputMode}
+          options={INPUT_MODES}
+          onChange={(mode) => (mode === "form" ? switchToForm() : switchToJson(jsonFormat))}
+          size="md"
+          className="self-start"
+        />
 
         {inputMode === "form" ? (
           <div className="flex flex-col gap-2 py-1">
@@ -470,30 +469,12 @@ export function ItemEditorDialog({
             {/* Format toggle */}
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs text-fg-muted">Format:</span>
-              <div className="flex items-center gap-1 rounded-md border border-border bg-bg-subtle p-0.5">
-                <button
-                  onClick={() => changeJsonFormat("unmarshalled")}
-                  className={cn(
-                    "rounded px-2.5 py-0.5 text-xs font-medium transition-colors",
-                    jsonFormat === "unmarshalled"
-                      ? "bg-bg text-fg shadow-sm"
-                      : "text-fg-muted hover:text-fg",
-                  )}
-                >
-                  Unmarshalled
-                </button>
-                <button
-                  onClick={() => changeJsonFormat("marshalled")}
-                  className={cn(
-                    "rounded px-2.5 py-0.5 text-xs font-medium transition-colors",
-                    jsonFormat === "marshalled"
-                      ? "bg-bg text-fg shadow-sm"
-                      : "text-fg-muted hover:text-fg",
-                  )}
-                >
-                  Marshalled
-                </button>
-              </div>
+              <SegmentedControl
+                label="JSON format"
+                value={jsonFormat}
+                options={JSON_FORMATS}
+                onChange={changeJsonFormat}
+              />
               <span className="text-xs text-fg-muted">
                 {jsonFormat === "unmarshalled"
                   ? '— plain JSON, e.g. {"pk": "hello", "count": 42}'

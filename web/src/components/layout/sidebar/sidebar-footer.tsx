@@ -4,6 +4,7 @@ import { BOTTOM_ITEMS } from "@/lib/nav-services"
 import { useDebugEnabled } from "@/hooks/use-server-info"
 import { SidebarNavItem } from "./sidebar-nav-item"
 import { SidebarTooltip } from "./sidebar-tooltip"
+import { formatQuantity } from "@/lib/format"
 
 interface SidebarFooterProps {
   collapsed: boolean
@@ -77,7 +78,7 @@ export function SidebarFooter({
             item.to === "/inbox"
               ? {
                   count: unreadCount,
-                  label: `${unreadCount} unread inbox message${unreadCount === 1 ? "" : "s"}`,
+                  label: formatQuantity(unreadCount, "unread inbox message"),
                 }
               : undefined
           }

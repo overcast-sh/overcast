@@ -1140,7 +1140,7 @@ describe("LogEventsViewer > level badges", () => {
     const { user } = renderViewer(levelled([CONSOLE_WARN]))
     await screen.findByText("warn")
 
-    await user.click(screen.getByRole("button", { name: /^plaintext$/i }))
+    await user.click(screen.getByRole("radio", { name: /^plaintext$/i }))
 
     expect(badge("warn")).not.toBeInTheDocument()
   })

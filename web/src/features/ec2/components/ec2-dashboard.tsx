@@ -51,6 +51,7 @@ import { useForm } from "@tanstack/react-form"
 import { z } from "zod"
 import { fieldLabel } from "@/lib/typography"
 import { cn } from "@/lib/utils"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 export function Ec2Dashboard() {
   const [activeTab, setActiveTab] = useState("instances")
@@ -119,10 +120,19 @@ function NatGatewayStateBadge({ state }: { state: string }) {
 
 // ─── Instances Panel ──────────────────────────────────────────────────────
 
+type StateFilter = "all" | "running" | "stopped" | "terminated"
+
+const STATE_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "running", label: "Running" },
+  { value: "stopped", label: "Stopped" },
+  { value: "terminated", label: "Terminated" },
+] as const satisfies readonly SegmentedOption<StateFilter>[]
+
 function InstancesPanel() {
   const [showLaunch, setShowLaunch] = useState(false)
   const [terminateTarget, setTerminateTarget] = useState<string>()
-  const [stateFilter, setStateFilter] = useState<string>("all")
+  const [stateFilter, setStateFilter] = useState<StateFilter>("all")
 
   const {
     data: instances = [],
@@ -172,19 +182,13 @@ function InstancesPanel() {
       }
     >
       {instances.length > 0 && (
-        <div className="flex items-center gap-1.5">
-          {["all", "running", "stopped", "terminated"].map((s) => (
-            <Button
-              key={s}
-              size="sm"
-              variant={stateFilter === s ? "default" : "secondary"}
-              onClick={() => setStateFilter(s)}
-              className="h-7 text-xs capitalize"
-            >
-              {s}
-            </Button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Instance state"
+          value={stateFilter}
+          options={STATE_FILTERS}
+          onChange={setStateFilter}
+          className="self-start"
+        />
       )}
 
       <ResourceTable

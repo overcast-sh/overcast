@@ -17,7 +17,7 @@ import { Definition, DefinitionList } from "@/components/ui/definition-card"
 import { SectionLabel } from "@/components/ui/primitives"
 import { Tabs, TabList, Tab, TabPanel } from "@/components/ui/tabs"
 import { ResourceLink } from "@/components/ui/arn-link"
-import { formatPreciseTimeOfDay } from "@/lib/format"
+import { formatPreciseTimeOfDay, formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { parseTaskResource, type AslModel, type AslState } from "../asl"
 import {
@@ -331,7 +331,7 @@ function RunSummary({
       {run.retriedErrors.length > 0 && !hideRetries && (
         <div className="rounded-md border border-warning/30 bg-warning-muted px-3 py-2 text-xs text-warning">
           <p className="font-semibold">
-            Retried {run.retriedErrors.length} time{run.retriedErrors.length === 1 ? "" : "s"}
+            Retried {formatQuantity(run.retriedErrors.length, "time")}
           </p>
           <ul className="mt-1 flex flex-col gap-0.5 font-mono text-2xs text-fg-muted">
             {run.retriedErrors.map((e, i) => (

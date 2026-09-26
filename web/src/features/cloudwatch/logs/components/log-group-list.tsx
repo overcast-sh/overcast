@@ -38,6 +38,7 @@ import { ResourceTable, type ResourceTableSort } from "@/components/ui/resource-
 import { useToast } from "@/components/ui/toast"
 import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs-modal"
 import { formatLogDate } from "@/lib/log-format"
+import { formatQuantity } from "@/lib/format"
 
 interface LogGroupListProps {
   /** Current table sort — owned by the route's `sort` search param, see `useSortSearchParam`. */
@@ -95,7 +96,7 @@ export function LogGroupList({ sort, onSortChange }: LogGroupListProps = {}) {
       setSelectedGroups(new Set())
       setShowBulkDelete(false)
       toast({
-        title: `${names.length} log group${names.length !== 1 ? "s" : ""} deleted`,
+        title: `${formatQuantity(names.length, "log group")} deleted`,
         variant: "success",
       })
     },
@@ -124,7 +125,7 @@ export function LogGroupList({ sort, onSortChange }: LogGroupListProps = {}) {
       {selectedGroups.size > 0 && (
         <div className="flex items-center gap-3 rounded-card border border-border bg-bg-muted px-3 py-2">
           <span className="text-sm font-medium">
-            {selectedGroups.size} group{selectedGroups.size !== 1 ? "s" : ""} selected
+            {formatQuantity(selectedGroups.size, "group")} selected
           </span>
           <Button size="sm" variant="danger" onClick={() => setShowBulkDelete(true)}>
             <Trash2 className="h-3.5 w-3.5" />
@@ -288,9 +289,7 @@ export function LogGroupList({ sort, onSortChange }: LogGroupListProps = {}) {
       <Dialog open={showBulkDelete} onOpenChange={(v) => !v && setShowBulkDelete(false)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Delete {selectedGroups.size} Log Group{selectedGroups.size !== 1 ? "s" : ""}
-            </DialogTitle>
+            <DialogTitle>Delete {formatQuantity(selectedGroups.size, "Log Group")}</DialogTitle>
           </DialogHeader>
           <DialogBody>
             <p className="text-sm text-fg-muted">

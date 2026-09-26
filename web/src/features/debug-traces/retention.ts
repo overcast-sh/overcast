@@ -1,4 +1,5 @@
 import type { TraceCountResponse } from "@/types"
+import { formatQuantity } from "@/lib/format"
 
 /**
  * What to say at the end of the trace list.
@@ -55,7 +56,7 @@ export function describeRetention(count: TraceCountResponse | undefined): Retent
   }
 
   return {
-    headline: `${NUMBER.format(total)} older ${total === 1 ? "trace" : "traces"} no longer retained`,
+    headline: `${formatQuantity(total, "older trace")} no longer retained`,
     reasons,
   }
 }

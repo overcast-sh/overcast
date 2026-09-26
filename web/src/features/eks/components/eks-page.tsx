@@ -26,6 +26,7 @@ import { CreateAction, RefreshAction, ResourceListPage } from "@/components/ui/r
 import { ResourceTable } from "@/components/ui/resource-table"
 import { DockerBanner } from "@/components/docker-banner"
 import { Badge } from "@/components/ui/badge"
+import { formatQuantity } from "@/lib/format"
 
 export function EksPage() {
   const [showCreate, setShowCreate] = useState(false)
@@ -49,7 +50,7 @@ export function EksPage() {
   return (
     <ResourceListPage
       title="EKS Clusters"
-      description={`${clusters.length} cluster${clusters.length !== 1 ? "s" : ""}`}
+      description={formatQuantity(clusters.length, "cluster")}
       actions={
         <>
           <ServiceDocsButton

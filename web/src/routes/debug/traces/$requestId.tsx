@@ -9,7 +9,7 @@ import { Spinner } from "@/components/ui/primitives"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CopyButton } from "@/components/ui/copy-button"
-import { cn } from "@/lib/utils"
+import { cn, isRecord } from "@/lib/utils"
 import { useCopyToClipboard } from "@/hooks/use-clipboard"
 import { Link as RouterLink } from "@tanstack/react-router"
 import type { useNavigate } from "@tanstack/react-router"
@@ -20,6 +20,7 @@ import { SequenceDiagram } from "@/features/debug-traces/components/sequence-dia
 import { FlowMap } from "@/features/debug-traces/components/flow-map"
 import { BodyOmissionChip, BodyOmissionNotice } from "@/features/debug-traces/components/body-omission"
 import type { TraceEntry, TraceHop, TraceLogEntry, TraceOmitReason } from "@/types"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 export const Route = createFileRoute("/debug/traces/$requestId")({
   head: ({ params }) => ({
@@ -46,6 +47,12 @@ export const Route = createFileRoute("/debug/traces/$requestId")({
 const tabs = ["Overview", "Hops", "Logs", "Errors", "Events"] as const
 type Tab = (typeof tabs)[number]
 type HopView = "sequence" | "waterfall" | "flow"
+
+const HOP_VIEWS = [
+  { value: "sequence", label: "Sequence" },
+  { value: "waterfall", label: "Waterfall" },
+  { value: "flow", label: "Flow" },
+] as const satisfies readonly SegmentedOption<HopView>[]
 
 function TraceDetailPage() {
   const { requestId } = Route.useParams()
@@ -274,22 +281,13 @@ function OverviewTab({ trace }: { trace: TraceEntry }) {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <h3 className="text-sm font-medium text-fg-muted">Call Graph</h3>
-            <div className="flex gap-0.5 ml-auto">
-              {(["sequence", "waterfall", "flow"] as HopView[]).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setHopView(v)}
-                  className={cn(
-                    "px-2 py-1 text-xs rounded border transition-colors",
-                    hopView === v
-                      ? "border-accent text-accent bg-accent-muted"
-                      : "border-border text-fg-muted hover:text-fg",
-                  )}
-                >
-                  {v === "sequence" ? "Sequence" : v === "waterfall" ? "Waterfall" : "Flow"}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              label="Call graph view"
+              value={hopView}
+              options={HOP_VIEWS}
+              onChange={setHopView}
+              className="ml-auto"
+            />
           </div>
           <div tabIndex={0} className="overflow-x-auto">
             {hopView === "sequence" && (
@@ -896,8 +894,8 @@ function JsonTree({ value, path }: { value: unknown; path: string }) {
       </span>
     )
   }
-  if (typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
+  if (isRecord(value)) {
+    const entries = Object.entries(value)
     if (entries.length === 0) return <span className={T.punctuation}>{'{}'}</span>
     return (
       <span>

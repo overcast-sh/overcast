@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { AlertTriangle, Download, Info, type LucideIcon } from "lucide-react"
+import { AlertTriangle, Download, Info } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils"
 import { describeObjectReadError } from "../object-read-error"
 
 /**
- * The frame every S3 preview shares — the panel, its notices, the view toggle,
- * the raw text — and the Avro notice. The data-file previews themselves (a
+ * The frame every S3 preview shares — the panel, its notices, the raw text —
+ * and the Avro notice. The data-file previews themselves (a
  * `DataGrid` over CSV, TSV, JSON Lines or Parquet) are in `data-file-preview.tsx`.
  */
 
@@ -86,58 +86,6 @@ export function PreviewNotice({
       />
       <span>{children}</span>
     </p>
-  )
-}
-
-export interface ToggleOption<T extends string> {
-  value: T
-  label: string
-  icon: LucideIcon
-}
-
-/**
- * Two or three views of one object, as a segmented control. Each segment is
- * a real button with `aria-pressed`, so Tab reaches it, Space and Enter work,
- * and a screen reader hears which view is on.
- */
-export function ViewToggle<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string
-  value: T
-  options: readonly ToggleOption<T>[]
-  onChange: (value: T) => void
-}) {
-  return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex items-center gap-0.5 rounded-control border border-border bg-bg-elevated p-0.5"
-    >
-      {options.map((option) => {
-        const Icon = option.icon
-        const pressed = option.value === value
-        return (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={pressed}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "inline-flex h-6 cursor-pointer items-center gap-1.5 rounded-sm px-2 font-mono text-2xs transition-colors",
-              "focus-visible:outline-2 focus-visible:outline-accent",
-              pressed ? "bg-accent-muted text-accent" : "text-fg-muted hover:text-fg",
-            )}
-          >
-            <Icon aria-hidden className="h-3.5 w-3.5" strokeWidth={1.9} />
-            {option.label}
-          </button>
-        )
-      })}
-    </div>
   )
 }
 

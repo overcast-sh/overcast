@@ -27,6 +27,7 @@ import { ResourceTable } from "@/components/ui/resource-table"
 import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs-modal"
 import { CreateResourceDialog } from "@/components/create-resource-dialog"
 import { PolicySimulator, EnforcementNotice } from "./policy-simulator"
+import { formatQuantity } from "@/lib/format"
 
 interface FilterProps {
   /** Current filter text for whichever tab is active — owned by the route's `q` search param, see `useFilterSearchParam`. */
@@ -400,7 +401,7 @@ function GroupMembers({ groupName }: { groupName: string }) {
   return (
     <div className="flex flex-col gap-1 py-1">
       <p className="text-xs font-medium text-fg-muted">
-        {members.length} {members.length === 1 ? "member" : "members"}
+        {formatQuantity(members.length, "member")}
       </p>
       <ul className="flex flex-col gap-0.5">
         {members.map((m) => (

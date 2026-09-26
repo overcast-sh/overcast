@@ -39,6 +39,7 @@ import { Badge } from "@/components/ui/badge"
 import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs-modal"
 import { RawStateLink } from "@/features/debug/raw-state-link"
 import { cn } from "@/lib/utils"
+import { formatQuantity } from "@/lib/format"
 
 interface QueueListProps {
   /** Current table sort — owned by the route's `sort` search param, see `useSortSearchParam`. */
@@ -93,7 +94,7 @@ export function QueueList({ sort, onSortChange }: QueueListProps = {}) {
       setSelectedQueues(new Set())
       setShowBulkDelete(false)
       toast({
-        title: `${names.length} queue${names.length !== 1 ? "s" : ""} deleted`,
+        title: `${formatQuantity(names.length, "queue")} deleted`,
         variant: "success",
       })
     },
@@ -133,7 +134,7 @@ export function QueueList({ sort, onSortChange }: QueueListProps = {}) {
       {selectedQueues.size > 0 && (
         <div className="flex items-center gap-3 rounded-card border border-border bg-bg-muted px-3 py-2">
           <span className="text-sm font-medium">
-            {selectedQueues.size} queue{selectedQueues.size !== 1 ? "s" : ""} selected
+            {formatQuantity(selectedQueues.size, "queue")} selected
           </span>
           <Button size="sm" variant="danger" onClick={() => setShowBulkDelete(true)}>
             <Trash2 className="h-3.5 w-3.5" />
@@ -273,9 +274,7 @@ export function QueueList({ sort, onSortChange }: QueueListProps = {}) {
       <Dialog open={showBulkDelete} onOpenChange={(v) => !v && setShowBulkDelete(false)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Delete {selectedQueues.size} Queue{selectedQueues.size !== 1 ? "s" : ""}
-            </DialogTitle>
+            <DialogTitle>Delete {formatQuantity(selectedQueues.size, "Queue")}</DialogTitle>
           </DialogHeader>
           <DialogBody>
             <p className="text-sm text-fg-muted">

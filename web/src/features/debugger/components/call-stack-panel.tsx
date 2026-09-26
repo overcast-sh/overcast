@@ -19,6 +19,7 @@ import { foldFrames } from "../call-stack"
 import { useDebugSession, useDebugSessionState } from "../session/hooks"
 import type { StackFrame } from "../session/session"
 import { PanelEmpty } from "./panel-empty"
+import { formatQuantity } from "@/lib/format"
 
 export function CallStackPanel() {
   const session = useDebugSession()
@@ -84,7 +85,7 @@ export function CallStackPanel() {
                 aria-hidden
                 className={cn("h-3 w-3 transition-transform", open && "rotate-90")}
               />
-              {row.frames.length} internal frame{row.frames.length === 1 ? "" : "s"}
+              {formatQuantity(row.frames.length, "internal frame")}
             </button>
             {open && (
               <ul className="m-0 flex list-none flex-col p-0">

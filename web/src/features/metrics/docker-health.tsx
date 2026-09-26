@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { sectionLabel } from "@/lib/typography"
 import { AlertCircle } from "lucide-react"
 import type { DockerServiceHealth } from "@/types/common"
+import { formatQuantity } from "@/lib/format"
 
 function healthBadge(svc: DockerServiceHealth) {
   if (svc.connected) return <Badge variant="success">Connected</Badge>
@@ -50,7 +51,7 @@ export function DockerHealthPanel() {
           <div>
             <p className="font-medium">
               {docker.available
-                ? `${disconnected.length} service${disconnected.length > 1 ? "s" : ""} disconnected`
+                ? `${formatQuantity(disconnected.length, "service")} disconnected`
                 : "Docker is not available"}
             </p>
             <p className="text-xs text-warning/70">

@@ -1,6 +1,7 @@
 import { msk } from "@/services/api"
 import { createSearchContributor } from "./create-contributor"
 import type { ClusterInfo } from "@/services/api/msk"
+import { formatQuantity } from "@/lib/format"
 
 createSearchContributor<ClusterInfo>({
   id: "msk",
@@ -10,7 +11,7 @@ createSearchContributor<ClusterInfo>({
   toResult: (c) => ({
     id: `msk:${c.ClusterArn}`,
     label: c.ClusterName ?? "",
-    sublabel: `Kafka ${c.CurrentBrokerSoftwareInfo?.KafkaVersion ?? ""} · ${c.NumberOfBrokerNodes} broker${c.NumberOfBrokerNodes !== 1 ? "s" : ""}`,
+    sublabel: `Kafka ${c.CurrentBrokerSoftwareInfo?.KafkaVersion ?? ""} · ${formatQuantity(c.NumberOfBrokerNodes ?? 0, "broker")}`,
     service: "MSK",
     serviceKey: "/msk",
     type: "Kafka Cluster",

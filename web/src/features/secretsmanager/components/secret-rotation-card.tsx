@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Definition, DefinitionCard } from "@/components/ui/definition-card"
 import { CodeBlock, SectionLabel } from "@/components/ui/primitives"
 import { ResourceTable } from "@/components/ui/resource-table"
-import { formatDate } from "@/lib/format"
+import { formatDate, formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { SecretRotationStatus } from "@/services/api/secretsmanager"
 
@@ -51,7 +51,7 @@ function scheduleText(rules: SecretRotationStatus["rotationRules"]): string {
   if (!rules) return "—"
   if (rules.AutomaticallyAfterDays) {
     const d = rules.AutomaticallyAfterDays
-    return `Every ${d} day${d === 1 ? "" : "s"}`
+    return `Every ${formatQuantity(d, "day")}`
   }
   return rules.ScheduleExpression ?? "—"
 }

@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { fieldLabel } from "@/lib/typography"
-import { cn } from "@/lib/utils"
+import { cn, isRecord } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { ArnLink } from "@/components/ui/arn-link"
 import { ResourceArnCombobox } from "@/components/ui/resource-arn-combobox"
@@ -28,19 +28,18 @@ function humanizeRule(rule: unknown): string {
   if (rule === null) return "null"
   if (typeof rule === "string") return rule === "" ? '""' : rule
   if (typeof rule === "number" || typeof rule === "boolean") return String(rule)
-  if (typeof rule === "object") {
-    const obj = rule as Record<string, unknown>
-    if ("prefix" in obj) return `starts with "${String(obj.prefix)}"`
-    if ("suffix" in obj) return `ends with "${String(obj.suffix)}"`
-    if ("equals-ignore-case" in obj) return `≈ "${String(obj["equals-ignore-case"])}"`
-    if ("exists" in obj) return obj.exists ? "exists" : "not exists"
-    if ("anything-but" in obj) {
-      const ab = obj["anything-but"]
+  if (isRecord(rule)) {
+    if ("prefix" in rule) return `starts with "${String(rule.prefix)}"`
+    if ("suffix" in rule) return `ends with "${String(rule.suffix)}"`
+    if ("equals-ignore-case" in rule) return `≈ "${String(rule["equals-ignore-case"])}"`
+    if ("exists" in rule) return rule.exists ? "exists" : "not exists"
+    if ("anything-but" in rule) {
+      const ab = rule["anything-but"]
       if (Array.isArray(ab)) return `≠ ${ab.map(String).join(" | ")}`
       return `≠ "${String(ab)}"`
     }
-    if ("numeric" in obj) {
-      const ops = obj.numeric as unknown[]
+    if ("numeric" in rule) {
+      const ops = rule.numeric as unknown[]
       if (ops.length === 2) return `${String(ops[0])} ${String(ops[1])}`
       if (ops.length >= 4)
         return `${String(ops[0])} ${String(ops[1])} and ${String(ops[2])} ${String(ops[3])}`

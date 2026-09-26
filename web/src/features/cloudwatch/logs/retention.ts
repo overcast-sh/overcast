@@ -1,3 +1,5 @@
+import { formatQuantity } from "@/lib/format"
+
 /**
  * CloudWatch Logs retention periods.
  *
@@ -13,5 +15,5 @@ export const LOG_RETENTION_DAYS = [
 
 /** Human label for a retention period, e.g. "1 day", "14 days". */
 export function retentionLabel(days: number): string {
-  return days === 1 ? "1 day" : `${days} days`
+  return formatQuantity(days, "day")
 }

@@ -10,6 +10,7 @@
  * the server's authoritative x-amz-expiration instead.
  */
 import type { S3LifecycleRule, S3LifecycleFilter } from "@/types"
+import { formatQuantity } from "@/lib/format"
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
@@ -205,11 +206,6 @@ export function describeLifecycleFilter(rule: S3LifecycleRule): string {
   return parts.join(" · ")
 }
 
-/** "1 day" / "2 days" — the unit every lifecycle action is counted in. */
-function days(count: number): string {
-  return `${count} day${count === 1 ? "" : "s"}`
-}
-
 /**
  * What a noncurrent action retains regardless of age, if anything. AWS counts
  * how many newer noncurrent versions must exist before it applies, which is the
@@ -224,7 +220,7 @@ function keeping(newerNoncurrentVersions?: number): string {
 export function describeLifecycleActions(rule: S3LifecycleRule): string[] {
   const actions: string[] = []
   if (rule.expirationDays !== undefined) {
-    actions.push(`Expire after ${days(rule.expirationDays)}`)
+    actions.push(`Expire after ${formatQuantity(rule.expirationDays, "day")}`)
   }
   if (rule.expirationDate) {
     actions.push(`Expire on ${rule.expirationDate.slice(0, 10)}`)
@@ -235,25 +231,27 @@ export function describeLifecycleActions(rule: S3LifecycleRule): string[] {
   for (const transition of rule.transitions) {
     const when =
       transition.days !== undefined
-        ? `after ${days(transition.days)}`
+        ? `after ${formatQuantity(transition.days, "day")}`
         : `on ${(transition.date ?? "").slice(0, 10)}`
     actions.push(`Mark ${transition.storageClass} ${when}`)
   }
   const noncurrentExpiration = rule.noncurrentVersionExpiration
   if (noncurrentExpiration) {
     actions.push(
-      `Expire noncurrent versions after ${days(noncurrentExpiration.noncurrentDays)}` +
+      `Expire noncurrent versions after ${formatQuantity(noncurrentExpiration.noncurrentDays, "day")}` +
         keeping(noncurrentExpiration.newerNoncurrentVersions),
     )
   }
   for (const transition of rule.noncurrentVersionTransitions) {
     actions.push(
-      `Mark noncurrent versions ${transition.storageClass} after ${days(transition.noncurrentDays)}` +
+      `Mark noncurrent versions ${transition.storageClass} after ${formatQuantity(transition.noncurrentDays, "day")}` +
         keeping(transition.newerNoncurrentVersions),
     )
   }
   if (rule.abortIncompleteMultipartUploadDays !== undefined) {
-    actions.push(`Abort incomplete uploads after ${days(rule.abortIncompleteMultipartUploadDays)}`)
+    actions.push(
+      `Abort incomplete uploads after ${formatQuantity(rule.abortIncompleteMultipartUploadDays, "day")}`,
+    )
   }
   return actions
 }

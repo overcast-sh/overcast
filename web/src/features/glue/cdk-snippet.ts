@@ -1,4 +1,5 @@
 import type { TableInput } from "@aws-sdk/client-glue"
+import { isRecord } from "@/lib/utils"
 
 /**
  * *Copy as CDK*: the `CfnTable` that creates the same table from a CDK app,
@@ -27,7 +28,7 @@ function literal(value: unknown, depth: number, data = false): string {
     const items = value.map((v) => `${pad}${literal(v, depth + 1)},`)
     return `[\n${items.join("\n")}\n${INDENT.repeat(depth)}]`
   }
-  if (typeof value === "object" && value !== null) {
+  if (isRecord(value)) {
     const entries = Object.entries(value).filter(([, v]) => v !== undefined)
     if (entries.length === 0) return "{}"
     const pad = INDENT.repeat(depth + 1)

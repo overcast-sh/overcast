@@ -8,6 +8,8 @@
  * shape is repaired by `restoreQueryTabs` rather than trusted.
  */
 
+import { isRecord } from "@/lib/utils"
+
 export const QUERY_TABS_STORAGE_KEY = "overcast:athena:query-tabs"
 
 export const DEFAULT_CATALOG = "AwsDataCatalog"
@@ -99,10 +101,6 @@ export function closeQueryTab(state: QueryTabs, id: string): QueryTabs {
 
 export function activeQueryTab(state: QueryTabs): QueryTab {
   return state.tabs.find((t) => t.id === state.activeId) ?? state.tabs[0]
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
 }
 
 function text(value: unknown, fallback: string): string {

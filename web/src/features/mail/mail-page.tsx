@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
 import { cn } from "@/lib/utils"
 import type { MessageKind } from "@/types"
+import { formatQuantity } from "@/lib/format"
 
 type KindFilter = "all" | MessageKind
 type ReadFilter = "all" | "unread"
@@ -133,7 +134,7 @@ export function InboxPage() {
 
   const countLabel =
     messages.length === allMessages.length
-      ? `${allMessages.length} message${allMessages.length !== 1 ? "s" : ""}`
+      ? formatQuantity(allMessages.length, "message")
       : `${messages.length} of ${allMessages.length}`
 
   return (

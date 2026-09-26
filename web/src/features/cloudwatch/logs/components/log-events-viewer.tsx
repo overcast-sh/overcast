@@ -50,8 +50,10 @@ import {
 import { useLogTailBuffer } from "@/features/cloudwatch/logs/use-log-tail-buffer"
 import { useTailCatchUp } from "@/features/cloudwatch/logs/use-tail-catch-up"
 import { useLoadMoreAtEdge } from "@/hooks/use-load-more-at-edge"
-import { useLogViewPrefs } from "@/features/cloudwatch/logs/use-log-view-prefs"
+import { type LogViewPrefs, useLogViewPrefs } from "@/features/cloudwatch/logs/use-log-view-prefs"
 import { ExportMenu } from "@/features/cloudwatch/logs/components/export-menu"
+import { formatCount, formatQuantity } from "@/lib/format"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 // ── Row height estimation ──────────────────────────────────────────────────
 
@@ -62,6 +64,11 @@ import { ExportMenu } from "@/features/cloudwatch/logs/components/export-menu"
  * churn is the point of the mode — so this must match what the CSS produces.
  */
 const COLLAPSED_ROW_HEIGHT = 30
+
+const DISPLAY_MODES = [
+  { value: "table", label: "Table" },
+  { value: "plain", label: "Plaintext" },
+] as const satisfies readonly SegmentedOption<LogViewPrefs["displayMode"]>[]
 
 /** Estimate the row height for a log event based on message length and format state. */
 function estimateRowHeight(msg: string, formatted: boolean): number {
@@ -867,32 +874,21 @@ export function LogEventsViewer({ groupName, streamName, anchor }: Props) {
           </Button>
           {activeFilter && (
             <span className="ml-1 shrink-0 text-xs text-fg-muted">
-              {events.length}
-              {hasNextPage ? "+" : ""} result{events.length !== 1 || hasNextPage ? "s" : ""}
+              {hasNextPage
+                ? `${formatCount(events.length)}+ results`
+                : formatQuantity(events.length, "result")}
             </span>
           )}
         </div>
 
         {/* View toggles */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            type="button"
-            size="sm"
-            variant={displayMode === "table" ? "default" : "ghost"}
-            onClick={() => setPref("displayMode", "table")}
-            className="h-7 px-2 text-2xs uppercase"
-          >
-            Table
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={displayMode === "plain" ? "default" : "ghost"}
-            onClick={() => setPref("displayMode", "plain")}
-            className="h-7 px-2 text-2xs uppercase"
-          >
-            Plaintext
-          </Button>
+          <SegmentedControl
+            label="Display mode"
+            value={displayMode}
+            options={DISPLAY_MODES}
+            onChange={(mode) => setPref("displayMode", mode)}
+          />
           <label className="flex cursor-pointer items-center gap-1.5 rounded border border-border px-2 py-1.5 font-mono text-2xs font-medium text-fg-muted uppercase select-none hover:bg-fg-muted/10">
             <input
               type="checkbox"
@@ -1023,8 +1019,9 @@ export function LogEventsViewer({ groupName, streamName, anchor }: Props) {
                 : undefined
             }
           >
-            {events.length.toLocaleString()}
-            {hasNextPage ? "+" : ""} event{events.length !== 1 || hasNextPage ? "s" : ""}
+            {hasNextPage
+              ? `${formatCount(events.length)}+ events`
+              : formatQuantity(events.length, "event")}
           </span>
           {tail.overflowed > 0 && (
             // The AWS console shows "% displayed" when Live Tail samples; the

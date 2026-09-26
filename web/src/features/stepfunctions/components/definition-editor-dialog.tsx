@@ -23,8 +23,14 @@ import { cn } from "@/lib/utils"
 import { parseDefinition } from "../asl"
 import { DEFINITION_TEMPLATES, templateDefinition } from "../templates"
 import { FlowDiagram } from "./flow-diagram"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 const NAME_PATTERN = /^[A-Za-z0-9_-]{1,80}$/
+
+const TYPES = [
+  { value: "STANDARD", label: "Standard" },
+  { value: "EXPRESS", label: "Express" },
+] as const satisfies readonly SegmentedOption<StateMachineType>[]
 
 export type DefinitionEditorResult =
   | { mode: "create"; name: string; type: StateMachineType; definition: string }
@@ -119,29 +125,14 @@ function EditorBody({
             </label>
             <div className="flex flex-col gap-1.5">
               <SectionLabel>Type</SectionLabel>
-              <div
-                role="radiogroup"
-                aria-label="State machine type"
-                className="flex h-8 overflow-hidden rounded-md border border-border"
-              >
-                {(["STANDARD", "EXPRESS"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    role="radio"
-                    aria-checked={type === t}
-                    onClick={() => setType(t)}
-                    className={cn(
-                      "px-3 text-xs font-medium transition-colors",
-                      type === t
-                        ? "bg-accent-muted text-accent"
-                        : "text-fg-muted hover:bg-bg-muted",
-                    )}
-                  >
-                    {t === "STANDARD" ? "Standard" : "Express"}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl
+                label="State machine type"
+                value={type}
+                options={TYPES}
+                onChange={setType}
+                size="md"
+                className="self-start"
+              />
             </div>
           </div>
           <div className="flex flex-col gap-1.5">

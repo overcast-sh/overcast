@@ -62,7 +62,7 @@ describe("Dashboard", () => {
   it("renders the services table once the list view is selected", async () => {
     const { user } = renderDashboard()
 
-    await user.click(await screen.findByRole("button", { name: "List view" }))
+    await user.click(await screen.findByRole("radio", { name: "List view" }))
 
     expect(screen.getByRole("table", { name: "Services" })).toBeInTheDocument()
   })
@@ -74,7 +74,7 @@ describe("Dashboard", () => {
   it("puts the services table on a focusable horizontal scroller", async () => {
     const { user } = renderDashboard()
 
-    await user.click(await screen.findByRole("button", { name: "List view" }))
+    await user.click(await screen.findByRole("radio", { name: "List view" }))
 
     const scroller = screen.getByRole("table", { name: "Services" }).parentElement
     expect(scroller).toHaveAttribute("tabindex", "0")
@@ -123,7 +123,7 @@ describe("Dashboard", () => {
         .closest("a"),
     ).not.toBeNull()
 
-    await user.click(await screen.findByRole("button", { name: "List view" }))
+    await user.click(await screen.findByRole("radio", { name: "List view" }))
 
     const table = screen.getByRole("table", { name: "Services" })
     expect(within(table).getByText("SNS").closest("a")).not.toBeNull()
@@ -230,7 +230,7 @@ describe("Dashboard > pinning", () => {
   it("pins a service from the list view", async () => {
     const { user } = renderDashboard()
 
-    await user.click(await screen.findByRole("button", { name: "List view" }))
+    await user.click(await screen.findByRole("radio", { name: "List view" }))
     const table = screen.getByRole("table", { name: "Services" })
     await user.click(within(table).getByRole("button", { name: "Pin DynamoDB to sidebar" }))
 

@@ -18,6 +18,7 @@
  */
 import type { StateRun, TaskAttempt } from "./execution-trace"
 import { describeLogEvent, parsePlatformRecord, tryParseJSON } from "@/lib/log-format"
+import { isRecord } from "@/lib/utils"
 
 // ─── Which function an attempt called ────────────────────────────────────────
 
@@ -53,7 +54,7 @@ export function parseFunctionRef(
 function parseObject(json: string | undefined): Record<string, unknown> | null {
   if (!json) return null
   const parsed = tryParseJSON(json)
-  return parsed && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
+  return isRecord(parsed) ? parsed : null
 }
 
 /** The Lambda function an attempt called, or null when it called something else. */
@@ -93,8 +94,8 @@ export function testEventName(stateName: string, attemptNumber: number): string 
 /** The request id `lambda:invoke` returned, which only a successful attempt has. */
 export function requestIdOf(attempt: TaskAttempt): string | undefined {
   const meta = parseObject(attempt.output)?.SdkResponseMetadata
-  if (meta && typeof meta === "object") {
-    const id = (meta as Record<string, unknown>).RequestId
+  if (isRecord(meta)) {
+    const id = meta.RequestId
     if (typeof id === "string" && id) return id
   }
   return undefined

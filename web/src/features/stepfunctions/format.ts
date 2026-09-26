@@ -2,6 +2,8 @@
  * Presentation helpers shared by the Step Functions views.
  */
 
+import { isRecord } from "@/lib/utils"
+
 type BadgeVariant = "default" | "success" | "danger" | "warning" | "info"
 
 /** Maps an execution status to the badge colour that reads correctly for it. */
@@ -78,7 +80,7 @@ export function historyEventFailure(event: Record<string, unknown>): {
   cause: string
 } {
   for (const [key, value] of Object.entries(event)) {
-    if (!key.endsWith("EventDetails") || typeof value !== "object" || value === null) continue
+    if (!key.endsWith("EventDetails") || !isRecord(value)) continue
     const details = value as { error?: string; cause?: string }
     if (details.error || details.cause) {
       return { error: details.error ?? "", cause: details.cause ?? "" }

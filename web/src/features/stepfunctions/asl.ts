@@ -11,6 +11,9 @@
  * wrong as `issues` instead of refusing to draw it.
  */
 
+import { formatQuantity } from "@/lib/format"
+import { isRecord } from "@/lib/utils"
+
 export type StateType =
   "Task" | "Pass" | "Choice" | "Wait" | "Succeed" | "Fail" | "Parallel" | "Map"
 
@@ -79,10 +82,6 @@ export const ROOT_SCOPE = "root"
 
 type Json = Record<string, unknown>
 
-function isObject(value: unknown): value is Json {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
 /** Parses a definition string. Returns an error rather than throwing when it is not a JSON object. */
 export function parseDefinition(definition: string | undefined): {
   model?: AslModel
@@ -95,7 +94,7 @@ export function parseDefinition(definition: string | undefined): {
   } catch (err) {
     return { error: `The definition is not valid JSON: ${(err as Error).message}` }
   }
-  if (!isObject(parsed)) return { error: "The definition must be a JSON object." }
+  if (!isRecord(parsed)) return { error: "The definition must be a JSON object." }
   return { model: buildModel(parsed) }
 }
 
@@ -124,16 +123,16 @@ function readScope(
     ? `"${container}"${branchIndex !== undefined ? ` branch ${branchIndex + 1}` : ""}`
     : "the top level"
   const startAt = typeof doc.StartAt === "string" ? doc.StartAt : ""
-  const statesDoc = isObject(doc.States) ? doc.States : {}
+  const statesDoc = isRecord(doc.States) ? doc.States : {}
   if (!startAt) model.issues.push(`StartAt is missing in ${where}.`)
-  if (!isObject(doc.States)) model.issues.push(`States is missing in ${where}.`)
+  if (!isRecord(doc.States)) model.issues.push(`States is missing in ${where}.`)
 
   const scope: AslScope = { id: scopeId, container, branchIndex, startAt, states: [] }
   model.scopes.set(scopeId, scope)
   const language = doc.QueryLanguage === "JSONata" ? "JSONata" : inheritedLanguage
 
   for (const [name, value] of Object.entries(statesDoc)) {
-    if (!isObject(value)) {
+    if (!isRecord(value)) {
       model.issues.push(`State "${name}" is not an object.`)
       continue
     }
@@ -167,7 +166,7 @@ function readState(
   if (type === "Choice") {
     const choices = Array.isArray(raw.Choices) ? raw.Choices : []
     for (const rule of choices) {
-      if (!isObject(rule) || typeof rule.Next !== "string") continue
+      if (!isRecord(rule) || typeof rule.Next !== "string") continue
       transitions.push({
         kind: "choice",
         to: rule.Next,
@@ -180,7 +179,7 @@ function readState(
   }
   const catchers = Array.isArray(raw.Catch) ? raw.Catch : []
   for (const catcher of catchers) {
-    if (!isObject(catcher) || typeof catcher.Next !== "string") continue
+    if (!isRecord(catcher) || typeof catcher.Next !== "string") continue
     const errors = Array.isArray(catcher.ErrorEquals) ? catcher.ErrorEquals.map(String) : []
     transitions.push({ kind: "catch", to: catcher.Next, label: `Catch ${formatErrors(errors)}` })
   }
@@ -189,15 +188,15 @@ function readState(
   if (type === "Parallel") {
     const branches = Array.isArray(raw.Branches) ? raw.Branches : []
     branches.forEach((branch, index) => {
-      if (!isObject(branch)) return
+      if (!isRecord(branch)) return
       const id = `${name}#${index}`
       childScopes.push(id)
       readScope(model, branch, id, name, index, stateLanguage)
     })
   } else if (type === "Map") {
-    const processor = isObject(raw.ItemProcessor)
+    const processor = isRecord(raw.ItemProcessor)
       ? raw.ItemProcessor
-      : isObject(raw.Iterator)
+      : isRecord(raw.Iterator)
         ? raw.Iterator
         : undefined
     if (processor) {
@@ -224,9 +223,9 @@ function readState(
 }
 
 function isDistributed(raw: Json): boolean {
-  const processor = isObject(raw.ItemProcessor) ? raw.ItemProcessor : undefined
+  const processor = isRecord(raw.ItemProcessor) ? raw.ItemProcessor : undefined
   const config =
-    processor && isObject(processor.ProcessorConfig) ? processor.ProcessorConfig : undefined
+    processor && isRecord(processor.ProcessorConfig) ? processor.ProcessorConfig : undefined
   return config?.Mode === "DISTRIBUTED"
 }
 
@@ -297,16 +296,16 @@ export function describeChoiceRule(rule: Json, language = "JSONPath"): string {
   }
   if (typeof rule.Condition === "string") return stripJsonata(rule.Condition)
   if (Array.isArray(rule.And)) {
-    return rule.And.map((r) => wrap(isObject(r) ? describeChoiceRule(r, language) : "?")).join(
+    return rule.And.map((r) => wrap(isRecord(r) ? describeChoiceRule(r, language) : "?")).join(
       " && ",
     )
   }
   if (Array.isArray(rule.Or)) {
-    return rule.Or.map((r) => wrap(isObject(r) ? describeChoiceRule(r, language) : "?")).join(
+    return rule.Or.map((r) => wrap(isRecord(r) ? describeChoiceRule(r, language) : "?")).join(
       " || ",
     )
   }
-  if (isObject(rule.Not)) return `!(${describeChoiceRule(rule.Not, language)})`
+  if (isRecord(rule.Not)) return `!(${describeChoiceRule(rule.Not, language)})`
 
   const variable = typeof rule.Variable === "string" ? rule.Variable : "?"
   for (const [op, symbol] of COMPARISON_OPERATORS) {
@@ -380,9 +379,9 @@ function summarizeState(type: string, raw: Json): string {
     case "Task": {
       const resource = typeof raw.Resource === "string" ? raw.Resource : ""
       const { service, action, pattern } = parseTaskResource(resource)
-      const params = isObject(raw.Parameters)
+      const params = isRecord(raw.Parameters)
         ? raw.Parameters
-        : isObject(raw.Arguments)
+        : isRecord(raw.Arguments)
           ? raw.Arguments
           : {}
       let target = action
@@ -403,11 +402,11 @@ function summarizeState(type: string, raw: Json): string {
     }
     case "Choice": {
       const count = Array.isArray(raw.Choices) ? raw.Choices.length : 0
-      return `${count} rule${count === 1 ? "" : "s"}${typeof raw.Default === "string" ? " + default" : ""}`
+      return `${formatQuantity(count, "rule")}${typeof raw.Default === "string" ? " + default" : ""}`
     }
     case "Parallel": {
       const count = Array.isArray(raw.Branches) ? raw.Branches.length : 0
-      return `${count} branch${count === 1 ? "" : "es"} in parallel`
+      return `${formatQuantity(count, "branch", "branches")} in parallel`
     }
     case "Map": {
       const items =
@@ -415,7 +414,7 @@ function summarizeState(type: string, raw: Json): string {
           ? raw.ItemsPath
           : typeof raw.Items === "string"
             ? stripJsonata(raw.Items)
-            : isObject(raw.ItemReader)
+            : isRecord(raw.ItemReader)
               ? "items from S3"
               : "$"
       const mode = isDistributed(raw) ? "Distributed · " : ""

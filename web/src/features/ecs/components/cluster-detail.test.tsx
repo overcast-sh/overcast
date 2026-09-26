@@ -77,7 +77,7 @@ describe("ClusterDetail tasks", () => {
       "/ecs/demo/tasks/running-task?container=app",
     )
 
-    await user.click(screen.getByRole("button", { name: /^Stopped/ }))
+    await user.click(screen.getByRole("radio", { name: /^Stopped/ }))
 
     expect(screen.getByText("stopped-task")).toBeInTheDocument()
     expect(screen.queryByText("running-task")).not.toBeInTheDocument()

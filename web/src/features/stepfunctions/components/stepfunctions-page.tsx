@@ -21,6 +21,7 @@ import { ServiceDocsButton, useDocsFromHash } from "@/features/docs/service-docs
 import { ArnText } from "@/components/ui/arn-link"
 import { formatTimestamp } from "@/features/stepfunctions/format"
 import { DefinitionEditorDialog } from "./definition-editor-dialog"
+import { formatQuantity } from "@/lib/format"
 
 interface StepFunctionsPageProps {
   /** Current filter text — owned by the route's `q` search param, see `useFilterSearchParam`. */
@@ -83,7 +84,7 @@ export function StepFunctionsPage({
   return (
     <ResourceListPage
       title="Step Functions"
-      description={`${machines.length} state machine${machines.length !== 1 ? "s" : ""}`}
+      description={formatQuantity(machines.length, "state machine")}
       actions={
         <>
           <ServiceDocsButton

@@ -12,6 +12,7 @@
  * how the user likes logs rendered.
  */
 import { useCallback, useEffect, useRef, useState } from "react"
+import { isRecord } from "@/lib/utils"
 
 export interface LogViewPrefs {
   displayMode: "table" | "plain"
@@ -53,9 +54,8 @@ function loadPrefs(): LogViewPrefs {
   try {
     const raw = localStorage.getItem(LOG_VIEW_PREFS_KEY)
     if (!raw) return defaultLogViewPrefs
-    const parsed: unknown = JSON.parse(raw)
-    if (parsed == null || typeof parsed !== "object") return defaultLogViewPrefs
-    const stored = parsed as Record<string, unknown>
+    const stored: unknown = JSON.parse(raw)
+    if (!isRecord(stored)) return defaultLogViewPrefs
     return {
       displayMode: stored.displayMode === "plain" ? "plain" : defaultLogViewPrefs.displayMode,
       formatted: readBool(stored.formatted, defaultLogViewPrefs.formatted),

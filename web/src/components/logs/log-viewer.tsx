@@ -6,6 +6,7 @@ import { describeLogEvent, formatLogTime, logLevelRowClass } from "@/lib/log-for
 import { nearViewport, useScrollSettled } from "@/hooks/use-scroll-settled"
 import { CopyButton } from "@/components/ui/copy-button"
 import { LogMessage } from "./log-message"
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/segmented-control"
 
 export interface LogViewerEvent {
   timestamp?: number
@@ -49,6 +50,11 @@ interface LogViewerProps {
  * of one-line rows cheap.
  */
 const COLLAPSED_ROW_HEIGHT = 28
+
+const LOG_LAYOUTS = [
+  { value: "plain", label: "Plain" },
+  { value: "table", label: "Table" },
+] as const satisfies readonly SegmentedOption<"plain" | "table">[]
 
 /**
  * A rough pre-measurement estimate for an *expanded* table row — refined by
@@ -161,31 +167,13 @@ export function LogViewer({
     <div className={cn("flex min-h-0 flex-1 flex-col", className)}>
       {showModeToggle && (
         <div className="mb-2 flex items-center justify-end gap-1.5">
-          <button
-            type="button"
-            onClick={() => setMode("plain")}
-            className={cn(
-              "rounded border px-2 py-1 font-mono text-2xs font-medium uppercase",
-              mode === "plain"
-                ? "border-accent/50 bg-accent-muted text-fg"
-                : "border-border text-fg-muted hover:bg-fg-muted/10",
-            )}
-          >
-            Plain
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("table")}
-            className={cn(
-              "rounded border px-2 py-1 font-mono text-2xs font-medium uppercase",
-              mode === "table"
-                ? "border-accent/50 bg-accent-muted text-fg"
-                : "border-border text-fg-muted hover:bg-fg-muted/10",
-            )}
-          >
-            Table
-          </button>
-          <label className="flex cursor-pointer items-center gap-1 rounded border border-border px-2 py-1 font-mono text-2xs font-medium text-fg-muted uppercase select-none hover:bg-fg-muted/10">
+          <SegmentedControl
+            label="Log layout"
+            value={mode}
+            options={LOG_LAYOUTS}
+            onChange={setMode}
+          />
+          <label className="flex cursor-pointer items-center gap-1 rounded border border-border px-2 py-1.5 font-mono text-2xs font-medium text-fg-muted uppercase select-none hover:bg-fg-muted/10">
             <input
               type="checkbox"
               checked={formatted}
