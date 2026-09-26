@@ -17,7 +17,7 @@ export function ParametersStrip({
 }) {
   if (count === 0) return null
   return (
-    <fieldset className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-muted px-3 py-2">
+    <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-border bg-bg-muted px-3 py-2">
       <legend className="sr-only">Execution parameters</legend>
       <FieldLabel aria-hidden>parameters</FieldLabel>
       {Array.from({ length: count }, (_, i) => (

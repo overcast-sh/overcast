@@ -37,6 +37,14 @@ The first query waits, `QUEUED`, while the engine starts — about ten seconds
 with the image already pulled, plus the pull of a 2.4 GB image the first time
 ever. Later queries start at once.
 
+In the console, **Athena** opens on a query editor. It has a browser of the
+catalog's databases and tables, completion for their names and for every
+Trino function, and the result in a grid. The editor also shows the engine's
+start-up as it happens. History, saved queries, workgroups and data catalogs
+are its other tabs. Another page can open SQL in the editor with
+`/athena?tab=editor&database=<name>&sql=<SQL>`, which opens a new query tab
+and does not run it.
+
 ## What works
 
 | Area | Behaviour |

@@ -52,7 +52,11 @@ export function EditorToolbar({
   const { copy } = useCopyToClipboard()
 
   return (
-    <div role="toolbar" aria-label="Query" className="flex flex-wrap items-center gap-2">
+    <div
+      role="toolbar"
+      aria-label="Query"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
+    >
       <label className="flex items-center gap-2 font-mono text-2xs text-fg-subtle">
         workgroup
         <Select

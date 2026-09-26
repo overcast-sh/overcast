@@ -292,8 +292,9 @@ export const SERVICES = {
   // ── Analytics ──────────────────────────────────────────────────────────
   // Athena and the Glue Data Catalog share the violet-magenta end of the
   // ramp, as one query-and-catalog family; S3 Tables takes S3's slot, since
-  // its tables live in S3 warehouse buckets. Their console pages are still to
-  // come (#2072, #2086, #2087): until each lands, its routes render
+  // its tables live in S3 warehouse buckets. Athena's page (#2072) keeps its
+  // tabs on the page, as IAM's does. The Glue and S3 Tables pages are still
+  // to come (#2086, #2087): until each lands, its routes render
   // ConsolePendingPage, and it adds its sub-nav `children` with its tabs.
   athena: {
     label: "Athena",
