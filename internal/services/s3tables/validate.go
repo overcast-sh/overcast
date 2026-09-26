@@ -47,10 +47,6 @@ func enumError(field, value string, allowed ...string) *protocol.AWSError {
 		value, field, strings.Join(allowed, ", "))
 }
 
-func notImplemented(msg string) *protocol.AWSError {
-	return &protocol.AWSError{Code: protocol.ErrNotImplemented.Code, Message: msg, HTTPStatus: http.StatusNotImplemented}
-}
-
 var (
 	errBucketNotFound    = notFound("The specified bucket does not exist.")
 	errNamespaceNotFound = notFound("The specified namespace does not exist.")

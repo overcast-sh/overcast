@@ -288,55 +288,54 @@ func s3tablesIcebergMetadata(v any) map[string]any {
 	}
 	out := map[string]any{}
 	if schema := cfnObject(m["IcebergSchema"]); schema != nil {
-		var fields []any
-		list, _ := schema["SchemaFieldList"].([]any)
-		for _, f := range list {
-			fm := cfnObject(f)
-			field := map[string]any{"name": fm["Name"], "type": fm["Type"]}
-			if r, ok := fm["Required"]; ok {
-				field["required"] = r
-			}
-			if id, ok := fm["Id"]; ok {
-				field["id"] = id
-			}
-			fields = append(fields, field)
-		}
-		out["schema"] = map[string]any{"fields": fields}
+		out["schema"] = map[string]any{"fields": cfnRenamedList(schema["SchemaFieldList"], s3tablesSchemaFieldNames)}
 	}
-	if v2, ok := m["IcebergSchemaV2"]; ok && v2 != nil {
-		out["schemaV2"] = convertCFKeysToAPI(v2)
+	if v2 := cfnObject(m["IcebergSchemaV2"]); v2 != nil {
+		schema := cfnRenamed(v2, s3tablesSchemaV2Names)
+		schema["fields"] = cfnRenamedList(v2["SchemaV2FieldList"], s3tablesSchemaV2FieldNames)
+		out["schemaV2"] = schema
 	}
 	if spec := cfnObject(m["IcebergPartitionSpec"]); spec != nil {
-		var fields []any
-		list, _ := spec["Fields"].([]any)
-		for _, f := range list {
-			fm := cfnObject(f)
-			field := map[string]any{"source-id": fm["SourceId"], "transform": fm["Transform"], "name": fm["Name"]}
-			if id, ok := fm["FieldId"]; ok {
-				field["field-id"] = id
-			}
-			fields = append(fields, field)
-		}
-		ps := map[string]any{"fields": fields}
-		if id, ok := spec["SpecId"]; ok {
-			ps["spec-id"] = id
-		}
+		ps := cfnRenamed(spec, map[string]string{"SpecId": "spec-id"})
+		ps["fields"] = cfnRenamedList(spec["Fields"], s3tablesPartitionFieldNames)
 		out["partitionSpec"] = ps
 	}
 	if order := cfnObject(m["IcebergSortOrder"]); order != nil {
-		var fields []any
-		list, _ := order["Fields"].([]any)
-		for _, f := range list {
-			fm := cfnObject(f)
-			fields = append(fields, map[string]any{
-				"source-id": fm["SourceId"], "transform": fm["Transform"],
-				"direction": fm["Direction"], "null-order": fm["NullOrder"],
-			})
-		}
-		out["writeOrder"] = map[string]any{"order-id": order["OrderId"], "fields": fields}
+		wo := cfnRenamed(order, map[string]string{"OrderId": "order-id"})
+		wo["fields"] = cfnRenamedList(order["Fields"], s3tablesSortFieldNames)
+		out["writeOrder"] = wo
 	}
 	if p, ok := m["TableProperties"]; ok && p != nil {
 		out["properties"] = p
+	}
+	return out
+}
+
+// CloudFormation's property names for the Iceberg shapes, mapped onto the
+// API's JSON names. A SchemaV2Field's Type is passed through untouched: a
+// primitive's name, or a nested type written, as the resource reference asks,
+// in the Iceberg spec's own lower-case JSON.
+var (
+	s3tablesSchemaFieldNames    = map[string]string{"Id": "id", "Name": "name", "Type": "type", "Required": "required"}
+	s3tablesSchemaV2Names       = map[string]string{"SchemaV2FieldType": "type", "SchemaId": "schema-id", "IdentifierFieldIds": "identifier-field-ids"}
+	s3tablesSchemaV2FieldNames  = map[string]string{"Id": "id", "Name": "name", "Type": "type", "Required": "required", "Doc": "doc"}
+	s3tablesPartitionFieldNames = map[string]string{"SourceId": "source-id", "FieldId": "field-id", "Name": "name", "Transform": "transform"}
+	s3tablesSortFieldNames      = map[string]string{"SourceId": "source-id", "Transform": "transform", "Direction": "direction", "NullOrder": "null-order"}
+)
+
+// cfnRenamed is the members of m that names lists, under their API names.
+func cfnRenamed(m map[string]any, names map[string]string) map[string]any {
+	out := make(map[string]any, len(names))
+	forwardPropertiesAs(m, out, names)
+	return out
+}
+
+// cfnRenamedList is cfnRenamed over each object of a CloudFormation list.
+func cfnRenamedList(v any, names map[string]string) []any {
+	list, _ := v.([]any)
+	out := make([]any, 0, len(list))
+	for _, item := range list {
+		out = append(out, cfnRenamed(cfnObject(item), names))
 	}
 	return out
 }

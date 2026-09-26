@@ -53,16 +53,36 @@ Tables can create one.
 ## Iceberg metadata
 
 `CreateTable` writes `metadata/00000-<uuid>.metadata.json` when
-`metadata.iceberg.schema` is given, and sets `metadataLocation` to it. Without
-a schema, `metadataLocation` is absent until a client commits one, as on AWS.
+`metadata.iceberg.schema` or `schemaV2` is given, and sets `metadataLocation`
+to it. Without a schema, `metadataLocation` is absent until a client commits
+one, as on AWS.
 
 | Input | Handling |
 | --- | --- |
-| `schema` | Primitive Iceberg types only (`long`, `string`, `decimal(p,s)`, `fixed[n]`, …); column ids are reassigned 1..n |
-| `partitionSpec` | Written as spec 0; partition field ids start at 1000 |
-| `writeOrder` | Written as the default sort order |
+| `schema` | Primitive Iceberg types only (`long`, `string`, `decimal(p,s)`, `fixed[n]`, …); a nested type is a `BadRequestException`; column ids are reassigned 1..n |
+| `schemaV2` | Primitive types, and `struct`, `list` and `map` as Iceberg type documents; ids are reassigned depth-first, as below |
+| `partitionSpec` | Written as spec 0; a partition field without a `field-id` is numbered from 1000 |
+| `writeOrder` | Written as sort order 1, the default, whatever its `order-id` |
 | `properties` | Copied into the metadata's properties |
-| `schemaV2` | Refused with `501 NotImplemented` |
+
+`schema` and `schemaV2` together are a `BadRequestException`, as
+CloudFormation documents for `IcebergSchema` and `IcebergSchemaV2`.
+
+### Field ids
+
+Iceberg numbers a new table's fields itself, whatever ids the request
+declared: the top-level columns 1..n, then each column's nested type in turn,
+depth-first, with a list's element and a map's key and value numbered before
+what they contain. The schema is id 0 whatever `schema-id` says. Partition
+fields, sort fields and `identifier-field-ids` name fields by the ids the
+request declared and are moved to the new ones.
+
+The references follow the Iceberg spec. A sort source must be a primitive. A
+partition source must be a primitive that may sit in a struct but not in a
+list or map, except for a `void` field. An identifier field follows the
+partition rule, and must also be required, neither `float` nor `double`, and
+nested only in required structs. Anything else is a `BadRequestException`, in
+`CreateTable` and in the Iceberg REST catalog's commits alike.
 
 Engines commit through the [Iceberg REST catalog](./iceberg-rest.md), which
 writes format-version 1 and 2 metadata, nested types included; a table asking
@@ -72,9 +92,8 @@ warehouse can commit it with `UpdateTableMetadataLocation` instead.
 ## Errors
 
 Every client error's code and HTTP status come from the AWS model; the
-exceptions are `schemaV2` (`501 NotImplemented`, above) and a failing state
-store (`500 InternalError`). Some messages have not been observed from AWS and
-are Overcast's wording:
+exception is a failing state store (`500 InternalError`). Some messages have
+not been observed from AWS and are Overcast's wording:
 
 | Condition | Code |
 | --- | --- |

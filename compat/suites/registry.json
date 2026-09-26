@@ -5419,6 +5419,21 @@
       ]
     },
     {
+      "service": "s3tables",
+      "name": "s3tables-schemav2",
+      "tests": [
+        {
+          "name": "CreateTable"
+        },
+        {
+          "name": "GetTableMetadataLocation",
+          "depends": [
+            "CreateTable"
+          ]
+        }
+      ]
+    },
+    {
       "service": "athena",
       "name": "athena-control",
       "tests": [

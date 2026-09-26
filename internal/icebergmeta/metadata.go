@@ -17,6 +17,7 @@
 package icebergmeta
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -41,6 +42,9 @@ const (
 	InitialSpecID = 0
 	// UnsortedOrderID is the id the spec reserves for the unsorted order.
 	UnsortedOrderID = 0
+	// InitialSortOrderID is the id of a new table's sort order when it has
+	// one, whatever id the caller proposed.
+	InitialSortOrderID = 1
 	// firstPartitionFieldID is where partition field ids start; the reference
 	// implementation reports 999 as the last id of a spec with no fields.
 	firstPartitionFieldID = 1000
@@ -140,7 +144,8 @@ type MetadataLogEntry struct {
 
 // Metadata is a table metadata document. Field order follows the spec's table
 // so the written JSON reads the way the spec does. Schema and PartitionSpec
-// are the version 1 fields, written only for a version 1 table.
+// are the version 1 fields, written only for a version 1 table, and
+// LastSequenceNumber is written only from version 2 (see MarshalJSON).
 // CurrentSnapshotID is -1 for a table with no current snapshot, as the
 // reference implementation writes it.
 type Metadata struct {
@@ -181,7 +186,6 @@ type CreateSpec struct {
 	Fields             []Field
 	IdentifierFieldIDs []int
 	PartitionFields    []PartitionField
-	SortOrderID        int
 	SortFields         []SortField
 	Properties         map[string]string
 }
@@ -214,9 +218,11 @@ func requirementFailed(format string, args ...any) error {
 
 // New builds the metadata of a table that has no snapshots yet, last updated
 // at now: one schema (id 0) with fresh field ids, the given partition spec as
-// spec 0 (unpartitioned when empty) and the given sort order (unsorted, id 0,
-// when empty). The reserved format-version property picks version 1 or 2 and
-// is not stored.
+// spec 0 (unpartitioned when empty) and the given sort order as order 1
+// (unsorted, id 0, when empty). Every reference is checked against the
+// caller's schema, so an error names the ids the caller sent, and is then
+// moved to the fresh ids. The reserved format-version property picks version
+// 1 or 2 and is not stored.
 func New(spec CreateSpec, now time.Time) (*Metadata, error) {
 	if spec.TableUUID == "" || spec.Location == "" {
 		return nil, invalid("a table needs a UUID and a location")
@@ -229,18 +235,19 @@ func New(spec CreateSpec, now time.Time) (*Metadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	schema, mapping, err := newSchema(spec.Fields, spec.IdentifierFieldIDs)
+	checked, schema, mapping, err := newSchema(spec.Fields, spec.IdentifierFieldIDs)
 	if err != nil {
 		return nil, err
 	}
-	partitionFields, lastPartitionID, err := bindPartitionFields(remapSources(spec.PartitionFields, mapping), schema, firstPartitionFieldID-1)
+	partitionFields, lastPartitionID, err := bindPartitionFields(spec.PartitionFields, checked, firstPartitionFieldID-1)
 	if err != nil {
 		return nil, err
 	}
-	orders, defaultOrder, err := newSortOrders(spec.SortOrderID, remapSortSources(spec.SortFields, mapping), schema)
+	order, err := newSortOrder(spec.SortFields, checked)
 	if err != nil {
 		return nil, err
 	}
+	order.Fields = remapSortSources(order.Fields, mapping)
 	m := &Metadata{
 		FormatVersion:      version,
 		TableUUID:          spec.TableUUID,
@@ -250,10 +257,10 @@ func New(spec CreateSpec, now time.Time) (*Metadata, error) {
 		CurrentSchemaID:    InitialSchemaID,
 		Schemas:            []Schema{schema},
 		DefaultSpecID:      InitialSpecID,
-		PartitionSpecs:     []PartitionSpec{{SpecID: InitialSpecID, Fields: partitionFields}},
+		PartitionSpecs:     []PartitionSpec{{SpecID: InitialSpecID, Fields: remapSources(partitionFields, mapping)}},
 		LastPartitionID:    lastPartitionID,
-		DefaultSortOrderID: defaultOrder,
-		SortOrders:         orders,
+		DefaultSortOrderID: order.OrderID,
+		SortOrders:         []SortOrder{order},
 		Properties:         props,
 		CurrentSnapshotID:  noSnapshot,
 	}
@@ -276,44 +283,40 @@ func createFormatVersion(props map[string]string) (int, error) {
 	return v, nil
 }
 
-// newSchema is the initial schema: the caller's fields validated and
-// renumbered from 1, with the old-to-new id mapping.
-func newSchema(fields []Field, identifierIDs []int) (Schema, map[int]int, error) {
-	checked, err := validateSchema(Schema{Fields: fields, IdentifierFieldIDs: identifierIDs})
+// newSchema validates the caller's schema and renumbers it from 1. It returns
+// the schema as the caller numbered it, the initial schema, and the
+// old-to-new id mapping.
+func newSchema(fields []Field, identifierIDs []int) (checked, fresh Schema, mapping map[int]int, err error) {
+	checked, err = validateSchema(Schema{Fields: fields, IdentifierFieldIDs: identifierIDs})
 	if err != nil {
-		return Schema{}, nil, err
+		return Schema{}, Schema{}, nil, err
 	}
-	fresh, mapping := freshIDs(checked.Fields)
-	schema := Schema{Type: "struct", SchemaID: InitialSchemaID, Fields: fresh}
+	freshFields, mapping := freshIDs(checked.Fields)
+	fresh = Schema{Type: "struct", SchemaID: InitialSchemaID, Fields: freshFields}
 	for _, id := range identifierIDs {
-		schema.IdentifierFieldIDs = append(schema.IdentifierFieldIDs, mapping[id])
+		fresh.IdentifierFieldIDs = append(fresh.IdentifierFieldIDs, mapping[id])
 	}
-	return schema, mapping, nil
+	return checked, fresh, mapping, nil
 }
 
-// remapSources rewrites partition source ids through the fresh-id mapping. An
-// id the caller's schema never declared becomes -1, which validation refuses.
+// remapSources rewrites checked partition source ids through the fresh-id
+// mapping.
 func remapSources(in []PartitionField, mapping map[int]int) []PartitionField {
 	out := slices.Clone(in)
 	for i := range out {
-		out[i].SourceID = remapped(mapping, out[i].SourceID)
+		out[i].SourceID = mapping[out[i].SourceID]
 	}
 	return out
 }
 
+// remapSortSources rewrites checked sort source ids through the fresh-id
+// mapping.
 func remapSortSources(in []SortField, mapping map[int]int) []SortField {
 	out := slices.Clone(in)
 	for i := range out {
-		out[i].SourceID = remapped(mapping, out[i].SourceID)
+		out[i].SourceID = mapping[out[i].SourceID]
 	}
 	return out
-}
-
-func remapped(mapping map[int]int, id int) int {
-	if v, ok := mapping[id]; ok {
-		return v
-	}
-	return -1
 }
 
 // bindPartitionFields validates a spec's fields against schema and assigns an
@@ -329,8 +332,8 @@ func bindPartitionFields(in []PartitionField, schema Schema, lastAssigned int) (
 	ids := map[int]bool{}
 	names := map[string]bool{}
 	for _, p := range in {
-		if !schema.hasFieldID(p.SourceID) {
-			return nil, 0, invalid("Partition field %q refers to unknown source id %d.", p.Name, p.SourceID)
+		if problem := schema.partitionSourceProblem(p.SourceID, p.Transform); problem != "" {
+			return nil, 0, invalid("Partition field %q: source id %d %s.", p.Name, p.SourceID, problem)
 		}
 		if p.Name == "" || p.Transform == "" {
 			return nil, 0, invalid("A partition field needs a name and a transform.")
@@ -351,28 +354,26 @@ func bindPartitionFields(in []PartitionField, schema Schema, lastAssigned int) (
 	return out, lastID, nil
 }
 
-// newSortOrders is the unsorted order plus, when fields are given, the order
-// orderID over them, with the id of the default order.
-func newSortOrders(orderID int, in []SortField, schema Schema) ([]SortOrder, int, error) {
-	orders := []SortOrder{unsortedOrder()}
+// newSortOrder is a new table's only sort order: order 1 over the fields when
+// there are any, and the unsorted order when not. The reference
+// implementations number it so, whatever id the caller proposed, and write
+// no other order.
+func newSortOrder(in []SortField, schema Schema) (SortOrder, error) {
 	if len(in) == 0 {
-		return orders, UnsortedOrderID, nil
-	}
-	if orderID == UnsortedOrderID {
-		return nil, 0, invalid("Sort order id 0 is reserved for the unsorted order.")
+		return unsortedOrder(), nil
 	}
 	if err := validateSortFields(in, schema); err != nil {
-		return nil, 0, err
+		return SortOrder{}, err
 	}
-	return append(orders, SortOrder{OrderID: orderID, Fields: slices.Clone(in)}), orderID, nil
+	return SortOrder{OrderID: InitialSortOrderID, Fields: slices.Clone(in)}, nil
 }
 
 func unsortedOrder() SortOrder { return SortOrder{OrderID: UnsortedOrderID, Fields: []SortField{}} }
 
 func validateSortFields(in []SortField, schema Schema) error {
 	for _, f := range in {
-		if !schema.hasFieldID(f.SourceID) {
-			return invalid("Sort field refers to unknown source id %d.", f.SourceID)
+		if problem := schema.sortSourceProblem(f.SourceID); problem != "" {
+			return invalid("Sort field source id %d %s.", f.SourceID, problem)
 		}
 		if f.Direction != "asc" && f.Direction != "desc" {
 			return invalid("Sort direction %q must be asc or desc.", f.Direction)
@@ -410,6 +411,20 @@ func (m *Metadata) fillEmpty() {
 	for i := range m.SortOrders {
 		m.SortOrders[i].Fields = nonNil(m.SortOrders[i].Fields)
 	}
+}
+
+// MarshalJSON writes the document for its format version. A version 1 table
+// has no sequence numbers, so last-sequence-number is written only from
+// version 2, as the reference implementations write it.
+func (m Metadata) MarshalJSON() ([]byte, error) {
+	type document Metadata
+	if m.FormatVersion > minFormatVersion {
+		return json.Marshal(document(m))
+	}
+	return json.Marshal(struct {
+		document
+		LastSequenceNumber *int64 `json:"last-sequence-number,omitempty"`
+	}{document: document(m)})
 }
 
 // writeVersionFields sets the version 1 fields a version 1 writer must still

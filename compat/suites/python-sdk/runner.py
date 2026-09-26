@@ -62,6 +62,7 @@ from groups import (
     s3tables,
     glue,
     glue_s3tables,
+    s3tables_schemav2,
     athena,
 )
 
@@ -113,6 +114,7 @@ _modules = [
     s3tables,
     glue,
     glue_s3tables,
+    s3tables_schemav2,
     athena,
 ]
 

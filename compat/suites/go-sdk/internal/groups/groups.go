@@ -65,6 +65,7 @@ func handWritten(c *clients.Clients) []ServiceGroup {
 		Shield(c).named("shield"),
 		Glue(c).named("glue"),
 		GlueS3Tables(c).named("glue_s3tables"),
+		S3TablesSchemaV2(c).named("s3tables_schemav2"),
 		Athena(c).named("athena"),
 		AthenaEngine(c).named("athena_engine"),
 		AthenaS3Tables(c).named("athena_s3tables"),

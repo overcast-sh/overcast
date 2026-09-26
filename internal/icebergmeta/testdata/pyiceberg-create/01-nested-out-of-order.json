@@ -1,0 +1,312 @@
+{
+  "expected": {
+    "current-schema-id": 0,
+    "default-sort-order-id": 1,
+    "default-spec-id": 0,
+    "format-version": 2,
+    "last-column-id": 16,
+    "last-partition-id": 1001,
+    "last-sequence-number": 0,
+    "last-updated-ms": 1790412015336,
+    "location": "s3://golden--table-s3",
+    "metadata-log": [],
+    "partition-specs": [
+      {
+        "fields": [
+          {
+            "field-id": 1000,
+            "name": "tenant_name",
+            "source-id": 5,
+            "transform": "identity"
+          },
+          {
+            "field-id": 1001,
+            "name": "id_bucket",
+            "source-id": 1,
+            "transform": "bucket[16]"
+          }
+        ],
+        "spec-id": 0
+      }
+    ],
+    "partition-statistics": [],
+    "properties": {
+      "write.format.default": "parquet"
+    },
+    "refs": {},
+    "schemas": [
+      {
+        "fields": [
+          {
+            "doc": "row id",
+            "id": 1,
+            "name": "id",
+            "required": true,
+            "type": "long"
+          },
+          {
+            "id": 2,
+            "name": "tenant",
+            "required": true,
+            "type": {
+              "fields": [
+                {
+                  "id": 5,
+                  "name": "name",
+                  "required": true,
+                  "type": "string"
+                },
+                {
+                  "id": 6,
+                  "name": "tags",
+                  "required": false,
+                  "type": {
+                    "element": {
+                      "fields": [
+                        {
+                          "id": 8,
+                          "name": "k",
+                          "required": true,
+                          "type": "string"
+                        },
+                        {
+                          "id": 9,
+                          "name": "v",
+                          "required": false,
+                          "type": "int"
+                        }
+                      ],
+                      "type": "struct"
+                    },
+                    "element-id": 7,
+                    "element-required": true,
+                    "type": "list"
+                  }
+                }
+              ],
+              "type": "struct"
+            }
+          },
+          {
+            "id": 3,
+            "name": "attrs",
+            "required": false,
+            "type": {
+              "key": "string",
+              "key-id": 10,
+              "type": "map",
+              "value": {
+                "fields": [
+                  {
+                    "id": 12,
+                    "name": "scores",
+                    "required": false,
+                    "type": {
+                      "element": "double",
+                      "element-id": 13,
+                      "element-required": false,
+                      "type": "list"
+                    }
+                  }
+                ],
+                "type": "struct"
+              },
+              "value-id": 11,
+              "value-required": false
+            }
+          },
+          {
+            "id": 4,
+            "name": "events",
+            "required": false,
+            "type": {
+              "element": {
+                "key": "string",
+                "key-id": 15,
+                "type": "map",
+                "value": "double",
+                "value-id": 16,
+                "value-required": true
+              },
+              "element-id": 14,
+              "element-required": false,
+              "type": "list"
+            }
+          }
+        ],
+        "identifier-field-ids": [
+          1,
+          5
+        ],
+        "schema-id": 0,
+        "type": "struct"
+      }
+    ],
+    "snapshot-log": [],
+    "snapshots": [],
+    "sort-orders": [
+      {
+        "fields": [
+          {
+            "direction": "asc",
+            "null-order": "nulls-first",
+            "source-id": 5,
+            "transform": "truncate[4]"
+          },
+          {
+            "direction": "desc",
+            "null-order": "nulls-last",
+            "source-id": 1,
+            "transform": "identity"
+          }
+        ],
+        "order-id": 1
+      }
+    ],
+    "statistics": [],
+    "table-uuid": "0f3a5b7c-9d1e-4f20-8a4b-6c7d8e9fa0b1"
+  },
+  "name": "01-nested-out-of-order",
+  "request": {
+    "location": "s3://golden--table-s3",
+    "partition-fields": [
+      {
+        "name": "tenant_name",
+        "source-id": 50,
+        "transform": "identity"
+      },
+      {
+        "name": "id_bucket",
+        "source-id": 100,
+        "transform": "bucket[16]"
+      }
+    ],
+    "properties": {
+      "write.format.default": "parquet"
+    },
+    "schema": {
+      "fields": [
+        {
+          "doc": "row id",
+          "id": 100,
+          "name": "id",
+          "required": true,
+          "type": "long"
+        },
+        {
+          "id": 5,
+          "name": "tenant",
+          "required": true,
+          "type": {
+            "fields": [
+              {
+                "id": 50,
+                "name": "name",
+                "required": true,
+                "type": "string"
+              },
+              {
+                "id": 51,
+                "name": "tags",
+                "required": false,
+                "type": {
+                  "element": {
+                    "fields": [
+                      {
+                        "id": 53,
+                        "name": "k",
+                        "required": true,
+                        "type": "string"
+                      },
+                      {
+                        "id": 54,
+                        "name": "v",
+                        "required": false,
+                        "type": "int"
+                      }
+                    ],
+                    "type": "struct"
+                  },
+                  "element-id": 52,
+                  "element-required": true,
+                  "type": "list"
+                }
+              }
+            ],
+            "type": "struct"
+          }
+        },
+        {
+          "id": 7,
+          "name": "attrs",
+          "required": false,
+          "type": {
+            "key": "string",
+            "key-id": 8,
+            "type": "map",
+            "value": {
+              "fields": [
+                {
+                  "id": 90,
+                  "name": "scores",
+                  "required": false,
+                  "type": {
+                    "element": "double",
+                    "element-id": 91,
+                    "element-required": false,
+                    "type": "list"
+                  }
+                }
+              ],
+              "type": "struct"
+            },
+            "value-id": 9,
+            "value-required": false
+          }
+        },
+        {
+          "id": 3,
+          "name": "events",
+          "required": false,
+          "type": {
+            "element": {
+              "key": "string",
+              "key-id": 31,
+              "type": "map",
+              "value": "double",
+              "value-id": 32,
+              "value-required": true
+            },
+            "element-id": 30,
+            "element-required": false,
+            "type": "list"
+          }
+        }
+      ],
+      "identifier-field-ids": [
+        100,
+        50
+      ],
+      "schema-id": 0,
+      "type": "struct"
+    },
+    "table-uuid": "0f3a5b7c-9d1e-4f20-8a4b-6c7d8e9fa0b1",
+    "write-order": {
+      "fields": [
+        {
+          "direction": "asc",
+          "null-order": "nulls-first",
+          "source-id": 50,
+          "transform": "truncate[4]"
+        },
+        {
+          "direction": "desc",
+          "null-order": "nulls-last",
+          "source-id": 100,
+          "transform": "identity"
+        }
+      ],
+      "order-id": 5
+    }
+  }
+}

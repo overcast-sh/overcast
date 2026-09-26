@@ -162,7 +162,7 @@ function toFields(rows: SchemaRow[]): NestedField[] {
   return build(0, 0)[0]
 }
 
-export function hasNestedFields(rows: SchemaRow[]): boolean {
+function hasNestedFields(rows: SchemaRow[]): boolean {
   return rows.some((r) => r.type === "struct")
 }
 
@@ -275,7 +275,8 @@ function constructId(name: string): string {
 
 /**
  * The same table as a CDK app declares it: `CfnTable` from
- * `aws-cdk-lib/aws-s3tables`, whose `icebergMetadata` mirrors the API's.
+ * `aws-cdk-lib/aws-s3tables`, whose `icebergMetadata` mirrors the API's
+ * under CloudFormation's member names.
  */
 export function toCdk(draft: TableDraft): string {
   const input = toCreateTableInput(draft)
@@ -287,7 +288,17 @@ export function toCdk(draft: TableDraft): string {
       schemaFieldList: iceberg.schema.fields,
     }
   }
-  if (iceberg?.schemaV2) metadata.icebergSchemaV2 = iceberg.schemaV2
+  if (iceberg?.schemaV2) {
+    // CloudFormation names IcebergSchemaV2's members its own way; each field's
+    // nested type stays in the Iceberg spec's JSON.
+    const { type, schemaId, identifierFieldIds, fields } = iceberg.schemaV2
+    metadata.icebergSchemaV2 = {
+      schemaV2FieldType: type,
+      schemaId,
+      ...(identifierFieldIds ? { identifierFieldIds } : {}),
+      schemaV2FieldList: fields,
+    }
+  }
   if (iceberg?.partitionSpec) metadata.icebergPartitionSpec = iceberg.partitionSpec
   const props = {
     tableBucketArn: draft.tableBucketARN,

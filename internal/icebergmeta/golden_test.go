@@ -112,14 +112,19 @@ func TestCommit_matchesPyIcebergGoldenCommits(t *testing.T) {
 			}
 
 			// Then: the metadata is the document PyIceberg wrote
-			if doc := normalisedDoc(t, raw); !reflect.DeepEqual(doc, expected) {
-				for k := range mergedKeys(doc, expected) {
-					if !reflect.DeepEqual(doc[k], expected[k]) {
-						t.Errorf("%s:\n got  %v\n want %v", k, doc[k], expected[k])
-					}
-				}
-			}
+			assertSameDoc(t, normalisedDoc(t, raw), expected)
 		})
+	}
+}
+
+// assertSameDoc reports each top-level member where two normalised metadata
+// documents differ.
+func assertSameDoc(t *testing.T, got, want map[string]any) {
+	t.Helper()
+	for k := range mergedKeys(got, want) {
+		if !reflect.DeepEqual(got[k], want[k]) {
+			t.Errorf("%s:\n got  %v\n want %v", k, got[k], want[k])
+		}
 	}
 }
 

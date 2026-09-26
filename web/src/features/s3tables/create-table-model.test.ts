@@ -211,4 +211,11 @@ new CfnTable(this, "OrdersTable", {
   }
 })`)
   })
+
+  it("declares a nested schema as icebergSchemaV2, under CloudFormation's member names", () => {
+    expect(toCdk(nested)).toContain(`icebergSchemaV2: {
+      schemaV2FieldType: "struct",
+      schemaId: 0,
+      schemaV2FieldList: [`)
+  })
 })
