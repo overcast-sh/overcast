@@ -170,8 +170,8 @@ func TestIAMEnforceServiceRoute_apiGatewayInvocationLeftToAPIGateway(t *testing.
 	// When: it invokes a REST API through API Gateway's own invocation route
 	resp := signedRequest(t, srv, http.MethodGet, "/restapis/abc123/prod/_user_request_/pets", "invoker", "execute-api")
 
-	// Then: enforcement leaves the invocation to API Gateway, which answers
-	// for the API it does not have with its own {"message":"Forbidden"}
+	// Then: enforcement does not gate the invocation (#2291), and API Gateway
+	// answers for the API it does not have with its own {"message":"Forbidden"}
 	body := helpers.ReadBody(t, resp)
 	if strings.Contains(body, "not authorized to perform") || !strings.Contains(body, `"message":"Forbidden"`) {
 		t.Fatalf("status %d, body %q; want API Gateway's own answer", resp.StatusCode, body)

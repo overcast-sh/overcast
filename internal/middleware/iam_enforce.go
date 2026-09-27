@@ -179,8 +179,8 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router Request
 				// own endpoints, a modeled binding's 501, a scope the router
 				// refuses, an S3 request S3 answers with an error of its own. A
 				// request a service's route serves always carries an action
-				// (serviceRouteIAMOperation), except an API Gateway invocation,
-				// which API Gateway authorises itself. S3 names every operation
+				// (serviceRouteIAMOperation), except an invocation of a
+				// deployed API on API Gateway's route (#2291). S3 names every operation
 				// it serves (s3route), so its traffic no longer reaches this
 				// branch; before #2284 its DeleteObjects did.
 				//

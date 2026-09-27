@@ -1,6 +1,7 @@
 package router
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -55,6 +56,9 @@ func (s serviceRoutes) Group(fn func(r chi.Router)) chi.Router {
 // sub-router's own routes need no record: RouteREST resolves a request by the
 // mount point chi matches first.
 func (s serviceRoutes) Route(pattern string, fn func(r chi.Router)) chi.Router {
+	if fn == nil {
+		panic(fmt.Sprintf("chi: attempting to Route() a nil subrouter on '%s'", pattern))
+	}
 	sub := chi.NewRouter()
 	fn(sub)
 	s.Mount(pattern, sub)

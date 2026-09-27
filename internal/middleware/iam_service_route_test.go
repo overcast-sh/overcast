@@ -41,7 +41,8 @@ func TestServiceRouteIAMOperation_unnamedOperationNeedsTheWholeService(t *testin
 		{"Iceberg endpoint AWS does not serve", "s3tables", http.MethodPost, "/iceberg/v1/p/namespaces/ns/register", "s3tables:*"},
 		{"API Gateway path naming no operation", "apigateway", http.MethodPost, "/restapis/a/b/c", "apigateway:*"},
 		{"REST API invocation", "apigateway", http.MethodGet, "/restapis/a/prod/_user_request_/pets", ""},
-		{"REST API invocation at its root", "apigateway", http.MethodGet, "/restapis/a/prod/_user_request_", ""},
+		{"REST API invocation at its root", "apigateway", http.MethodGet, "/restapis/a/prod/_user_request_/", ""},
+		{"not an invocation route", "apigateway", http.MethodGet, "/restapis/a/prod/_user_request_", "apigateway:*"},
 		{"HTTP API invocation", "apigateway", http.MethodPost, "/v2/apis/a/stages/prod/pets", ""},
 		{"a named operation beneath a stage", "apigateway", http.MethodDelete, "/v2/apis/a/stages/prod/routesettings/r", "apigateway:DeleteRouteSettings"},
 	} {
@@ -53,7 +54,7 @@ func TestServiceRouteIAMOperation_unnamedOperationNeedsTheWholeService(t *testin
 			op := serviceRouteIAMOperation(r, tc.service)
 
 			// Then: an operation no action names needs the whole service,
-			// unless API Gateway authorises the invocation itself
+			// unless it invokes a deployed API
 			if op.action != tc.want {
 				t.Fatalf("action = %q, want %q", op.action, tc.want)
 			}

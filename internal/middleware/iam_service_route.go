@@ -19,7 +19,7 @@ import (
 // its policy never named.
 func serviceRouteIAMOperation(r *http.Request, service string) iamOperation {
 	op := iamOperation{service: service, action: requestIAMAction(r, service)}
-	if op.action == "" && !authorisedByAPIGateway(r, service) {
+	if op.action == "" && !invokesAPIGatewayAPI(r, service) {
 		op.action = unnamedIAMAction(service)
 	}
 	return op
@@ -32,22 +32,25 @@ func unnamedIAMAction(service string) string {
 	return iamActionPrefix(service) + ":*"
 }
 
-// authorisedByAPIGateway reports whether r, which API Gateway's own route
+// invokesAPIGatewayAPI reports whether r, which API Gateway's own route
 // serves and no operation of API Gateway's names, invokes a deployed API: a
-// REST API at /restapis/{restApiId}/{stageName}/_user_request_/, or an HTTP
-// API beneath /v2/apis/{apiId}/stages/{stageName}/. An invocation is no
-// operation of API Gateway's: AWS authorises it by the method's authorization
-// type, with execute-api:Invoke for an AWS_IAM method, and API Gateway's
-// handler does that itself, as it does for the same invocation on the
-// execute-api host. So enforcement names no action for it and leaves it to
-// the handler.
-func authorisedByAPIGateway(r *http.Request, service string) bool {
+// REST API beneath /restapis/{restApiId}/{stageName}/_user_request_/, or an
+// HTTP API beneath /v2/apis/{apiId}/stages/{stageName}/.
+//
+// An invocation is not gated, as it is not on the execute-api host, whose
+// addresses are rewritten into the /_overcast/ namespace shouldBypassIAM
+// exempts. It is no operation of API Gateway's: AWS authorises it by the
+// method's authorization type, with execute-api:Invoke on the method's ARN
+// only for an AWS_IAM method, which neither this middleware nor API Gateway's
+// handler checks yet (#2291). Checking it as apigateway:* instead would refuse
+// the invocations AWS serves to anyone.
+func invokesAPIGatewayAPI(r *http.Request, service string) bool {
 	if service != "apigateway" {
 		return false
 	}
 	segments := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	switch {
-	case len(segments) >= 4 && segments[0] == "restapis":
+	case len(segments) >= 5 && segments[0] == "restapis":
 		return segments[3] == "_user_request_"
 	case len(segments) >= 6 && segments[0] == "v2" && segments[1] == "apis":
 		return segments[3] == "stages"

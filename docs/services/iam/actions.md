@@ -36,8 +36,8 @@ When a service's route serves a request no operation names, such as a POST to
 an SQS queue URL with no `Action`, the request is checked as `<prefix>:*`, so
 only a policy that allows the whole service allows it. An invocation of a
 deployed API on API Gateway's own `/restapis/{id}/{stage}/_user_request_/` or
-`/v2/apis/{id}/stages/{stage}/` route is not checked here: API Gateway checks
-`execute-api:Invoke` itself, as it does on the `execute-api` host.
+`/v2/apis/{id}/stages/{stage}/` route is not checked, as it is not on the
+`execute-api` host; see [Limitations](./limitations.md#what-enforcement-does-not-see).
 
 ## Which action
 

@@ -101,11 +101,14 @@ func (p *pathDispatch) recordMount(root string, h http.Handler) {
 
 // RouteREST reports how the router serves r by its path, following the
 // router's own choices from the route chi matches it to: through the REST
-// fallback, or by a service's route. It reports false when r reaches neither,
-// such as a route the router answers itself, or no route at all.
+// fallback, or by a service's route. It reports false when r reaches neither:
+// a route the router answers itself, or no route at all, which includes a
+// path beneath a service's sub-router that the sub-router does not match.
 func (p *pathDispatch) RouteREST(r *http.Request) (middleware.RESTRoute, bool) {
 	rctx := chi.NewRouteContext()
-	p.mux.Find(rctx, r.Method, routingPath(r))
+	if p.mux.Find(rctx, r.Method, routingPath(r)) == "" {
+		return middleware.RESTRoute{}, false
+	}
 	h, ok := p.registered(r.Method, rctx)
 	for ok {
 		switch next := h.(type) {

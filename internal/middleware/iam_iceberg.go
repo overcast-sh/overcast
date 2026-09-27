@@ -5,9 +5,10 @@ import (
 	"strings"
 )
 
-// icebergRoot is where S3 Tables serves its Iceberg REST catalog, on its own
-// endpoint (s3tables.IcebergRoot).
-const icebergRoot = "/iceberg"
+// IcebergRoot is where S3 Tables serves its Iceberg REST catalog, on its own
+// endpoint. It is s3tables.IcebergRoot, which this package cannot import; a
+// router test holds the two equal.
+const IcebergRoot = "/iceberg"
 
 // icebergEndpointIAMActions are the actions AWS checks for each Iceberg REST
 // catalog endpoint, keyed "<METHOD> <path template>" as the Iceberg spec, and
@@ -43,11 +44,11 @@ func icebergIAMActions(r *http.Request) []string {
 }
 
 // icebergEndpoint names the Iceberg REST endpoint r calls, as
-// "<METHOD> <path template>", or "" when r is not under icebergRoot. The
+// "<METHOD> <path template>", or "" when r is not under IcebergRoot. The
 // prefix, a table bucket ARN, arrives percent-encoded, so the escaped path is
 // read to keep it one segment.
 func icebergEndpoint(r *http.Request) string {
-	rest, ok := strings.CutPrefix(r.URL.EscapedPath(), icebergRoot+"/v1/")
+	rest, ok := strings.CutPrefix(r.URL.EscapedPath(), IcebergRoot+"/v1/")
 	if !ok {
 		return ""
 	}
