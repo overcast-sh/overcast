@@ -86,7 +86,7 @@ func (d *rootDispatch) queryGetMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// RouteQuery satisfies middleware.QueryRouter with the resolution the router
+// RouteQuery is middleware.RequestRouter's Query half: the resolution the router
 // serves the request by.
 func (d *rootDispatch) RouteQuery(w http.ResponseWriter, r *http.Request) (middleware.QueryRoute, bool, error) {
 	route, isQuery, err := d.route(w, r)

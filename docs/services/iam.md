@@ -156,10 +156,15 @@ documentation gives. Ten services differ from their Overcast service key:
 | DynamoDB Streams   | `dynamodb:`               |
 | AppConfig Data     | `appconfig:`              |
 
-An AWS Query call (IAM, STS, SQS, SNS, CloudFormation, EC2 and the rest) is
-authorised as the operation that serves it — the service that owns its
-`Action` and `Version` — whatever service its credential scope names. An IAM
-`CreateUser` signed for `s3` is checked as `iam:CreateUser`, not `s3:CreateUser`.
+A request is authorised as the operation that serves it, whatever service its
+credential scope names, with one gap:
+
+- An AWS Query call is the operation its `Action` and `Version` name:
+  `CreateUser` signed for `s3` is `iam:CreateUser`.
+- A path no service's route claims is S3's, whatever `Action` it carries:
+  `PUT /my-bucket?Action=GetFederationToken` signed for `sts` is `s3:CreateBucket`.
+- The gap: a service's own route, such as EKS's `/clusters`, is named by the
+  credential scope. Sign for the service you call.
 
 ## Differences from AWS
 
@@ -168,7 +173,7 @@ authorised as the operation that serves it — the service that owns its
 | Enforcement                                                                  | Always on                                 | Off unless `OVERCAST_ENFORCE_IAM=true`; identity policies, plus trust policies for web identity |
 | Credentials                                                                  | Verified against the signing key          | Accepted without verification                                                         |
 | Web identity tokens                                                          | Verified against the provider's keys      | Claims read without verification                                                      |
-| Credential scope naming another service                                      | Refused at the endpoint                   | AWS Query call served, and authorised by its `Action`                                 |
+| Credential scope naming another service                                      | Refused at the endpoint                   | Served; Query calls and unclaimed paths are authorised as the operation served        |
 | Policy versions                                                              | Every version is retained and retrievable | A counter only — no `GetPolicyVersion`, `ListPolicyVersions` or `DeletePolicyVersion` |
 | Policy document validation                                                   | The full policy grammar                   | Structure only — see [Limitations](./iam/limitations.md#policy-documents-are-checked-at-the-api-boundary) |
 | Login profiles, MFA devices, SSH keys, signing certificates, Git credentials | Full API                                  | Not modelled                                                                          |

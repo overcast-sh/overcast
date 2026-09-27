@@ -5,7 +5,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/overcast-sh/overcast/internal/awsapi"
 	"github.com/overcast-sh/overcast/internal/middleware"
 )
 
@@ -32,44 +31,45 @@ import (
 //     request meant for another service, which is the rule addressesNonS3
 //     applies to the REST fallback itself. A virtual-hosted request goes to
 //     s3 too, since its path starts with the bucket the Host named.
+//
+// Every handler it mounts is a chooser, recorded on paths, so IAM enforcement
+// resolves a request through the same choices (#2271).
 type sharedRoots struct {
-	mux chi.Router
+	paths *pathDispatch
 	// s3 is the router's REST fallback, run on the whole request path.
-	s3 http.HandlerFunc
+	s3 http.Handler
 }
 
-func newSharedRoots(mux chi.Router, operationRegistry *awsapi.Registry, s3Router http.Handler) sharedRoots {
-	return sharedRoots{mux: mux, s3: wholePath(restFallback(operationRegistry, s3Router))}
+func newSharedRoots(paths *pathDispatch, fallback *restFallback) sharedRoots {
+	return sharedRoots{paths: paths, s3: wholePath{fallback}}
 }
 
 // mount serves root through dispatch, except that an S3-signed request goes
 // straight to S3. The single "/*" pattern also matches the bare root.
 func (s sharedRoots) mount(root string, dispatch http.Handler) {
-	h := s3First(dispatch, s.s3)
-	s.mux.Route(root, func(m chi.Router) {
-		m.HandleFunc("/*", h)
-	})
+	s.paths.mount(root, s3First{dispatch: dispatch, s3: s.s3})
 }
 
 // delegate makes a dispatched sub-router hand what it does not serve to S3's
 // REST fallback (see delegateUnmatched), and returns it for recording.
 func (s sharedRoots) delegate(sub chi.Router) chi.Router {
 	delegateUnmatched(sub, s.s3)
-	return sub
+	return delegatedRouter{Router: sub, fallback: s.s3}
 }
 
 // s3First sends a request that positively addresses S3 — virtual-hosted to a
 // bucket, or signed for the S3 object API — to s3, and every other request to
 // dispatch.
-func s3First(dispatch, s3 http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if middleware.AddressesS3(r, middleware.ServiceFromCredential(r)) {
-			s3.ServeHTTP(w, r)
-			return
-		}
-		dispatch.ServeHTTP(w, r)
+type s3First struct{ dispatch, s3 http.Handler }
+
+func (f s3First) choose(r *http.Request, _ *chi.Context) http.Handler {
+	if middleware.AddressesS3(r, middleware.ServiceFromCredential(r)) {
+		return f.s3
 	}
+	return f.dispatch
 }
+
+func (f s3First) ServeHTTP(w http.ResponseWriter, r *http.Request) { serveChoice(w, r, f) }
 
 // wholePath makes a handler reached from inside a chi mount route on the full
 // request path again. A mount shifts chi's routing path past its prefix, which
@@ -77,13 +77,18 @@ func s3First(dispatch, s3 http.Handler) http.HandlerFunc {
 // handed the shifted path it would read "/tables/key" as the object "key" in a
 // bucket that does not exist. Clearing RoutePath makes chi fall back to the
 // request URL, exactly as it does for the unmounted "/*" route.
-func wholePath(h http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if rctx := chi.RouteContext(r.Context()); rctx != nil {
-			rctx.RoutePath = ""
-		}
-		h.ServeHTTP(w, r)
+type wholePath struct{ http.Handler }
+
+// choose names the wrapped handler. It leaves the routing context as it is,
+// where ServeHTTP clears its RoutePath: the one handler it wraps, the REST
+// fallback, reads the request URL and never the routing context.
+func (h wholePath) choose(*http.Request, *chi.Context) http.Handler { return h.Handler }
+
+func (h wholePath) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if rctx := chi.RouteContext(r.Context()); rctx != nil {
+		rctx.RoutePath = ""
 	}
+	h.Handler.ServeHTTP(w, r)
 }
 
 // delegateUnmatched makes a dispatched sub-router hand requests it does not
@@ -98,7 +103,7 @@ func wholePath(h http.Handler) http.HandlerFunc {
 // MethodNotAllowed matters as much as NotFound: the model binds several
 // unimplemented operations to a method on a path that *is* registered, and chi
 // answers those 405.
-func delegateUnmatched(sub chi.Router, fallback http.HandlerFunc) {
-	sub.NotFound(fallback)
-	sub.MethodNotAllowed(fallback)
+func delegateUnmatched(sub chi.Router, fallback http.Handler) {
+	sub.NotFound(fallback.ServeHTTP)
+	sub.MethodNotAllowed(fallback.ServeHTTP)
 }

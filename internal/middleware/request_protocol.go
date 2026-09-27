@@ -38,10 +38,16 @@ func servedOver(p awsapi.Protocol, modelService string) servedProtocol {
 // handler has usually drained a Query POST's body by then, so that one falls
 // back to the attributed service's envelope, as it did before #2265.
 func writeUnroutedError(w http.ResponseWriter, r *http.Request, aerr *protocol.AWSError) {
+	serviceutil.WriteError(w, r, unroutedProtocol(r, detectService(r)).errors, aerr)
+}
+
+// unroutedProtocol is requestProtocol for a request no RequestRouter resolved
+// as Query, which reads its Query form first: only a POST carries one.
+func unroutedProtocol(r *http.Request, service string) servedProtocol {
 	if r.Method == http.MethodPost && strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
 		_ = protocol.ParseFormPreservingBody(r)
 	}
-	serviceutil.WriteError(w, r, requestProtocol(r, detectService(r), false).errors, aerr)
+	return requestProtocol(r, service, false)
 }
 
 // requestProtocol names the wire protocol r is served over, from the same
@@ -72,9 +78,16 @@ func requestProtocol(r *http.Request, service string, routedQuery bool) servedPr
 		return servedProtocol{protocol: claim.Protocol, errors: claim.ErrorProfile}
 	}
 	if claim, ok := queryOperationClaim(r); ok {
-		// Query traffic no QueryRouter resolved.
+		// Query traffic no RequestRouter resolved.
 		return queryDialect(claim)
 	}
+	return restProtocol(r, service)
+}
+
+// restProtocol names the REST protocol r is served over, by service's modeled
+// binding for its method and path, as the router's REST fallback serves it.
+// It answers ProtocolUnknown, in the JSON envelope, when none applies.
+func restProtocol(r *http.Request, service string) servedProtocol {
 	if service == "s3" {
 		// The fallback owner of every path no model gives another service,
 		// so no REST claim can speak for it.
@@ -121,7 +134,7 @@ func queryDialect(claim awsapi.Claim) servedProtocol {
 }
 
 // queryOperationClaim names the modeled Query operation r's Version and Action
-// select. It reads a form the router or requestIAMAction has already parsed
+// select. It reads a form the router or unroutedProtocol has already parsed
 // and never parses one itself: parsing here would consume a body the handler
 // still has to read.
 func queryOperationClaim(r *http.Request) (awsapi.Claim, bool) {

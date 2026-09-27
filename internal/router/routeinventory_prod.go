@@ -14,7 +14,9 @@ import (
 // New still records the mounts either way rather than branching on a build
 // tag: it is eight appends once at startup, and one code path is worth more
 // than that. Only the wrapper is dev-only.
-func withDispatchMounts(r *chi.Mux, _ []dispatchMount, _ map[string]string) http.Handler { return r }
+func withDispatchMounts(r *chi.Mux, _ []dispatchMount, _ map[string]string, _ *pathDispatch) http.Handler {
+	return r
+}
 
 // routeOwnerTracker is a no-op outside dev builds. A released binary calls
 // attribute() once per enabled service exactly as the dev build does — New

@@ -86,7 +86,7 @@ func listTopicsAsSession(t *testing.T, st state.Store) (*httptest.ResponseRecord
 	if err := r.ParseForm(); err != nil {
 		t.Fatal(err)
 	}
-	return enforceSigned(t, st, stubQueryRouter{route: QueryRoute{Service: "sns", Action: "ListTopics"}, isQuery: true}, r)
+	return enforceSigned(t, st, stubRouter{route: QueryRoute{Service: "sns", Action: "ListTopics"}, isQuery: true}, r)
 }
 
 func TestIAMEnforce_roleSessionDenialNamesTheCaller(t *testing.T) {

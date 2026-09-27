@@ -99,7 +99,7 @@ func parsedQueryRequest(t *testing.T, form url.Values) *http.Request {
 
 // servedAsWebIdentity is the router serving a request as STS
 // AssumeRoleWithWebIdentity.
-var servedAsWebIdentity = stubQueryRouter{route: QueryRoute{Service: "sts", Action: "AssumeRoleWithWebIdentity"}, isQuery: true}
+var servedAsWebIdentity = stubRouter{route: QueryRoute{Service: "sts", Action: "AssumeRoleWithWebIdentity"}, isQuery: true}
 
 func TestIAMEnforce_webIdentity_unsignedCallTheTrustPolicyAdmits(t *testing.T) {
 	cases := []struct {
@@ -256,18 +256,18 @@ func TestIAMEnforce_webIdentity_unreadableStoreIsAnInternalError(t *testing.T) {
 func TestIAMEnforce_webIdentity_unsignedCallsOtherwiseRoutedAreRefused(t *testing.T) {
 	st := storeWithRole(t, webIdentityRoleARN, `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"sts:*"}]}`)
 	token := ciToken(t, "ci")
-	cases := map[string]func() (*http.Request, QueryRouter){
-		"STS AssumeRole": func() (*http.Request, QueryRouter) {
+	cases := map[string]func() (*http.Request, RequestRouter){
+		"STS AssumeRole": func() (*http.Request, RequestRouter) {
 			r := parsedQueryRequest(t, webIdentityForm(token, map[string]string{"Action": "AssumeRole"}))
-			return r, stubQueryRouter{route: QueryRoute{Service: "sts", Action: "AssumeRole"}, isQuery: true}
+			return r, stubRouter{route: QueryRoute{Service: "sts", Action: "AssumeRole"}, isQuery: true}
 		},
-		"a Query call the router serves as IAM": func() (*http.Request, QueryRouter) {
+		"a Query call the router serves as IAM": func() (*http.Request, RequestRouter) {
 			r := parsedQueryRequest(t, webIdentityForm(token, map[string]string{"Version": "2010-05-08"}))
-			return r, stubQueryRouter{route: QueryRoute{Service: "iam", Action: "AssumeRoleWithWebIdentity"}, isQuery: true}
+			return r, stubRouter{route: QueryRoute{Service: "iam", Action: "AssumeRoleWithWebIdentity"}, isQuery: true}
 		},
-		"a path-routed request naming AssumeRoleWithWebIdentity": func() (*http.Request, QueryRouter) {
+		"a path-routed request naming AssumeRoleWithWebIdentity": func() (*http.Request, RequestRouter) {
 			q := webIdentityForm(token, nil)
-			return httptest.NewRequest(http.MethodPut, "/bucket?"+q.Encode(), nil), stubQueryRouter{}
+			return httptest.NewRequest(http.MethodPut, "/bucket?"+q.Encode(), nil), stubRouter{}
 		},
 	}
 	for name, request := range cases {

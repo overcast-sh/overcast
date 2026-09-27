@@ -31,11 +31,11 @@ type requestChain struct {
 	hostRoutes *[]middleware.HostRouteRow
 }
 
-// api is the chain of the API clients call, whose AWS Query dispatch is
-// queries: IAM enforcement reads its decisions, so a Query call is authorised
-// as the operation it is served as (#2229).
-func (c requestChain) api(queries middleware.QueryRouter) chi.Middlewares {
-	return c.build(c.cfg.EnforceIAM, queries)
+// api is the chain of the API clients call, whose dispatch is router: IAM
+// enforcement reads its decisions, so a request is authorised as the
+// operation it is served as (#2229, #2271).
+func (c requestChain) api(router middleware.RequestRouter) chi.Middlewares {
+	return c.build(c.cfg.EnforceIAM, router)
 }
 
 // engine is the chain of the Athena engine gateway, which serves no Query
@@ -53,7 +53,7 @@ func (c requestChain) engine() chi.Middlewares {
 	return c.build(false, nil)
 }
 
-func (c requestChain) build(enforceIAM bool, queries middleware.QueryRouter) chi.Middlewares {
+func (c requestChain) build(enforceIAM bool, router middleware.RequestRouter) chi.Middlewares {
 	return chi.Middlewares{
 		middleware.RealIP,
 		middleware.CORS,
@@ -79,7 +79,7 @@ func (c requestChain) build(enforceIAM bool, queries middleware.QueryRouter) chi
 		middleware.NotReady(c.store),
 		middleware.RequestEvents(c.bus, c.clk),
 		middleware.SigV4(c.cfg.SigV4Validate, middleware.NewSecretResolver(c.store), c.logger, c.clk),
-		middleware.IAMEnforce(enforceIAM, c.store, c.logger, queries),
+		middleware.IAMEnforce(enforceIAM, c.store, c.logger, router),
 		middleware.Region,
 		// ClientEndpoint stamps the origin the caller dialled, so services that
 		// hand back resource URLs (SQS queue URLs above all) mint them on an

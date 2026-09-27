@@ -33,7 +33,7 @@ func signAsCaller(r *http.Request, signingName string) *http.Request {
 // enforceSigned sends r, which the caller has signed, through IAMEnforce over
 // st with queries as the router's Query dispatch. It reports the response and
 // whether the request was served.
-func enforceSigned(t *testing.T, st state.Store, queries QueryRouter, r *http.Request) (*httptest.ResponseRecorder, bool) {
+func enforceSigned(t *testing.T, st state.Store, queries RequestRouter, r *http.Request) (*httptest.ResponseRecorder, bool) {
 	t.Helper()
 	served := false
 	h := IAMEnforce(true, st, zap.NewNop(), queries)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -55,14 +55,14 @@ func callerWith(t *testing.T, policy string) state.Store {
 
 // queryCall is a parsed, signed Query form, and the route the router serves it
 // as.
-func queryCall(t *testing.T, service, action, version string) (*http.Request, QueryRouter) {
+func queryCall(t *testing.T, service, action, version string) (*http.Request, RequestRouter) {
 	t.Helper()
 	r := signAsCaller(httptest.NewRequest(http.MethodPost, "/", strings.NewReader("Action="+action+"&Version="+version)), service)
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if err := r.ParseForm(); err != nil {
 		t.Fatal(err)
 	}
-	return r, stubQueryRouter{route: QueryRoute{Service: service, Action: action}, isQuery: true}
+	return r, stubRouter{route: QueryRoute{Service: service, Action: action}, isQuery: true}
 }
 
 func TestIAMEnforce_actionsNeedingNoPermissionServedUnderAnExplicitDeny(t *testing.T) {
@@ -101,14 +101,14 @@ func TestIAMEnforce_denialMessageNamesThePrincipalActionAndResource(t *testing.T
 	cases := []struct {
 		name    string
 		policy  string
-		request func(*testing.T) (*http.Request, QueryRouter)
+		request func(*testing.T) (*http.Request, RequestRouter)
 		code    string
 		message string
 	}{
 		{
 			name:   "awsJson, explicit deny",
 			policy: `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sqs:*","Resource":"*"},{"Effect":"Deny","Action":"sqs:DeleteQueue","Resource":"*"}]}`,
-			request: func(*testing.T) (*http.Request, QueryRouter) {
+			request: func(*testing.T) (*http.Request, RequestRouter) {
 				r := signAsCaller(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"QueueUrl":"http://localhost/000000000000/demo"}`)), "sqs")
 				r.Header.Set("Content-Type", "application/x-amz-json-1.0")
 				r.Header.Set("X-Amz-Target", "AmazonSQS.DeleteQueue")
@@ -120,7 +120,7 @@ func TestIAMEnforce_denialMessageNamesThePrincipalActionAndResource(t *testing.T
 		{
 			name:   "awsQuery SNS, implicit deny",
 			policy: sqsOnlyUnitDoc,
-			request: func(t *testing.T) (*http.Request, QueryRouter) {
+			request: func(t *testing.T) (*http.Request, RequestRouter) {
 				return queryCall(t, "sns", "ListTopics", "2010-03-31")
 			},
 			code:    "AuthorizationError",
@@ -129,7 +129,7 @@ func TestIAMEnforce_denialMessageNamesThePrincipalActionAndResource(t *testing.T
 		{
 			name:   "awsQuery IAM, implicit deny",
 			policy: sqsOnlyUnitDoc,
-			request: func(t *testing.T) (*http.Request, QueryRouter) {
+			request: func(t *testing.T) (*http.Request, RequestRouter) {
 				return queryCall(t, "iam", "ListUsers", "2010-05-08")
 			},
 			code:    "AccessDenied",
@@ -138,7 +138,7 @@ func TestIAMEnforce_denialMessageNamesThePrincipalActionAndResource(t *testing.T
 		{
 			name:   "ec2Query, implicit deny",
 			policy: sqsOnlyUnitDoc,
-			request: func(t *testing.T) (*http.Request, QueryRouter) {
+			request: func(t *testing.T) (*http.Request, RequestRouter) {
 				return queryCall(t, "ec2", "DescribeVpcs", "2016-11-15")
 			},
 			code:    "UnauthorizedOperation",
@@ -147,7 +147,7 @@ func TestIAMEnforce_denialMessageNamesThePrincipalActionAndResource(t *testing.T
 		{
 			name:   "restXml S3, implicit deny",
 			policy: sqsOnlyUnitDoc,
-			request: func(*testing.T) (*http.Request, QueryRouter) {
+			request: func(*testing.T) (*http.Request, RequestRouter) {
 				return signAsCaller(httptest.NewRequest(http.MethodGet, "/bucket/key", nil), "s3"), nil
 			},
 			code:    "AccessDenied",
@@ -224,7 +224,7 @@ func TestIAMEnforce_exemptActionOffTheQueryPathIsAuthorized(t *testing.T) {
 	r := signAsCaller(httptest.NewRequest(http.MethodPut, "/borrowed-bucket?Action=GetCallerIdentity", nil), "sts")
 
 	// When: it reaches enforcement
-	rec, served := enforceSigned(t, st, stubQueryRouter{}, r)
+	rec, served := enforceSigned(t, st, stubRouter{}, r)
 
 	// Then: STS's exemption does not carry over to whatever the router serves
 	if served {
