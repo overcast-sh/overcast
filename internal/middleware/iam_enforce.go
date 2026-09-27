@@ -135,6 +135,15 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryR
 				return
 			}
 
+			if iamAuthorizedByTrustPolicy(op) {
+				// Signed or not: the trust policy decides, never the signer's
+				// identity policies.
+				if st == nil || authorizeWebIdentity(w, r, st, logger) {
+					next.ServeHTTP(w, r)
+				}
+				return
+			}
+
 			if !isSignedIAMRequest(r) {
 				denyIAMRequest(w, r, op, logger, "unsigned request", nil)
 				return
@@ -289,10 +298,11 @@ type iamRoleSessionRecord struct {
 }
 
 type iamRoleRecord struct {
-	RoleName         string            `json:"RoleName"`
-	Arn              string            `json:"Arn"`
-	InlinePolicies   map[string]string `json:"InlinePolicies"`
-	AttachedPolicies []struct {
+	RoleName                 string            `json:"RoleName"`
+	Arn                      string            `json:"Arn"`
+	AssumeRolePolicyDocument string            `json:"AssumeRolePolicyDocument"`
+	InlinePolicies           map[string]string `json:"InlinePolicies"`
+	AttachedPolicies         []struct {
 		PolicyArn string `json:"PolicyArn"`
 	} `json:"AttachedPolicies"`
 	PermissionsBoundary string `json:"PermissionsBoundary"`

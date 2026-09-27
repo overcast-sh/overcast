@@ -74,12 +74,35 @@ When it is on:
   see the table below.
 - **Identity policies only.** Resource-based policies — S3 bucket policies,
   Lambda/SQS/SNS policies — are not consulted. Pass one to the simulator
-  explicitly to test it.
+  explicitly to test it. The one exception is web identity federation, below.
 - Enforcement is **fail-closed**: an unsigned request, an unparseable policy, or
   a construct the evaluator does not implement all deny.
 - `sts:GetCallerIdentity` and `sts:GetSessionToken` are served to any caller
   whose access key names a principal, even under an explicit `Deny`, because
   AWS documents that no policy controls them.
+
+### Web identity federation
+
+`sts:AssumeRoleWithWebIdentity` needs no AWS credentials, so an SDK sends it
+unsigned. Enforcement decides it by the trust policy of the role it names, as
+AWS does, and never by the caller's identity policies, whether or not the call
+is signed:
+
+- The token's `iss` claim names the provider. A `Federated` principal matches it
+  as `arn:aws:iam::<account>:oidc-provider/<issuer host and path>` or by the
+  bare issuer name, such as `accounts.google.com`. An OAuth 2.0 access token
+  names its provider in `ProviderId` instead.
+- Conditions can test `<provider>:sub` and `<provider>:aud`. `aud` holds the
+  token's `azp` claim when it has one.
+- A trust policy that does not allow the caller, or a role that does not exist,
+  gets `AccessDenied` (403) with `Not authorized to perform
+  sts:AssumeRoleWithWebIdentity`. A token that is not a JWT gets
+  `InvalidIdentityToken` (400).
+- The token is read, not verified: its signature, its expiry, and whether its
+  issuer is a registered OIDC provider are not checked.
+
+`sts:AssumeRoleWithSAML` is not implemented, so an unsigned one is refused like
+any other unsigned call.
 
 | Protocol the call was made over | For example              | Error code              | Status |
 | ------------------------------- | ------------------------ | ----------------------- | ------ |
@@ -135,8 +158,9 @@ authorised as the operation that serves it — the service that owns its
 
 | Area                                                                         | On AWS                                    | Overcast                                                                              |
 | ---------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
-| Enforcement                                                                  | Always on                                 | Off unless `OVERCAST_ENFORCE_IAM=true`; identity policies only                        |
+| Enforcement                                                                  | Always on                                 | Off unless `OVERCAST_ENFORCE_IAM=true`; identity policies, plus trust policies for web identity |
 | Credentials                                                                  | Verified against the signing key          | Accepted without verification                                                         |
+| Web identity tokens                                                          | Verified against the provider's keys      | Claims read without verification                                                      |
 | Credential scope naming another service                                      | Refused at the endpoint                   | AWS Query call served, and authorised by its `Action`                                 |
 | Policy versions                                                              | Every version is retained and retrievable | A counter only — no `GetPolicyVersion`, `ListPolicyVersions` or `DeletePolicyVersion` |
 | Policy document validation                                                   | The full policy grammar                   | Structure only — see [Limitations](./iam/limitations.md#policy-documents-are-checked-at-the-api-boundary) |

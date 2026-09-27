@@ -66,7 +66,7 @@ func TestParseDocumentWithOptions_allowsAbsentVersionButRejectsBogusVersion(t *t
 }
 
 func TestParseDocument_zeroOptionsStillAcceptUnknownVersion(t *testing.T) {
-	raw := `{"Version":"custom-version","Statement":[{"Effect":"Allow","Principal":{"Federated":"example.com"},"Action":"kms:*","Resource":"*"}]}`
+	raw := `{"Version":"custom-version","Statement":[{"Effect":"Allow","Principal":{"CanonicalUser":"79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be"},"Action":"kms:*","Resource":"*"}]}`
 	statements, err := ParseDocument(raw, SourceRef{ID: "resource-policy"})
 	if err != nil {
 		t.Fatalf("ParseDocument returned error: %v", err)

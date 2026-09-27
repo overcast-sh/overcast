@@ -29,6 +29,10 @@ type Request struct {
 	// match a resource-based policy's Principal block.
 	PrincipalARN     string
 	PrincipalAccount string
+	// Federated names the identity provider a web identity caller
+	// authenticated with, in every form a trust policy's Federated principal
+	// may name it. It is empty for an IAM user or role caller.
+	Federated []string
 }
 
 // Input is one evaluation: a request, the principal's identity policies, and
@@ -273,6 +277,11 @@ func principalSetMatches(set *PrincipalSet, req Request) bool {
 		// A bare account ID or the account root ARN both mean "any principal
 		// in that account", which within one account is the caller.
 		if raw == account || raw == fmt.Sprintf("arn:aws:iam::%s:root", account) {
+			return true
+		}
+	}
+	for _, provider := range set.Federated {
+		if containsString(req.Federated, strings.TrimSpace(provider)) {
 			return true
 		}
 	}
