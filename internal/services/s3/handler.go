@@ -9,6 +9,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/events"
+	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/s3route"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/state"
@@ -78,7 +79,7 @@ type Handler struct {
 // operationHandlers maps S3 operation names onto their handlers. It is a named
 // type rather than a map[string]http.HandlerFunc literal because capgen reads
 // such a literal as a service's whole dispatch and requires a capability row
-// for every key, and 49 of S3's 501 stubs have none yet (#2287).
+// for every key, and most of S3's 501 stubs have none yet (#2287).
 type operationHandlers map[string]http.HandlerFunc
 
 func newHandler(cfg *config.Config, store state.Store, log *serviceutil.ServiceLogger, clk clock.Clock, bus *events.Bus) *Handler {
@@ -100,8 +101,10 @@ func newHandler(cfg *config.Config, store state.Store, log *serviceutil.ServiceL
 // dispatch serves r as the operation s3route names it, which is the name IAM
 // enforcement authorises and the request log records: S3 has no other
 // dispatch, so what is authorised, logged and served cannot differ (#2284).
-// unserved answers a request s3route names no operation — a POST to a bucket
-// or an object without a sub-resource that selects one.
+// A request s3route refuses, one naming a sub-resource on a method S3 serves
+// it on none, is MethodNotAllowed. unserved answers any other request
+// s3route names no operation: a POST to a bucket or an object without a
+// sub-resource that selects one.
 //
 // Every operation is guarded by x-amz-expected-bucket-owner except the ones AWS
 // documents as ignoring it (see expected_owner.go), and a copy is guarded by
@@ -118,6 +121,10 @@ func (h *Handler) dispatch(unserved http.HandlerFunc) http.HandlerFunc {
 		}
 		if serve, ok := h.operations[operation]; ok {
 			serve(w, r)
+			return
+		}
+		if s3route.Refused(r) {
+			protocol.MethodNotAllowedXML(w, r)
 			return
 		}
 		unserved(w, r)

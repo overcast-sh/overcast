@@ -58,9 +58,15 @@ func s3IAMChecks(r *http.Request) []iamCheck {
 			return checks
 		}
 	}
+	resource := requestS3IAMResource(r)
+	if operation == "WriteGetObjectResponse" {
+		// Its path names no bucket, and AWS lists no resource type for
+		// s3-object-lambda:WriteGetObjectResponse.
+		resource = "*"
+	}
 	checks := []iamCheck{{
 		action:   iamActionFor("s3", operation, r.URL.Query().Get("versionId") != ""),
-		resource: requestS3IAMResource(r),
+		resource: resource,
 	}}
 	if copySource := r.Header.Get(s3route.CopySourceHeader); copySource != "" && (operation == "CopyObject" || operation == "UploadPartCopy") {
 		checks = append(checks, s3CopySourceCheck(copySource))

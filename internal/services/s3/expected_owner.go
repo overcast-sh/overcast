@@ -30,11 +30,13 @@ import (
 // ignoresExpectedBucketOwner are the operations AWS documents as ignoring
 // x-amz-expected-bucket-owner: CreateBucket has no bucket yet to compare an
 // owner against, and ListBuckets no single bucket. ListDirectoryBuckets is the
-// same shape of operation.
+// same shape of operation, and WriteGetObjectResponse addresses no bucket at
+// all: its model has no ExpectedBucketOwner member.
 var ignoresExpectedBucketOwner = map[string]bool{
-	"CreateBucket":         true,
-	"ListBuckets":          true,
-	"ListDirectoryBuckets": true,
+	"CreateBucket":           true,
+	"ListBuckets":            true,
+	"ListDirectoryBuckets":   true,
+	"WriteGetObjectResponse": true,
 }
 
 // copiesObject are the operations that read the object x-amz-copy-source
