@@ -2,7 +2,7 @@ import { BLOCK_ROWS } from "./base-source"
 import { isAbortError, NotTabularError } from "./row-source"
 import { openTextSource, type TextSourceOptions } from "./text-source"
 import { bytesObject, fakeFetch, syntheticCsv, type ByteSource } from "./testing/fake-object"
-import { indexSettled, nextTurn, readRows } from "./testing/source-helpers"
+import { indexPast, indexSettled, nextTurn, readRows } from "./testing/source-helpers"
 import { inProcessDataWorker } from "./worker-port"
 
 function openText(
@@ -149,8 +149,7 @@ describe("openTextSource > CSV", () => {
     const counted = source.rowCount.value
     const lastBlock = Math.floor(counted / BLOCK_ROWS) * BLOCK_ROWS
     await readRows(source, lastBlock - BLOCK_ROWS, lastBlock)
-    await nextTurn()
-    await indexSettled(source, ["on-demand", "done"])
+    await indexPast(source, counted)
     // Then: the index reads on
     expect(source.rowCount.value).toBeGreaterThan(counted)
   })

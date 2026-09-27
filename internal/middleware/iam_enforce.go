@@ -32,6 +32,9 @@ import (
 type iamEnforceCacheEntry struct {
 	statements   []iampolicy.Statement
 	principalCtx map[string]string
+	// callerARN is the ARN a denial names the caller by; see
+	// iamPrincipalPolicies.callerArn.
+	callerARN string
 	// boundary is the principal's compiled permissions boundary, nil when it
 	// has none, and boundaryErr says why it could not be read when it could
 	// not. Both are cached alongside the identity policies because attaching,
@@ -136,6 +139,17 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router Request
 				return
 			}
 
+			if iamAuthorizedByTrustPolicy(op) {
+				// Signed or not: the trust policy decides, never the signer's
+				// identity policies.
+				if aerr := authorizeWebIdentity(r, st, logger); aerr != nil {
+					protocol.WriteQueryXMLError(w, r, aerr)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			if !isSignedIAMRequest(r) {
 				denyIAMRequest(w, r, op, logger, "unsigned request", nil)
 				return
@@ -192,7 +206,7 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router Request
 
 			resource := requestIAMResource(r, op)
 			result := evaluateIAMDecision(r, st, parts.AccessKey, op, resource, cache)
-			if reason, denied := iamDenialReason(result); denied && !iamServedWithoutPermission(op, result.principalARN) {
+			if reason, denied := iamDenialReason(result); denied && !iamServedWithoutPermission(op, result.callerARN) {
 				// A deny the evaluator could not reason about is a gap in
 				// Overcast, not a decision the user asked for: say so at warn
 				// level rather than burying it in debug output.
@@ -281,19 +295,26 @@ type iamGroupRecord struct {
 	} `json:"AttachedPolicies"`
 }
 
-// iamRoleSessionRecord is the record stored in iam:sessions when a role is assumed via STS.
-// Keyed by the temporary access key ID.
-type iamRoleSessionRecord struct {
-	RoleArn         string `json:"RoleArn"`
-	RoleName        string `json:"RoleName"`
+// RoleSessionRecord is the record STS stores in iam:sessions when it issues
+// credentials for a role session, keyed by the temporary access key ID. STS
+// writes it and enforcement and SigV4 secret resolution read it, so the shape
+// is defined once, here.
+type RoleSessionRecord struct {
+	RoleArn  string `json:"RoleArn"`
+	RoleName string `json:"RoleName"`
+	// RoleSessionName and AssumedRoleID are empty in a session STS issued
+	// before it recorded them (#2272).
+	RoleSessionName string `json:"RoleSessionName"`
+	AssumedRoleID   string `json:"AssumedRoleId"`
 	SecretAccessKey string `json:"SecretAccessKey"`
 }
 
 type iamRoleRecord struct {
-	RoleName         string            `json:"RoleName"`
-	Arn              string            `json:"Arn"`
-	InlinePolicies   map[string]string `json:"InlinePolicies"`
-	AttachedPolicies []struct {
+	RoleName                 string            `json:"RoleName"`
+	Arn                      string            `json:"Arn"`
+	AssumeRolePolicyDocument string            `json:"AssumeRolePolicyDocument"`
+	InlinePolicies           map[string]string `json:"InlinePolicies"`
+	AttachedPolicies         []struct {
 		PolicyArn string `json:"PolicyArn"`
 	} `json:"AttachedPolicies"`
 	PermissionsBoundary string `json:"PermissionsBoundary"`
@@ -1194,13 +1215,13 @@ func parseSQSQueueURL(queueURL string) (string, string) {
 }
 
 // iamEnforceResult is an evaluation plus whatever stopped it being one, and
-// the ARN of the principal it was made for ("" when the access key names
-// none).
+// the ARN of the caller it was made for, as iamPrincipalPolicies.callerArn
+// names it ("" when the access key names no principal).
 type iamEnforceResult struct {
 	iampolicy.Result
-	principalARN string
-	compileErr   error
-	boundaryErr  error
+	callerARN   string
+	compileErr  error
+	boundaryErr error
 }
 
 func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op iamOperation, resource string, cache *iamEnforceCache) iamEnforceResult {
@@ -1212,18 +1233,18 @@ func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op
 		cached = &iamEnforceCacheEntry{
 			statements:   statements,
 			principalCtx: principal.context,
+			callerARN:    principal.callerArn,
 			boundary:     boundary,
 			boundaryErr:  boundaryErr,
 			compileErr:   err,
 		}
 		cache.store(generation, accessKeyID, cached)
 	}
-	principalARN := cached.principalCtx["aws:principalarn"]
 	if cached.compileErr != nil {
-		return iamEnforceResult{principalARN: principalARN, compileErr: cached.compileErr}
+		return iamEnforceResult{callerARN: cached.callerARN, compileErr: cached.compileErr}
 	}
 	if cached.boundaryErr != nil {
-		return iamEnforceResult{principalARN: principalARN, boundaryErr: cached.boundaryErr}
+		return iamEnforceResult{callerARN: cached.callerARN, boundaryErr: cached.boundaryErr}
 	}
 
 	reqCtx := buildIAMRequestContext(r, op.service)
@@ -1231,12 +1252,12 @@ func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op
 		reqCtx[k] = v
 	}
 
-	return iamEnforceResult{principalARN: principalARN, Result: iampolicy.Evaluate(iampolicy.Input{
+	return iamEnforceResult{callerARN: cached.callerARN, Result: iampolicy.Evaluate(iampolicy.Input{
 		Request: iampolicy.Request{
 			Action:           op.action,
 			Resource:         resource,
 			Context:          reqCtx,
-			PrincipalARN:     principalARN,
+			PrincipalARN:     cached.principalCtx["aws:principalarn"],
 			PrincipalAccount: cached.principalCtx["aws:principalaccount"],
 		},
 		Identity: cached.statements,
@@ -1251,6 +1272,10 @@ type iamPrincipalPolicies struct {
 	docs        []iampolicy.SourcedDocument
 	context     map[string]string
 	boundaryArn string
+	// callerArn is the ARN AWS names the caller by in an access-denied
+	// message: a user's own ARN, or a role session's assumed-role ARN. It
+	// differs from aws:PrincipalArn, which for a role session is the role's.
+	callerArn string
 }
 
 // resolveIAMPermissionsBoundary compiles the managed policy a principal's
@@ -1327,6 +1352,7 @@ func collectPrincipalPolicies(ctx context.Context, st state.Store, accessKeyID s
 			docs:        docs,
 			context:     principalCtx,
 			boundaryArn: user.PermissionsBoundary,
+			callerArn:   principalArn,
 		}
 	}
 
@@ -1360,36 +1386,43 @@ func ResolvePrincipalIdentity(ctx context.Context, st state.Store, accessKeyID s
 // to handle account roots, STS sessions, service principals, and remote
 // accounts, none of which this local IAM store can authoritatively validate.
 func LocalIAMPrincipalExists(ctx context.Context, st state.Store, principalARN string) (bool, error) {
-	if st == nil {
-		return false, nil
-	}
-	parts := strings.SplitN(strings.TrimSpace(principalARN), ":", 6)
+	principalARN = strings.TrimSpace(principalARN)
+	parts := strings.SplitN(principalARN, ":", 6)
 	if len(parts) != 6 || parts[0] != "arn" || parts[2] != "iam" {
 		return false, nil
 	}
-	resource := parts[5]
-	var namespace, name string
-	switch {
+	var namespace string
+	switch resource := parts[5]; {
 	case strings.HasPrefix(resource, "user/"):
 		namespace = iamUsersNamespace
-		name = resource[strings.LastIndex(resource, "/")+1:]
 	case strings.HasPrefix(resource, "role/"):
 		namespace = iamRolesNamespace
-		name = resource[strings.LastIndex(resource, "/")+1:]
 	default:
 		return false, nil
 	}
-	raw, found, err := st.Get(ctx, namespace, name)
+	_, found, err := iamRecordByARN(ctx, st, namespace, principalARN)
+	return found, err
+}
+
+// iamRecordByARN reads the record namespace keeps for the user or role arn
+// names, which is keyed by the ARN's last path segment. found is false when
+// there is none, or when the record there does not decode or is a different
+// entity's: a role of the same name under another path or account.
+func iamRecordByARN(ctx context.Context, st state.Store, namespace, arn string) (raw string, found bool, err error) {
+	if st == nil {
+		return "", false, nil
+	}
+	raw, found, err = st.Get(ctx, namespace, arn[strings.LastIndex(arn, "/")+1:])
 	if err != nil || !found {
-		return false, err
+		return "", false, err
 	}
 	var record struct {
 		ARN string `json:"Arn"`
 	}
-	if err := json.Unmarshal([]byte(raw), &record); err != nil {
-		return false, nil
+	if json.Unmarshal([]byte(raw), &record) != nil || strings.TrimSpace(record.ARN) != arn {
+		return "", false, nil
 	}
-	return strings.TrimSpace(record.ARN) == strings.TrimSpace(principalARN), nil
+	return raw, true, nil
 }
 
 func appendGroupPolicyDocuments(ctx context.Context, st state.Store, docs []iampolicy.SourcedDocument, userName string) []iampolicy.SourcedDocument {
@@ -1435,17 +1468,14 @@ func collectRoleSessionPolicies(ctx context.Context, st state.Store, accessKeyID
 		return iamPrincipalPolicies{}
 	}
 
-	var session iamRoleSessionRecord
+	var session RoleSessionRecord
 	if err := json.Unmarshal([]byte(sessionRaw), &session); err != nil {
 		return iamPrincipalPolicies{}
 	}
 
 	roleName := strings.TrimSpace(session.RoleName)
 	if roleName == "" {
-		// Try to derive the role name from the ARN as fallback.
-		if idx := strings.LastIndex(session.RoleArn, "/"); idx >= 0 {
-			roleName = session.RoleArn[idx+1:]
-		}
+		roleName = protocol.RoleNameFromARN(strings.TrimSpace(session.RoleArn))
 	}
 	if roleName == "" {
 		return iamPrincipalPolicies{}
@@ -1479,7 +1509,7 @@ func collectRoleSessionPolicies(ctx context.Context, st state.Store, accessKeyID
 	principalCtx := map[string]string{
 		"aws:principalarn":     principalArn,
 		"aws:principalaccount": principalAccount,
-		"aws:userid":           accessKeyID,
+		"aws:userid":           roleSessionUserID(session.AssumedRoleID, accessKeyID),
 		"aws:username":         roleName,
 		"aws:principaltype":    "AssumedRole",
 	}
@@ -1488,7 +1518,29 @@ func collectRoleSessionPolicies(ctx context.Context, st state.Store, accessKeyID
 		docs:        docs,
 		context:     principalCtx,
 		boundaryArn: role.PermissionsBoundary,
+		callerArn:   roleSessionCallerARN(principalAccount, principalArn, session.RoleSessionName),
 	}
+}
+
+// roleSessionCallerARN is the ARN access-denied messages name a role session
+// by: its assumed-role ARN. A session STS recorded before it kept the session
+// name (#2272) has none, and is named by its role ARN instead.
+func roleSessionCallerARN(account, roleArn, sessionName string) string {
+	if strings.TrimSpace(sessionName) == "" {
+		return roleArn
+	}
+	return protocol.AssumedRoleARN(account, roleArn, sessionName)
+}
+
+// roleSessionUserID is a role session's aws:userid: the AssumedRoleId STS
+// returned for it, "<role ID>:<session name>", as the IAM User Guide documents
+// it for an assumed role. A session recorded without one keeps its access key
+// ID.
+func roleSessionUserID(assumedRoleID, accessKeyID string) string {
+	if strings.TrimSpace(assumedRoleID) == "" {
+		return accessKeyID
+	}
+	return assumedRoleID
 }
 
 func accountFromARN(arn string) string {

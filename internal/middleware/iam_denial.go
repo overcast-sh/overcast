@@ -77,12 +77,12 @@ func iamAccessDeniedError(served servedProtocol, service string, denial *iampoli
 // policies are shared by every request an access key makes, but the action
 // and resource are this request's own.
 func (res iamEnforceResult) denial(action, resource string) *iampolicy.Denial {
-	if res.principalARN == "" || res.compileErr != nil || res.boundaryErr != nil || len(res.Unsupported) > 0 {
+	if res.callerARN == "" || res.compileErr != nil || res.boundaryErr != nil || len(res.Unsupported) > 0 {
 		return nil
 	}
 	policy, explicit := res.DeniedBy()
 	return &iampolicy.Denial{
-		Principal: res.principalARN,
+		Principal: res.callerARN,
 		Action:    action,
 		Resource:  resource,
 		Policy:    policy,

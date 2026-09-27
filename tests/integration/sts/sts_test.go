@@ -279,6 +279,24 @@ func TestAssumeRoleWithWebIdentity_success(t *testing.T) {
 	}
 }
 
+func TestAssumeRoleWithWebIdentity_missingTokenIsMissingParameter(t *testing.T) {
+	// Given: an STS service
+	srv := helpers.NewTestServer(t)
+
+	// When: AssumeRoleWithWebIdentity is called without the required token
+	resp := stsCall(t, srv, "AssumeRoleWithWebIdentity", url.Values{
+		"RoleArn":         {"arn:aws:iam::000000000000:role/WebRole"},
+		"RoleSessionName": {"web-session"},
+	})
+	defer resp.Body.Close()
+
+	// Then: it is refused, as the model requires WebIdentityToken
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	if body := helpers.ReadBody(t, resp); !strings.Contains(body, "<Code>MissingParameter</Code>") || !strings.Contains(body, "WebIdentityToken") {
+		t.Fatalf("body = %s, want MissingParameter naming WebIdentityToken", body)
+	}
+}
+
 // ─── Unsupported operations ───────────────────────────────────────────────────
 
 // TestUnsupportedOperations_notImplemented documents that STS operations

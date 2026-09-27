@@ -73,7 +73,7 @@ func (r *defaultSecretResolver) resolveSessionSecret(ctx context.Context, access
 	if err != nil || !found {
 		return "", false
 	}
-	var session iamRoleSessionRecord
+	var session RoleSessionRecord
 	if err := json.Unmarshal([]byte(raw), &session); err != nil {
 		return "", false
 	}

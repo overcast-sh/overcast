@@ -21,7 +21,7 @@ var iamActionsNeedingNoPermission = map[string]struct{}{
 	"sts:GetSessionToken":   {},
 }
 
-// iamServedWithoutPermission reports whether AWS serves op to principalARN
+// iamServedWithoutPermission reports whether AWS serves op to callerARN
 // whatever its policies say. Three things must hold:
 //
 //   - op's action is one of iamActionsNeedingNoPermission;
@@ -34,8 +34,8 @@ var iamActionsNeedingNoPermission = map[string]struct{}{
 //     exemption;
 //   - the access key names a principal. AWS refuses a key it does not know
 //     before it authorizes anything, so an unknown key stays denied.
-func iamServedWithoutPermission(op iamOperation, principalARN string) bool {
-	if !op.query || principalARN == "" {
+func iamServedWithoutPermission(op iamOperation, callerARN string) bool {
+	if !op.query || callerARN == "" {
 		return false
 	}
 	_, ok := iamActionsNeedingNoPermission[op.action]

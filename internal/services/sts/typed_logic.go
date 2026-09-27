@@ -27,6 +27,13 @@ type assumeRoleReq struct {
 	DurationSeconds int    `json:"DurationSeconds"`
 }
 
+type assumeRoleWithWebIdentityReq struct {
+	RoleArn          string `json:"RoleArn"`
+	RoleSessionName  string `json:"RoleSessionName"`
+	WebIdentityToken string `json:"WebIdentityToken"`
+	DurationSeconds  int    `json:"DurationSeconds"`
+}
+
 // ---- Response types (xml tags for QueryXML codec WriteResponse) ----
 
 type getCallerIdentityResp struct {
@@ -169,51 +176,47 @@ func (h *Handler) assumeRoleTyped(ctx context.Context, req *assumeRoleReq) (*ass
 	}
 	dur := defaultDuration(req.DurationSeconds, 3600)
 	creds := typedCredentials(h.clk, dur)
-	account := h.cfg.AccountID
-	roleID := randID("AROA", 16)
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{
 			Type: events.STSRoleAssumed, Time: h.clk.Now(), Source: "sts",
 			Payload: events.STSAssumeRolePayload{RoleARN: req.RoleArn, SessionName: req.RoleSessionName},
 		})
 	}
-	h.persistRoleSession(ctx, creds.AccessKeyId, req.RoleArn, creds.SecretAccessKey)
+	user := h.startRoleSession(ctx, req.RoleArn, req.RoleSessionName, creds.AccessKeyId, creds.SecretAccessKey)
 	return &assumeRoleResp{
 		Xmlns: stsXMLNS,
 		Result: assumeRoleResult{
-			Credentials: creds,
-			AssumedRoleUser: assumedRoleUserXML{
-				Arn:           assumedRoleArn(account, req.RoleArn, req.RoleSessionName),
-				AssumedRoleId: fmt.Sprintf("%s:%s", roleID, req.RoleSessionName),
-			},
+			Credentials:     creds,
+			AssumedRoleUser: user,
 		},
 		Meta: metaFromCtx(ctx),
 	}, nil
 }
 
-func (h *Handler) assumeRoleWithWebIdentityTyped(ctx context.Context, req *assumeRoleReq) (*assumeRoleWithWebIdentityResp, *protocol.AWSError) {
+func (h *Handler) assumeRoleWithWebIdentityTyped(ctx context.Context, req *assumeRoleWithWebIdentityReq) (*assumeRoleWithWebIdentityResp, *protocol.AWSError) {
 	if req.RoleArn == "" {
 		return nil, protocol.ErrMissingParameter("RoleArn")
 	}
 	if req.RoleSessionName == "" {
 		return nil, protocol.ErrMissingParameter("RoleSessionName")
 	}
+	if req.WebIdentityToken == "" {
+		return nil, protocol.ErrMissingParameter("WebIdentityToken")
+	}
 	dur := defaultDuration(req.DurationSeconds, 3600)
 	creds := typedCredentials(h.clk, dur)
-	account := h.cfg.AccountID
-	roleID := randID("AROA", 16)
 	if h.bus != nil {
 		h.bus.Publish(ctx, events.Event{
 			Type: events.STSRoleAssumed, Time: h.clk.Now(), Source: "sts",
 			Payload: events.STSAssumeRolePayload{RoleARN: req.RoleArn, SessionName: req.RoleSessionName},
 		})
 	}
-	h.persistRoleSession(ctx, creds.AccessKeyId, req.RoleArn, creds.SecretAccessKey)
+	user := h.startRoleSession(ctx, req.RoleArn, req.RoleSessionName, creds.AccessKeyId, creds.SecretAccessKey)
 	return &assumeRoleWithWebIdentityResp{
 		Xmlns: stsXMLNS,
 		Result: assumeRoleWithWebIdentityResult{
 			Credentials:                 creds,
-			AssumedRoleUser:             assumedRoleUserXML{Arn: assumedRoleArn(account, req.RoleArn, req.RoleSessionName), AssumedRoleId: fmt.Sprintf("%s:%s", roleID, req.RoleSessionName)},
+			AssumedRoleUser:             user,
 			SubjectFromWebIdentityToken: "test-user",
 		},
 		Meta: metaFromCtx(ctx),

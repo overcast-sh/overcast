@@ -32,6 +32,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 // cognitoUserPoolConfig is the subset of AppSync's UserPoolConfig that
@@ -97,7 +98,7 @@ func (h *Handler) verifyCognitoToken(r *http.Request, token string, userPoolCfg 
 		return nil, unauthorizedError("Cognito token verification is unavailable.")
 	}
 
-	claims, err := decodeJWTClaims(token)
+	claims, err := serviceutil.DecodeJWTClaims(token)
 	if err != nil {
 		return nil, unauthorizedError("Unable to parse JWT token.")
 	}

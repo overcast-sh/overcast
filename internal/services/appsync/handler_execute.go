@@ -9,9 +9,7 @@ package appsync
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -368,37 +366,14 @@ func extractBearerToken(r *http.Request) string {
 
 // parseJWTClaims extracts a JWT's claims, yielding an empty map for anything
 // it cannot read. This is NOT a security validation — the emulator trusts the
-// token. Strict Cognito enforcement calls decodeJWTClaims instead, because it
-// has to tell a malformed token apart from one carrying no claims.
+// token. Strict Cognito enforcement calls serviceutil.DecodeJWTClaims instead,
+// because it has to tell a malformed token apart from one carrying no claims.
 func parseJWTClaims(token string) map[string]any {
-	claims, err := decodeJWTClaims(token)
+	claims, err := serviceutil.DecodeJWTClaims(token)
 	if err != nil {
 		return map[string]any{}
 	}
 	return claims
-}
-
-// decodeJWTClaims base64url-decodes the payload section of a JWT (between the
-// two dots) and reports why it could not, without verifying anything.
-func decodeJWTClaims(token string) (map[string]any, error) {
-	parts := strings.SplitN(token, ".", 3)
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("malformed JWT: expected at least 2 parts, got %d", len(parts))
-	}
-	payload := parts[1]
-	// JWT uses base64url without padding.
-	if m := len(payload) % 4; m != 0 {
-		payload += strings.Repeat("=", 4-m)
-	}
-	decoded, err := base64.URLEncoding.DecodeString(payload)
-	if err != nil {
-		return nil, fmt.Errorf("JWT payload decode: %w", err)
-	}
-	var claims map[string]any
-	if err := json.Unmarshal(decoded, &claims); err != nil {
-		return nil, fmt.Errorf("JWT payload JSON: %w", err)
-	}
-	return claims, nil
 }
 
 func claimString(claims map[string]any, keys ...string) string {
