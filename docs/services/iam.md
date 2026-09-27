@@ -101,10 +101,11 @@ User: arn:aws:iam::000000000000:user/dev is not authorized to perform: sns:ListT
 `on resource:` is left out when the action names no particular resource. The
 policy named is the identity-based policy, or the permissions boundary when the
 boundary holds the `Deny`, or when the identity policies allowed the call and
-the boundary did not. A role session is named by its role ARN, where AWS names
-the `assumed-role/<role>/<session>` ARN. S3 quotes the resource ARN, and EC2
-puts the sentence after its own `You are not authorized to perform this
-operation.` A denial no policy decided
+the boundary did not. A role session is named by its
+`arn:aws:sts::<account>:assumed-role/<role>/<session>` ARN, except one an
+older Overcast issued, which recorded no session name and is named by its role
+ARN. S3 quotes the resource ARN, and EC2 puts the sentence after its own `You
+are not authorized to perform this operation.` A denial no policy decided
 — an unsigned call, an unknown access key, a policy that could not be evaluated
 — says only `User is not authorized to perform this action` (S3:
 `Access Denied`).

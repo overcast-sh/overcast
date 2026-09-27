@@ -100,3 +100,21 @@ func LogStreamARN(region, accountID, groupName, streamName string) string {
 func DistributionARN(accountID, distributionID string) string {
 	return fmt.Sprintf("arn:aws:cloudfront::%s:distribution/%s", accountID, distributionID)
 }
+
+// RoleNameFromARN returns the role name an IAM role ARN
+// (arn:aws:iam::<account>:role/<RoleName>, or role/<path>/<RoleName>) names:
+// its last "/"-delimited segment. An input with no "/" is returned unchanged.
+func RoleNameFromARN(roleArn string) string {
+	if idx := strings.LastIndex(roleArn, "/"); idx >= 0 {
+		return roleArn[idx+1:]
+	}
+	return roleArn
+}
+
+// AssumedRoleARN builds the ARN AWS names an STS role session by:
+// arn:aws:sts::<account>:assumed-role/<RoleName>/<SessionName>. RoleName is
+// read from roleArn, and the role's path is not part of it — see
+// https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html#identifiers-arns.
+func AssumedRoleARN(accountID, roleArn, sessionName string) string {
+	return fmt.Sprintf("arn:aws:sts::%s:assumed-role/%s/%s", accountID, RoleNameFromARN(roleArn), sessionName)
+}

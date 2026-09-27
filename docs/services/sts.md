@@ -45,9 +45,10 @@ Access keys are `ASIA`-prefixed, with a random secret and session token as on
 AWS. `DurationSeconds` is honoured wherever it is accepted.
 
 > [!NOTE]
-> `AssumeRole` records the minted access key against the role ARN, which is how
-> opt-in [IAM enforcement](./iam.md#request-time-enforcement-opt-in) resolves a caller to
-> a role's policies. With enforcement off, nothing reads it.
+> `AssumeRole` records the minted access key against the role ARN and session
+> name, which is how opt-in [IAM enforcement](./iam.md#request-time-enforcement-opt-in)
+> resolves a caller to a role's policies and names its session. With enforcement
+> off, nothing reads it.
 
 ## Differences from AWS
 
