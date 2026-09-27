@@ -156,18 +156,15 @@ documentation gives. Ten services differ from their Overcast service key:
 | DynamoDB Streams   | `dynamodb:`               |
 | AppConfig Data     | `appconfig:`              |
 
-Most requests are authorised as the operation that serves them, whatever
-service their credential scope names:
+A request is authorised as the operation that serves it, whatever service its
+credential scope names, with one gap:
 
-- An AWS Query call (IAM, STS, SQS, SNS, CloudFormation, EC2 and the rest) is
-  the operation its `Action` and `Version` name. An IAM `CreateUser` signed for
-  `s3` is checked as `iam:CreateUser`, not `s3:CreateUser`.
-- A path no service's own route claims is S3's, and an `Action` in its query
-  string names nothing. `PUT /my-bucket?Action=GetFederationToken` signed for
-  `sts` is checked as `s3:CreateBucket`.
-- A path a service's own route serves, such as EKS's `/clusters`, is still
-  named by the service the credential scope gives it. Sign for the service you
-  call.
+- An AWS Query call is the operation its `Action` and `Version` name:
+  `CreateUser` signed for `s3` is `iam:CreateUser`.
+- A path no service's route claims is S3's, whatever `Action` it carries:
+  `PUT /my-bucket?Action=GetFederationToken` signed for `sts` is `s3:CreateBucket`.
+- The gap: a service's own route, such as EKS's `/clusters`, is named by the
+  credential scope. Sign for the service you call.
 
 ## Differences from AWS
 
