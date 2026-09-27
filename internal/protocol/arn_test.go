@@ -56,3 +56,41 @@ func TestTableARN(t *testing.T) {
 		t.Errorf("TableARN: expected %q, got %q", want, got)
 	}
 }
+
+// TestAssumedRoleARN verifies an assumed-role session ARN is built from the
+// role name parsed out of the role ARN, without the role's path, and not from
+// the session name repeated in both segments — see
+// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumedRoleUser.html.
+func TestAssumedRoleARN(t *testing.T) {
+	tests := []struct {
+		name        string
+		roleArn     string
+		sessionName string
+		want        string
+	}{
+		{
+			name:        "simple role",
+			roleArn:     "arn:aws:iam::123456789012:role/demo",
+			sessionName: "Bob",
+			want:        "arn:aws:sts::123456789012:assumed-role/demo/Bob",
+		},
+		{
+			name:        "role arn with a path",
+			roleArn:     "arn:aws:iam::123456789012:role/some/nested/path/MyRole",
+			sessionName: "test-session",
+			want:        "arn:aws:sts::123456789012:assumed-role/MyRole/test-session",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Given: a role ARN and a session name
+			// When: the session's ARN is built
+			got := protocol.AssumedRoleARN("123456789012", tt.roleArn, tt.sessionName)
+
+			// Then: it names the role by its name alone, then the session
+			if got != tt.want {
+				t.Errorf("AssumedRoleARN(%q, %q) = %q, want %q", tt.roleArn, tt.sessionName, got, tt.want)
+			}
+		})
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/events"
+	"github.com/overcast-sh/overcast/internal/middleware"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/protocol/op"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
@@ -147,30 +148,19 @@ func (h *Handler) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 	dur := parseDurationSeconds(r.FormValue("DurationSeconds"), 3600)
 	creds := newTempCredentials(h.clk, dur)
-	account := h.cfg.AccountID
-	roleID := randID("AROA", 16)
 	if h.bus != nil {
 		h.bus.Publish(r.Context(), events.Event{
 			Type: events.STSRoleAssumed, Time: h.clk.Now(), Source: "sts",
 			Payload: events.STSAssumeRolePayload{RoleARN: roleArn, SessionName: sessionName},
 		})
 	}
-	h.persistRoleSession(r.Context(), creds.AccessKeyId, roleArn, creds.SecretAccessKey)
+	user := h.startRoleSession(r.Context(), roleArn, sessionName, creds.AccessKeyId, creds.SecretAccessKey)
 	writeSTSXML(w, r, "AssumeRoleResponse", "AssumeRoleResult", struct {
 		Credentials     tempCredentialsXML `xml:"Credentials"`
-		AssumedRoleUser struct {
-			Arn           string `xml:"Arn"`
-			AssumedRoleId string `xml:"AssumedRoleId"`
-		} `xml:"AssumedRoleUser"`
+		AssumedRoleUser assumedRoleUserXML `xml:"AssumedRoleUser"`
 	}{
-		Credentials: creds,
-		AssumedRoleUser: struct {
-			Arn           string `xml:"Arn"`
-			AssumedRoleId string `xml:"AssumedRoleId"`
-		}{
-			Arn:           assumedRoleArn(account, roleArn, sessionName),
-			AssumedRoleId: fmt.Sprintf("%s:%s", roleID, sessionName),
-		},
+		Credentials:     creds,
+		AssumedRoleUser: user,
 	})
 }
 
@@ -188,77 +178,57 @@ func (h *Handler) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *http.Reque
 	}
 	dur := parseDurationSeconds(r.FormValue("DurationSeconds"), 3600)
 	creds := newTempCredentials(h.clk, dur)
-	account := h.cfg.AccountID
-	roleID := randID("AROA", 16)
 	if h.bus != nil {
 		h.bus.Publish(r.Context(), events.Event{
 			Type: events.STSRoleAssumed, Time: h.clk.Now(), Source: "sts",
 			Payload: events.STSAssumeRolePayload{RoleARN: roleArn, SessionName: sessionName},
 		})
 	}
-	h.persistRoleSession(r.Context(), creds.AccessKeyId, roleArn, creds.SecretAccessKey)
+	user := h.startRoleSession(r.Context(), roleArn, sessionName, creds.AccessKeyId, creds.SecretAccessKey)
 	writeSTSXML(w, r, "AssumeRoleWithWebIdentityResponse", "AssumeRoleWithWebIdentityResult", struct {
-		Credentials     tempCredentialsXML `xml:"Credentials"`
-		AssumedRoleUser struct {
-			Arn           string `xml:"Arn"`
-			AssumedRoleId string `xml:"AssumedRoleId"`
-		} `xml:"AssumedRoleUser"`
-		SubjectFromWebIdentityToken string `xml:"SubjectFromWebIdentityToken"`
+		Credentials                 tempCredentialsXML `xml:"Credentials"`
+		AssumedRoleUser             assumedRoleUserXML `xml:"AssumedRoleUser"`
+		SubjectFromWebIdentityToken string             `xml:"SubjectFromWebIdentityToken"`
 	}{
-		Credentials: creds,
-		AssumedRoleUser: struct {
-			Arn           string `xml:"Arn"`
-			AssumedRoleId string `xml:"AssumedRoleId"`
-		}{
-			Arn:           assumedRoleArn(account, roleArn, sessionName),
-			AssumedRoleId: fmt.Sprintf("%s:%s", roleID, sessionName),
-		},
+		Credentials:                 creds,
+		AssumedRoleUser:             user,
 		SubjectFromWebIdentityToken: "test-user",
 	})
 }
 
-// persistRoleSession stores a mapping from the temporary access key ID to the
-// assumed role ARN and secret access key in iam:sessions so that the IAM
-// enforcement middleware and SigV4 presigned URL validation can resolve the
-// caller's identity and signing key.
-func (h *Handler) persistRoleSession(ctx context.Context, accessKeyID, roleArn, secretKey string) {
-	if h.st == nil || strings.TrimSpace(accessKeyID) == "" || strings.TrimSpace(roleArn) == "" {
+// startRoleSession records the session of roleArn named sessionName that
+// accessKeyID was issued for, and returns the AssumedRoleUser AWS reports for
+// it. Every path that issues role-session credentials goes through here, so
+// the ARN and ID a caller is told match the ones IAM enforcement names it by.
+func (h *Handler) startRoleSession(ctx context.Context, roleArn, sessionName, accessKeyID, secretKey string) assumedRoleUserXML {
+	user := assumedRoleUserXML{
+		Arn:           protocol.AssumedRoleARN(h.cfg.AccountID, roleArn, sessionName),
+		AssumedRoleId: randID("AROA", 16) + ":" + sessionName,
+	}
+	h.persistRoleSession(ctx, accessKeyID, middleware.RoleSessionRecord{
+		RoleArn:         roleArn,
+		RoleName:        protocol.RoleNameFromARN(roleArn),
+		RoleSessionName: sessionName,
+		AssumedRoleID:   user.AssumedRoleId,
+		SecretAccessKey: secretKey,
+	})
+	return user
+}
+
+// persistRoleSession stores session under its temporary access key ID in
+// iam:sessions so that the IAM enforcement middleware and SigV4 presigned URL
+// validation can resolve the caller's identity and signing key.
+func (h *Handler) persistRoleSession(ctx context.Context, accessKeyID string, session middleware.RoleSessionRecord) {
+	if h.st == nil || strings.TrimSpace(accessKeyID) == "" || strings.TrimSpace(session.RoleArn) == "" {
 		return
 	}
-	roleName := roleNameFromRoleArn(roleArn)
-	type sessionRecord struct {
-		RoleArn         string `json:"RoleArn"`
-		RoleName        string `json:"RoleName"`
-		SecretAccessKey string `json:"SecretAccessKey"`
-	}
-	b, err := json.Marshal(sessionRecord{RoleArn: roleArn, RoleName: roleName, SecretAccessKey: secretKey})
+	b, err := json.Marshal(session)
 	if err != nil {
 		return
 	}
 	// Ignore errors — session persistence is best-effort; missing sessions only
 	// affect IAM enforcement resolution, which is opt-in.
 	_ = h.st.Set(ctx, "iam:sessions", accessKeyID, string(b))
-}
-
-// roleNameFromRoleArn extracts the role name from an IAM role ARN
-// (arn:aws:iam::<account>:role/<RoleName> or
-// arn:aws:iam::<account>:role/<path>/<RoleName>), returning the last
-// "/"-delimited path segment. Falls back to the input unchanged if it
-// contains no "/".
-func roleNameFromRoleArn(roleArn string) string {
-	if idx := strings.LastIndex(roleArn, "/"); idx >= 0 {
-		return roleArn[idx+1:]
-	}
-	return roleArn
-}
-
-// assumedRoleArn builds the AssumedRoleUser.Arn shape AWS returns from
-// AssumeRole/AssumeRoleWithWebIdentity: arn:aws:sts::<account>:assumed-role/<RoleName>/<SessionName>,
-// where RoleName is parsed out of the request's RoleArn — not the session
-// name repeated in both segments. Shared by both the legacy and typed wire
-// paths so they stay identical.
-func assumedRoleArn(account, roleArn, sessionName string) string {
-	return fmt.Sprintf("arn:aws:sts::%s:assumed-role/%s/%s", account, roleNameFromRoleArn(roleArn), sessionName)
 }
 
 // ─── Wire format helpers ──────────────────────────────────────────────────────
