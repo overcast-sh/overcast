@@ -100,10 +100,10 @@ func TestAssumeRole_persistsTheSession(t *testing.T) {
 	const sessionName = "alice"
 	issuers := map[string]func(*Handler) issuedSession{
 		"AssumeRole (Query)": func(h *Handler) issuedSession {
-			return sessionFromQuery(t, h.AssumeRole, "AssumeRole", roleArn, sessionName)
+			return sessionFromQuery(t, h.AssumeRole, "AssumeRole", "RoleArn="+roleArn+"&RoleSessionName="+sessionName)
 		},
 		"AssumeRoleWithWebIdentity (Query)": func(h *Handler) issuedSession {
-			return sessionFromQuery(t, h.AssumeRoleWithWebIdentity, "AssumeRoleWithWebIdentity", roleArn, sessionName)
+			return sessionFromQuery(t, h.AssumeRoleWithWebIdentity, "AssumeRoleWithWebIdentity", "RoleArn="+roleArn+"&RoleSessionName="+sessionName+"&WebIdentityToken=a.b.c")
 		},
 		"AssumeRole (typed)": func(h *Handler) issuedSession {
 			resp, aerr := h.assumeRoleTyped(context.Background(), &assumeRoleReq{RoleArn: roleArn, RoleSessionName: sessionName})
@@ -113,7 +113,7 @@ func TestAssumeRole_persistsTheSession(t *testing.T) {
 			return issuedSession{resp.Result.Credentials.AccessKeyId, resp.Result.AssumedRoleUser.AssumedRoleId}
 		},
 		"AssumeRoleWithWebIdentity (typed)": func(h *Handler) issuedSession {
-			resp, aerr := h.assumeRoleWithWebIdentityTyped(context.Background(), &assumeRoleReq{RoleArn: roleArn, RoleSessionName: sessionName})
+			resp, aerr := h.assumeRoleWithWebIdentityTyped(context.Background(), &assumeRoleWithWebIdentityReq{RoleArn: roleArn, RoleSessionName: sessionName, WebIdentityToken: "a.b.c"})
 			if aerr != nil {
 				t.Fatalf("assumeRoleWithWebIdentityTyped: %s", aerr.Message)
 			}
@@ -157,9 +157,9 @@ type issuedSession struct {
 
 // sessionFromQuery calls a Query-protocol role-session handler and returns
 // the session it issued.
-func sessionFromQuery(t *testing.T, handler http.HandlerFunc, action, roleArn, sessionName string) issuedSession {
+func sessionFromQuery(t *testing.T, handler http.HandlerFunc, action, params string) issuedSession {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/?Action="+action+"&RoleArn="+roleArn+"&RoleSessionName="+sessionName, nil)
+	req := httptest.NewRequest(http.MethodPost, "/?Action="+action+"&"+params, nil)
 	w := httptest.NewRecorder()
 	handler(w, req)
 	var resp struct {
