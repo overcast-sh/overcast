@@ -2567,13 +2567,17 @@ func TestS3_UnimplementedOperations_return501(t *testing.T) {
 		{"GetBucketRequestPayment", http.MethodGet, "/stub-bucket?requestPayment"},
 		{"GetBucketOwnershipControls", http.MethodGet, "/stub-bucket?ownershipControls"},
 		{"GetPublicAccessBlock", http.MethodGet, "/stub-bucket?publicAccessBlock"},
+		{"GetBucketAnalyticsConfiguration", http.MethodGet, "/stub-bucket?analytics&id=a"},
 		{"ListBucketAnalyticsConfigurations", http.MethodGet, "/stub-bucket?analytics"},
+		{"GetBucketIntelligentTieringConfiguration", http.MethodGet, "/stub-bucket?intelligent-tiering&id=a"},
 		{"ListBucketIntelligentTieringConfigurations", http.MethodGet, "/stub-bucket?intelligent-tiering"},
+		{"GetBucketInventoryConfiguration", http.MethodGet, "/stub-bucket?inventory&id=a"},
 		{"ListBucketInventoryConfigurations", http.MethodGet, "/stub-bucket?inventory"},
+		{"GetBucketMetricsConfiguration", http.MethodGet, "/stub-bucket?metrics&id=a"},
 		{"ListBucketMetricsConfigurations", http.MethodGet, "/stub-bucket?metrics"},
 		{"GetObjectLockConfiguration", http.MethodGet, "/stub-bucket?object-lock"},
 		{"GetBucketAbac", http.MethodGet, "/stub-bucket?abac"},
-		{"GetBucketMetadataConfiguration", http.MethodGet, "/stub-bucket?metadata"},
+		{"GetBucketMetadataConfiguration", http.MethodGet, "/stub-bucket?metadataConfiguration"},
 		{"GetBucketMetadataTableConfiguration", http.MethodGet, "/stub-bucket?metadataTable"},
 		{"CreateSession", http.MethodGet, "/stub-bucket?session"},
 
@@ -2591,8 +2595,9 @@ func TestS3_UnimplementedOperations_return501(t *testing.T) {
 		{"PutBucketMetricsConfiguration", http.MethodPut, "/stub-bucket?metrics"},
 		{"PutObjectLockConfiguration", http.MethodPut, "/stub-bucket?object-lock"},
 		{"PutBucketAbac", http.MethodPut, "/stub-bucket?abac"},
-		{"CreateBucketMetadataConfiguration", http.MethodPut, "/stub-bucket?metadata"},
-		{"UpdateBucketMetadataTableConfiguration", http.MethodPut, "/stub-bucket?metadataTable"},
+		{"UpdateBucketMetadataInventoryTableConfiguration", http.MethodPut, "/stub-bucket?metadataInventoryTable"},
+		{"UpdateBucketMetadataJournalTableConfiguration", http.MethodPut, "/stub-bucket?metadataJournalTable"},
+		{"UpdateBucketMetadataAnnotationTableConfiguration", http.MethodPut, "/stub-bucket?metadataAnnotationTable"},
 
 		// ---- Bucket DELETE sub-resources --------------------------------
 		{"DeleteBucketReplication", http.MethodDelete, "/stub-bucket?replication"},
@@ -2602,10 +2607,11 @@ func TestS3_UnimplementedOperations_return501(t *testing.T) {
 		{"DeleteBucketMetricsConfiguration", http.MethodDelete, "/stub-bucket?metrics"},
 		{"DeleteBucketOwnershipControls", http.MethodDelete, "/stub-bucket?ownershipControls"},
 		{"DeletePublicAccessBlock", http.MethodDelete, "/stub-bucket?publicAccessBlock"},
-		{"DeleteBucketMetadataConfiguration", http.MethodDelete, "/stub-bucket?metadata"},
+		{"DeleteBucketMetadataConfiguration", http.MethodDelete, "/stub-bucket?metadataConfiguration"},
 		{"DeleteBucketMetadataTableConfiguration", http.MethodDelete, "/stub-bucket?metadataTable"},
 
 		// ---- Bucket POST sub-resources ----------------------------------
+		{"CreateBucketMetadataConfiguration", http.MethodPost, "/stub-bucket?metadataConfiguration"},
 		{"CreateBucketMetadataTableConfiguration", http.MethodPost, "/stub-bucket?metadataTable"},
 
 		// ---- Object GET sub-resources -----------------------------------
@@ -2614,20 +2620,25 @@ func TestS3_UnimplementedOperations_return501(t *testing.T) {
 		{"GetObjectLegalHold", http.MethodGet, "/stub-bucket/stub-key?legal-hold"},
 		{"GetObjectRetention", http.MethodGet, "/stub-bucket/stub-key?retention"},
 		{"GetObjectTorrent", http.MethodGet, "/stub-bucket/stub-key?torrent"},
+		{"GetObjectAnnotation", http.MethodGet, "/stub-bucket/stub-key?annotation&annotationName=n"},
+		{"ListObjectAnnotations", http.MethodGet, "/stub-bucket/stub-key?annotation"},
 
 		// ---- Object PUT sub-resources -----------------------------------
 		{"PutObjectAcl", http.MethodPut, "/stub-bucket/stub-key?acl"},
 		{"PutObjectLegalHold", http.MethodPut, "/stub-bucket/stub-key?legal-hold"},
 		{"PutObjectRetention", http.MethodPut, "/stub-bucket/stub-key?retention"},
-		{"RenameObject", http.MethodPut, "/stub-bucket/stub-key?rename"},
+		{"RenameObject", http.MethodPut, "/stub-bucket/stub-key?renameObject"},
+		{"PutObjectAnnotation", http.MethodPut, "/stub-bucket/stub-key?annotation"},
 		{"UpdateObjectEncryption", http.MethodPut, "/stub-bucket/stub-key?encryption"},
 		{"UploadPartCopy", http.MethodPut, "/stub-bucket/stub-key?partNumber=1"},
 
 		// ---- Object DELETE sub-resources --------------------------------
+		{"DeleteObjectAnnotation", http.MethodDelete, "/stub-bucket/stub-key?annotation"},
+
 		// ---- Object POST sub-resources ----------------------------------
 		{"RestoreObject", http.MethodPost, "/stub-bucket/stub-key?restore"},
 		{"SelectObjectContent", http.MethodPost, "/stub-bucket/stub-key?select"},
-		{"WriteGetObjectResponse", http.MethodPost, "/stub-bucket/stub-key?writeGetObjectResponse"},
+		{"WriteGetObjectResponse", http.MethodPost, "/WriteGetObjectResponse"},
 	}
 
 	for _, c := range cases {

@@ -60,14 +60,39 @@ type route struct {
 	method string
 }
 
-// subResource is a query parameter that selects an operation.
+// subResource is the query that selects an operation: one parameter, or
+// several joined by "&" that must all be present, as in "analytics&id".
 type subResource struct {
-	param     string
+	params    string
 	operation string
+}
+
+// names lists sub's parameters, the sub-resource first.
+func (sub subResource) names() []string {
+	return strings.Split(sub.params, "&")
+}
+
+// present reports whether query carries every one of sub's parameters. It
+// walks them in place rather than through names: it runs on every request.
+func (sub subResource) present(query url.Values) bool {
+	for params := sub.params; params != ""; {
+		var param string
+		param, params, _ = strings.Cut(params, "&")
+		if !query.Has(param) {
+			return false
+		}
+	}
+	return true
 }
 
 // subResources lists, per route, the sub-resources that select an operation,
 // in the order S3 tries them: the first one present wins.
+//
+// The model tells a Get from the List on the same sub-resource only by the
+// x-id literal S3 ignores: it binds GetBucketAnalyticsConfiguration and
+// ListBucketAnalyticsConfigurations both to GET ?analytics. S3 tells them
+// apart by the query member only the Get carries, id or annotationName, so
+// the Get, which names both, comes first.
 var subResources = map[route][]subResource{
 	{levelService, http.MethodGet}: {
 		// An Overcast selector: AWS serves ListDirectoryBuckets on the
@@ -95,13 +120,17 @@ var subResources = map[route][]subResource{
 		{"publicAccessBlock", "GetPublicAccessBlock"},
 		{"uploads", "ListMultipartUploads"},
 		{"versions", "ListObjectVersions"},
+		{"analytics&id", "GetBucketAnalyticsConfiguration"},
 		{"analytics", "ListBucketAnalyticsConfigurations"},
+		{"intelligent-tiering&id", "GetBucketIntelligentTieringConfiguration"},
 		{"intelligent-tiering", "ListBucketIntelligentTieringConfigurations"},
+		{"inventory&id", "GetBucketInventoryConfiguration"},
 		{"inventory", "ListBucketInventoryConfigurations"},
+		{"metrics&id", "GetBucketMetricsConfiguration"},
 		{"metrics", "ListBucketMetricsConfigurations"},
 		{"object-lock", "GetObjectLockConfiguration"},
 		{"abac", "GetBucketAbac"},
-		{"metadata", "GetBucketMetadataConfiguration"},
+		{"metadataConfiguration", "GetBucketMetadataConfiguration"},
 		{"metadataTable", "GetBucketMetadataTableConfiguration"},
 		{"session", "CreateSession"},
 	},
@@ -127,8 +156,9 @@ var subResources = map[route][]subResource{
 		{"metrics", "PutBucketMetricsConfiguration"},
 		{"object-lock", "PutObjectLockConfiguration"},
 		{"abac", "PutBucketAbac"},
-		{"metadata", "CreateBucketMetadataConfiguration"},
-		{"metadataTable", "UpdateBucketMetadataTableConfiguration"},
+		{"metadataInventoryTable", "UpdateBucketMetadataInventoryTableConfiguration"},
+		{"metadataJournalTable", "UpdateBucketMetadataJournalTableConfiguration"},
+		{"metadataAnnotationTable", "UpdateBucketMetadataAnnotationTableConfiguration"},
 	},
 	{levelBucket, http.MethodDelete}: {
 		{"cors", "DeleteBucketCors"},
@@ -144,11 +174,12 @@ var subResources = map[route][]subResource{
 		{"metrics", "DeleteBucketMetricsConfiguration"},
 		{"ownershipControls", "DeleteBucketOwnershipControls"},
 		{"publicAccessBlock", "DeletePublicAccessBlock"},
-		{"metadata", "DeleteBucketMetadataConfiguration"},
+		{"metadataConfiguration", "DeleteBucketMetadataConfiguration"},
 		{"metadataTable", "DeleteBucketMetadataTableConfiguration"},
 	},
 	{levelBucket, http.MethodPost}: {
 		{"delete", "DeleteObjects"},
+		{"metadataConfiguration", "CreateBucketMetadataConfiguration"},
 		{"metadataTable", "CreateBucketMetadataTableConfiguration"},
 	},
 	{levelObject, http.MethodGet}: {
@@ -158,6 +189,8 @@ var subResources = map[route][]subResource{
 		{"legal-hold", "GetObjectLegalHold"},
 		{"retention", "GetObjectRetention"},
 		{"torrent", "GetObjectTorrent"},
+		{"annotation&annotationName", "GetObjectAnnotation"},
+		{"annotation", "ListObjectAnnotations"},
 		{"uploadId", "ListParts"},
 	},
 	{levelObject, http.MethodPut}: {
@@ -168,11 +201,13 @@ var subResources = map[route][]subResource{
 		{"tagging", "PutObjectTagging"},
 		{"legal-hold", "PutObjectLegalHold"},
 		{"retention", "PutObjectRetention"},
-		{"rename", "RenameObject"},
+		{"renameObject", "RenameObject"},
 		{"encryption", "UpdateObjectEncryption"},
+		{"annotation", "PutObjectAnnotation"},
 	},
 	{levelObject, http.MethodDelete}: {
 		{"tagging", "DeleteObjectTagging"},
+		{"annotation", "DeleteObjectAnnotation"},
 		{"uploadId", "AbortMultipartUpload"},
 	},
 	{levelObject, http.MethodPost}: {
@@ -180,17 +215,34 @@ var subResources = map[route][]subResource{
 		{"uploadId", "CompleteMultipartUpload"},
 		{"restore", "RestoreObject"},
 		{"select", "SelectObjectContent"},
-		{"writeGetObjectResponse", "WriteGetObjectResponse"},
 	},
+}
+
+// binding is a method on a fixed path.
+type binding struct {
+	method string
+	path   string
+}
+
+// fixedPaths names the operations S3 binds to a path of their own rather
+// than to a bucket or an object. No bucket can be named
+// WriteGetObjectResponse, since bucket names are lowercase, so the path
+// addresses none. AWS serves it on a host prefixed with the request route,
+// which Overcast does not route: a client reaches it path-style.
+var fixedPaths = map[binding]string{
+	{http.MethodPost, "/WriteGetObjectResponse"}: "WriteGetObjectResponse",
 }
 
 // plain names the operation a route serves when no sub-resource selects one.
 // A route absent here serves none: S3 answers a POST to a bucket or an object
 // without a sub-resource with an error, not an operation.
 //
-// A modeled sub-resource missing from subResources is served as the plain
-// operation too, which for ?annotation or ?renameObject overwrites or deletes
-// the object; #2286 routes them.
+// A query parameter S3 does not know is ignored, so a request carrying one
+// is served as the plain operation. A sub-resource it does know never is:
+// served on another method it is refused (Refused), and one the model binds
+// but subResources lacked would be destructive, as PUT ?annotation once
+// overwrote the object (#2286). TestOperations_coverTheModel fails on any
+// modeled operation missing from subResources.
 var plain = map[route]string{
 	{levelService, http.MethodGet}:   "ListBuckets",
 	{levelBucket, http.MethodGet}:    "ListObjects",
@@ -219,32 +271,82 @@ const CopySourceHeader = "X-Amz-Copy-Source"
 // prefix, so the keys enforcement authorises are the keys S3 deletes.
 const MaxDeleteObjectsBody = 4 << 20
 
+// parameters are the leading parameters in subResources that are query
+// members rather than sub-resources. Each selects an operation on the methods
+// that list it, and is an ordinary parameter on any other: GET
+// /bucket/key?partNumber=1 is a GetObject.
+var parameters = map[string]bool{
+	"partNumber": true,
+	"uploadId":   true,
+}
+
+// subResourcesAt lists, per level, the sub-resources S3 serves an operation
+// on there, on any method.
+var subResourcesAt = func() map[level]map[string]bool {
+	at := map[level]map[string]bool{}
+	for rt, subs := range subResources {
+		if at[rt.level] == nil {
+			at[rt.level] = map[string]bool{}
+		}
+		for _, sub := range subs {
+			if param := sub.names()[0]; !parameters[param] {
+				at[rt.level][param] = true
+			}
+		}
+	}
+	return at
+}()
+
 // Operation names the operation S3 serves r as, or "" when S3 serves it none.
 func Operation(r *http.Request) string {
-	rt := route{levelOf(r.URL.EscapedPath()), r.Method}
-	query := r.URL.Query()
-	operation := selectOperation(rt, query)
-	if copied, ok := copies[operation]; ok && rt.level == levelObject && r.Header.Get(CopySourceHeader) != "" {
-		return copied
-	}
+	operation, _ := resolve(r)
 	return operation
 }
 
+// Refused reports whether S3 refuses r with MethodNotAllowed: r's query
+// names a sub-resource S3 serves at r's level, but not on r's method. S3
+// answers that 405 rather than serving the plain operation of the route,
+// which for DELETE /bucket?versioning would be DeleteBucket. Operation names
+// a refused request no operation.
+func Refused(r *http.Request) bool {
+	_, refused := resolve(r)
+	return refused
+}
+
+// resolve names the operation S3 serves r as, or reports that S3 refuses it.
+func resolve(r *http.Request) (operation string, refused bool) {
+	if operation, ok := fixedPaths[binding{r.Method, r.URL.EscapedPath()}]; ok {
+		return operation, false
+	}
+	rt := route{levelOf(r.URL.EscapedPath()), r.Method}
+	operation, refused = selectOperation(rt, r.URL.Query())
+	if copied, ok := copies[operation]; ok && rt.level == levelObject && r.Header.Get(CopySourceHeader) != "" {
+		return copied, false
+	}
+	return operation, refused
+}
+
 // selectOperation is the operation rt serves for query, before a copy source
-// is considered.
-func selectOperation(rt route, query url.Values) string {
+// is considered, or refused when query names a sub-resource that rt serves
+// none for.
+func selectOperation(rt route, query url.Values) (operation string, refused bool) {
 	for _, sub := range subResources[rt] {
-		if !query.Has(sub.param) {
+		if !sub.present(query) {
 			continue
 		}
 		// list-type=2 is ListObjectsV2. Any other list-type is the original
 		// ListObjects, which is what S3 serves a bucket GET without one.
-		if sub.operation == "ListObjectsV2" && query.Get(sub.param) != "2" {
-			return "ListObjects"
+		if sub.operation == "ListObjectsV2" && query.Get("list-type") != "2" {
+			return "ListObjects", false
 		}
-		return sub.operation
+		return sub.operation, false
 	}
-	return plain[rt]
+	for param := range query {
+		if subResourcesAt[rt.level][param] {
+			return "", true
+		}
+	}
+	return plain[rt], false
 }
 
 // Operations lists every operation Operation can name.
@@ -259,6 +361,9 @@ func Operations() []string {
 		operations = append(operations, operation)
 	}
 	for _, operation := range copies {
+		operations = append(operations, operation)
+	}
+	for _, operation := range fixedPaths {
 		operations = append(operations, operation)
 	}
 	slices.Sort(operations)

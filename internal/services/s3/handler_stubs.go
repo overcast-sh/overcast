@@ -6,6 +6,9 @@ package s3
 // Convention: when an operation is implemented, move its method body out of this
 // file and into handler.go (or handler_<group>.go for large feature groups).
 // handler.go is the authoritative inventory of what actually works.
+//
+// It runs past the usual 400-line budget on purpose: it is a flat inventory
+// of one-line stubs, and splitting it would scatter that inventory.
 
 import (
 	"net/http"
@@ -87,9 +90,21 @@ func (h *Handler) ListObjects(w http.ResponseWriter, r *http.Request) {
 	h.ListObjectsV1(w, r)
 }
 
+// GetBucketAnalyticsConfiguration handles GET /{bucket}?analytics&id=
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketAnalyticsConfiguration.html
+func (h *Handler) GetBucketAnalyticsConfiguration(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
 // ListBucketAnalyticsConfigurations handles GET /{bucket}?analytics
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBucketAnalyticsConfigurations.html
 func (h *Handler) ListBucketAnalyticsConfigurations(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
+// GetBucketIntelligentTieringConfiguration handles GET /{bucket}?intelligent-tiering&id=
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketIntelligentTieringConfiguration.html
+func (h *Handler) GetBucketIntelligentTieringConfiguration(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
@@ -99,9 +114,21 @@ func (h *Handler) ListBucketIntelligentTieringConfigurations(w http.ResponseWrit
 	protocol.NotImplementedXML(w, r)
 }
 
+// GetBucketInventoryConfiguration handles GET /{bucket}?inventory&id=
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketInventoryConfiguration.html
+func (h *Handler) GetBucketInventoryConfiguration(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
 // ListBucketInventoryConfigurations handles GET /{bucket}?inventory
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBucketInventoryConfigurations.html
 func (h *Handler) ListBucketInventoryConfigurations(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
+// GetBucketMetricsConfiguration handles GET /{bucket}?metrics&id=
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketMetricsConfiguration.html
+func (h *Handler) GetBucketMetricsConfiguration(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
@@ -123,7 +150,7 @@ func (h *Handler) GetBucketAbac(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
-// GetBucketMetadataConfiguration handles GET /{bucket}?metadata
+// GetBucketMetadataConfiguration handles GET /{bucket}?metadataConfiguration
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketMetadataConfiguration.html
 func (h *Handler) GetBucketMetadataConfiguration(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
@@ -249,16 +276,21 @@ func (h *Handler) PutBucketAbac(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
-// CreateBucketMetadataConfiguration handles PUT /{bucket}?metadata
-// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucketMetadataConfiguration.html
-func (h *Handler) CreateBucketMetadataConfiguration(w http.ResponseWriter, r *http.Request) {
+// UpdateBucketMetadataInventoryTableConfiguration handles PUT /{bucket}?metadataInventoryTable
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_UpdateBucketMetadataInventoryTableConfiguration.html
+func (h *Handler) UpdateBucketMetadataInventoryTableConfiguration(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
-// UpdateBucketMetadataTableConfiguration handles PUT /{bucket}?metadataTable
-// Covers UpdateBucketMetadataInventoryTableConfiguration and UpdateBucketMetadataJournalTableConfiguration.
-// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_UpdateBucketMetadataInventoryTableConfiguration.html
-func (h *Handler) UpdateBucketMetadataTableConfiguration(w http.ResponseWriter, r *http.Request) {
+// UpdateBucketMetadataJournalTableConfiguration handles PUT /{bucket}?metadataJournalTable
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_UpdateBucketMetadataJournalTableConfiguration.html
+func (h *Handler) UpdateBucketMetadataJournalTableConfiguration(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
+// UpdateBucketMetadataAnnotationTableConfiguration handles PUT /{bucket}?metadataAnnotationTable
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_UpdateBucketMetadataAnnotationTableConfiguration.html
+func (h *Handler) UpdateBucketMetadataAnnotationTableConfiguration(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
@@ -327,7 +359,7 @@ func (h *Handler) DeletePublicAccessBlock(w http.ResponseWriter, r *http.Request
 	protocol.NotImplementedXML(w, r)
 }
 
-// DeleteBucketMetadataConfiguration handles DELETE /{bucket}?metadata
+// DeleteBucketMetadataConfiguration handles DELETE /{bucket}?metadataConfiguration
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucketMetadataConfiguration.html
 func (h *Handler) DeleteBucketMetadataConfiguration(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
@@ -340,6 +372,12 @@ func (h *Handler) DeleteBucketMetadataTableConfiguration(w http.ResponseWriter, 
 }
 
 // ---- Bucket POST stubs -----------------------------------------------------
+
+// CreateBucketMetadataConfiguration handles POST /{bucket}?metadataConfiguration
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucketMetadataConfiguration.html
+func (h *Handler) CreateBucketMetadataConfiguration(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
 
 // CreateBucketMetadataTableConfiguration handles POST /{bucket}?metadataTable
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucketMetadataTableConfiguration.html
@@ -379,6 +417,18 @@ func (h *Handler) GetObjectTorrent(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
+// GetObjectAnnotation handles GET /{bucket}/{key}?annotation&annotationName=
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectAnnotation.html
+func (h *Handler) GetObjectAnnotation(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
+// ListObjectAnnotations handles GET /{bucket}/{key}?annotation
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectAnnotations.html
+func (h *Handler) ListObjectAnnotations(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
 // ---- Object PUT stubs ------------------------------------------------------
 
 // PutObjectAcl handles PUT /{bucket}/{key}?acl
@@ -399,7 +449,7 @@ func (h *Handler) PutObjectRetention(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
-// RenameObject handles PUT /{bucket}/{key}?rename
+// RenameObject handles PUT /{bucket}/{key}?renameObject
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_RenameObject.html
 func (h *Handler) RenameObject(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
@@ -411,6 +461,12 @@ func (h *Handler) UpdateObjectEncryption(w http.ResponseWriter, r *http.Request)
 	protocol.NotImplementedXML(w, r)
 }
 
+// PutObjectAnnotation handles PUT /{bucket}/{key}?annotation
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObjectAnnotation.html
+func (h *Handler) PutObjectAnnotation(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
+
 // UploadPartCopy handles PUT /{bucket}/{key}?partNumber=N with x-amz-copy-source header.
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPartCopy.html
 func (h *Handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
@@ -418,6 +474,12 @@ func (h *Handler) UploadPartCopy(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---- Object DELETE stubs ---------------------------------------------------
+
+// DeleteObjectAnnotation handles DELETE /{bucket}/{key}?annotation
+// AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjectAnnotation.html
+func (h *Handler) DeleteObjectAnnotation(w http.ResponseWriter, r *http.Request) {
+	protocol.NotImplementedXML(w, r)
+}
 
 // ---- Object POST stubs -----------------------------------------------------
 
@@ -433,7 +495,7 @@ func (h *Handler) SelectObjectContent(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
 }
 
-// WriteGetObjectResponse handles POST /{bucket}/{key}?writeGetObjectResponse
+// WriteGetObjectResponse handles POST /WriteGetObjectResponse
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_WriteGetObjectResponse.html
 func (h *Handler) WriteGetObjectResponse(w http.ResponseWriter, r *http.Request) {
 	protocol.NotImplementedXML(w, r)
