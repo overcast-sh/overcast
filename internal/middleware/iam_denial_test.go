@@ -24,7 +24,7 @@ import (
 
 // denyUnsigned sends r unsigned through IAMEnforce, which refuses it before
 // any policy is read, and returns the refusal.
-func denyUnsigned(t *testing.T, r *http.Request, queries QueryRouter) *httptest.ResponseRecorder {
+func denyUnsigned(t *testing.T, r *http.Request, queries RequestRouter) *httptest.ResponseRecorder {
 	t.Helper()
 	served := false
 	h := IAMEnforce(true, nil, zap.NewNop(), queries)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -101,7 +101,7 @@ func TestIAMDenial_awsQuery(t *testing.T) {
 			if err := r.ParseForm(); err != nil {
 				t.Fatal(err)
 			}
-			queries := stubQueryRouter{route: QueryRoute{Service: tc.service, Action: tc.action}, isQuery: true}
+			queries := stubRouter{route: QueryRoute{Service: tc.service, Action: tc.action}, isQuery: true}
 
 			// When: IAM denies it
 			rec := denyUnsigned(t, r, queries)
@@ -155,7 +155,7 @@ func TestQueryDenialCodes_matchTheModels(t *testing.T) {
 }
 
 func TestIAMDenial_awsQueryNoRouterResolved(t *testing.T) {
-	// Given: an SNS Query call, and no QueryRouter to resolve it
+	// Given: an SNS Query call, and no RequestRouter to resolve it
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("Action=ListTopics&Version=2010-03-31"))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -177,7 +177,7 @@ func TestIAMDenial_ec2Query(t *testing.T) {
 	if err := r.ParseForm(); err != nil {
 		t.Fatal(err)
 	}
-	queries := stubQueryRouter{route: QueryRoute{Service: "ec2", Action: "DescribeInstances"}, isQuery: true}
+	queries := stubRouter{route: QueryRoute{Service: "ec2", Action: "DescribeInstances"}, isQuery: true}
 
 	// When: IAM denies it
 	rec := denyUnsigned(t, r, queries)

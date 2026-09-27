@@ -34,7 +34,7 @@ var queryDenialCodes = map[string]string{
 // (#2259). denial names the principal, action, resource and policy the
 // message reports; it is nil when no policy decided the denial.
 func writeIAMAccessDenied(w http.ResponseWriter, r *http.Request, op iamOperation, denial *iampolicy.Denial) {
-	served := requestProtocol(r, op.service, op.query)
+	served := op.servedProtocol(r)
 	serviceutil.WriteError(w, r, served.errors, iamAccessDeniedError(served, op.service, denial))
 }
 

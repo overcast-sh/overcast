@@ -25,11 +25,13 @@ var iamActionsNeedingNoPermission = map[string]struct{}{
 // whatever its policies say. Three things must hold:
 //
 //   - op's action is one of iamActionsNeedingNoPermission;
-//   - the router serves the request as that Query call (op.query). Off the
-//     Query path the action is read from the request's own content under the
-//     service its credential scope names, which need not be the operation the
-//     router serves: a PUT /bucket?Action=GetCallerIdentity signed for sts is
-//     served as S3, and must not borrow STS's exemption;
+//   - the router serves the request as that Query call (op.query). The router
+//     names the operation of a Query call and of a request its REST fallback
+//     serves, but one a service's own route serves is still read from the
+//     request's content under the service its credential scope names, which
+//     need not be the operation served: GET /clusters?Action=GetCallerIdentity
+//     signed for sts is EKS's ListClusters, and must not borrow STS's
+//     exemption;
 //   - the access key names a principal. AWS refuses a key it does not know
 //     before it authorizes anything, so an unknown key stays denied.
 func iamServedWithoutPermission(op iamOperation, principalARN string) bool {

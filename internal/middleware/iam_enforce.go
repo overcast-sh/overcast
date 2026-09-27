@@ -17,6 +17,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/overcast-sh/overcast/internal/awsapi"
 	"github.com/overcast-sh/overcast/internal/iampolicy"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/state"
@@ -114,10 +115,10 @@ func (c *iamEnforceCache) store(generation uint64, accessKeyID string, entry *ia
 
 // IAMEnforce enforces opt-in IAM authorization.
 //
-// queries is the router's AWS Query dispatch, which names the operation a
-// Query request is served as. A nil queries is a router that serves no Query
-// traffic, and every request is then classified from its own content.
-func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryRouter) func(http.Handler) http.Handler {
+// router is the router's dispatch, which names the operation a request is
+// served as. A nil router serves no Query traffic and has no REST fallback,
+// and every request is then classified from its own content.
+func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router RequestRouter) func(http.Handler) http.Handler {
 	cache := &iamEnforceCache{}
 
 	return func(next http.Handler) http.Handler {
@@ -127,7 +128,7 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryR
 				return
 			}
 
-			op, err := requestIAMOperation(w, r, queries)
+			op, err := requestIAMOperation(w, r, router)
 			if err != nil {
 				// The router refuses a Query form it cannot parse with this
 				// error, and a form parsed here cannot be parsed there again.
@@ -326,34 +327,82 @@ type iamOperation struct {
 	// whose clients read an error only in a Query XML envelope, whatever
 	// other protocol the serving service also answers on.
 	query bool
+	// rest is set when the router's REST fallback serves the request, by its
+	// method and path alone.
+	rest bool
 }
 
 // requestIAMOperation names the operation r is served as.
 //
-// A request the router dispatches as AWS Query is named by queries, from the
-// same Version and Action resolution the router serves it by, and never by its
-// credential scope: the two name different services whenever a caller signs
-// for one service and calls another's Action (#2229). Everything else is
-// classified from its own content by detectService.
-func requestIAMOperation(w http.ResponseWriter, r *http.Request, queries QueryRouter) (iamOperation, error) {
-	if queries != nil {
-		route, isQuery, err := queries.RouteQuery(w, r)
+// It asks the router first, because the router serves a request by signals
+// its content and credential scope need not agree with. A request the router
+// dispatches as AWS Query is named from the same Version and Action
+// resolution the router serves it by, never by its credential scope: the two
+// name different services whenever a caller signs for one service and calls
+// another's Action (#2229). A request the router's REST fallback serves is
+// named by the service the fallback serves it as (S3, for a path no other
+// service claims) whatever Action or credential scope it carries (#2271).
+// Everything else reaches a service's own route and is classified from its
+// own content by detectService.
+func requestIAMOperation(w http.ResponseWriter, r *http.Request, router RequestRouter) (iamOperation, error) {
+	if router != nil {
+		route, isQuery, err := router.RouteQuery(w, r)
 		if err != nil || isQuery {
 			return queryIAMOperation(route), err
+		}
+		if route, isFallback := router.RouteREST(r); isFallback {
+			return restIAMOperation(r, route), nil
 		}
 	}
 	svc := detectService(r)
 	return iamOperation{service: svc, action: requestIAMAction(r, svc)}, nil
 }
 
+// servedProtocol names the wire protocol r is served over as op. The REST
+// fallback serves by method and path alone, so a request it serves is read
+// only for its REST binding: an Action and Version in its query string do not
+// make an S3 CreateBucket a Query call.
+func (op iamOperation) servedProtocol(r *http.Request) servedProtocol {
+	switch {
+	case op.query:
+		return requestProtocol(r, op.service, true)
+	case op.rest:
+		return restProtocol(r, op.service)
+	}
+	return unroutedProtocol(r, op.service)
+}
+
 // queryIAMOperation names the operation a routed Query request is served as.
 // A route no service owns serves no operation, so it names none.
 func queryIAMOperation(route QueryRoute) iamOperation {
-	op := iamOperation{service: route.Service, query: true}
-	if route.Service != "" && route.Action != "" {
-		op.action = iamActionPrefix(route.Service) + ":" + route.Action
+	return iamOperation{service: route.Service, action: iamAction(route.Service, route.Action), query: true}
+}
+
+// restIAMOperation names the operation the router's REST fallback serves r
+// as. The fallback serves by method and path alone, so neither an Action nor
+// an X-Amz-Target on the request names it. A refused request is served no
+// operation, so it names none.
+func restIAMOperation(r *http.Request, route RESTRoute) iamOperation {
+	op := iamOperation{service: restFallbackService(r, route), rest: true}
+	if route.Outcome != RESTScopeMismatch {
+		op.action = pathIAMAction(r, op.service)
 	}
 	return op
+}
+
+// restFallbackService is the key of the service the REST fallback serves r
+// as: S3, or the service whose modeled binding answers the caller. A binding
+// several services share, or a root catch-all, names no service, and the
+// router then answers as the one the caller's credential scope names.
+func restFallbackService(r *http.Request, route RESTRoute) string {
+	switch {
+	case route.Outcome == RESTServedByS3:
+		return "s3"
+	case route.Claim.Service != "":
+		return middlewareServiceKey(route.Claim.Service)
+	default:
+		return serviceKeyFromAuthCredential(r)
+	}
 }
 
 // requestIAMAction names the IAM action a request to svc invokes, as
@@ -365,45 +414,64 @@ func queryIAMOperation(route QueryRoute) iamOperation {
 // evaluated against a policy the user wrote from the AWS documentation, so it
 // has to be the name that documentation gives — see iamActionPrefix.
 func requestIAMAction(r *http.Request, svc string) string {
-	if svc == "" || svc == "internal" || svc == "metrics" || svc == "events" {
+	if svc == "lambda" {
+		if action := pathIAMAction(r, svc); action != "" {
+			return action
+		}
+	}
+	if op := wireIAMOperation(r, svc); op != "" {
+		return iamAction(svc, op)
+	}
+	return iamAction(svc, detectOperationForService(r, svc))
+}
+
+// pathIAMAction names the IAM action of the operation r's method and path
+// select for svc.
+func pathIAMAction(r *http.Request, svc string) string {
+	if svc == "lambda" {
+		return iamAction(svc, requestLambdaIAMOperation(r))
+	}
+	return iamAction(svc, operationWithoutTarget(r, svc))
+}
+
+// wireIAMOperation names the operation a request's protocol names it by: an
+// AWS Query Action, or an X-Amz-Target.
+//
+// An Action is read only for a service an AWS Query call can address. No
+// other protocol names an operation by one, so on a request to any other
+// service it is a query parameter like any other: reading it authorised
+// GET /clusters?Action=DeleteCluster as a DeleteCluster EKS never served.
+func wireIAMOperation(r *http.Request, svc string) string {
+	if awsapi.AnswersQuery(awsapiServiceKey(svc)) {
+		if action := strings.TrimSpace(r.URL.Query().Get("Action")); action != "" {
+			return action
+		}
+		if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
+			// Preserving the body matters here: enforcement runs ahead of
+			// routing and this content type is what a bare HTTP client sends
+			// by default, so a plain ParseForm would eat an S3 PutObject
+			// payload whenever IAM enforcement is switched on.
+			_ = protocol.ParseFormPreservingBody(r)
+			if action := strings.TrimSpace(r.Form.Get("Action")); action != "" {
+				return action
+			}
+		}
+	}
+	target := strings.TrimSpace(r.Header.Get("X-Amz-Target"))
+	if idx := strings.LastIndex(target, "."); idx >= 0 && idx+1 < len(target) {
+		target = target[idx+1:]
+	}
+	return target
+}
+
+// iamAction is op's IAM action for svc, "<prefix>:<Op>", or "" when there is
+// no operation or svc is not a service IAM authorises.
+func iamAction(svc, op string) string {
+	op = strings.TrimSpace(op)
+	if op == "" || svc == "" || svc == "internal" || svc == "metrics" || svc == "events" {
 		return ""
 	}
-	prefix := iamActionPrefix(svc)
-	if svc == "lambda" {
-		if op := requestLambdaIAMOperation(r); op != "" {
-			return prefix + ":" + op
-		}
-	}
-
-	if action := strings.TrimSpace(r.URL.Query().Get("Action")); action != "" {
-		return prefix + ":" + action
-	}
-	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
-		// Preserving the body matters here: enforcement runs ahead of routing
-		// and this content type is what a bare HTTP client sends by default,
-		// so a plain ParseForm would eat an S3 PutObject payload whenever IAM
-		// enforcement is switched on.
-		_ = protocol.ParseFormPreservingBody(r)
-		if action := strings.TrimSpace(r.Form.Get("Action")); action != "" {
-			return prefix + ":" + action
-		}
-	}
-
-	if target := strings.TrimSpace(r.Header.Get("X-Amz-Target")); target != "" {
-		op := target
-		if idx := strings.LastIndex(op, "."); idx >= 0 && idx+1 < len(op) {
-			op = op[idx+1:]
-		}
-		if op != "" {
-			return prefix + ":" + op
-		}
-	}
-
-	if op := strings.TrimSpace(detectOperationForService(r, svc)); op != "" {
-		return prefix + ":" + op
-	}
-
-	return ""
+	return iamActionPrefix(svc) + ":" + op
 }
 
 // requestIAMResource names the resource op acts on, as an ARN or "*".
@@ -1034,7 +1102,7 @@ func newIAMRequestFieldResolver() *iamRequestFieldResolver {
 func (f *iamRequestFieldResolver) field(r *http.Request, key string) string {
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/x-www-form-urlencoded") {
 		if !f.formParsed {
-			// Body-preserving for the same reason as requestIAMAction above.
+			// Body-preserving for the same reason as wireIAMOperation above.
 			_ = protocol.ParseFormPreservingBody(r)
 			f.formParsed = true
 		}

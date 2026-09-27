@@ -283,7 +283,7 @@ func detectService(r *http.Request, body ...[]byte) string {
 	// Query surface sharing an API version with DocumentDB and Neptune.
 	//
 	// This labels a request; it does not authorise one. IAM enforcement names
-	// a Query call by the router's own dispatch (QueryRouter), because only
+	// a Query call by the router's own dispatch (RequestRouter), because only
 	// the router knows which service owns an Action the models cannot
 	// attribute — one sent with no Version, above all.
 	if claim, ok := queryClaimFromBody(body...); ok && claim.Service != "" {
@@ -628,7 +628,14 @@ func detectOperationForService(r *http.Request, svc string, body ...[]byte) stri
 			return claim.Operation
 		}
 	}
+	return operationWithoutTarget(r, svc, body...)
+}
 
+// operationWithoutTarget is detectOperationForService from step 2 on: every
+// signal it names an operation by except X-Amz-Target. The router dispatches a
+// target only on POST /, so a request its REST fallback serves by method and
+// path is named without one (#2271).
+func operationWithoutTarget(r *http.Request, svc string, body ...[]byte) string {
 	// 2. x-id query param (S3 SDK sends this for several operations)
 	if xid := rawQueryValue(r.URL.RawQuery, "x-id"); xid != "" {
 		return xid

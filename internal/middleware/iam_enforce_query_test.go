@@ -12,22 +12,29 @@ import (
 	"github.com/overcast-sh/overcast/internal/state"
 )
 
-// stubQueryRouter answers RouteQuery with a fixed decision, standing in for
-// the router's Query dispatch.
-type stubQueryRouter struct {
+// stubRouter answers RouteQuery and RouteREST with fixed decisions, standing
+// in for the router's dispatch.
+type stubRouter struct {
 	route   QueryRoute
 	isQuery bool
 	err     error
+
+	rest       RESTRoute
+	isFallback bool
 }
 
-func (s stubQueryRouter) RouteQuery(http.ResponseWriter, *http.Request) (QueryRoute, bool, error) {
+func (s stubRouter) RouteQuery(http.ResponseWriter, *http.Request) (QueryRoute, bool, error) {
 	return s.route, s.isQuery, s.err
+}
+
+func (s stubRouter) RouteREST(*http.Request) (RESTRoute, bool) {
+	return s.rest, s.isFallback
 }
 
 // serveQueryScoped sends an IAM CreateUser Query call signed for s3, by a
 // principal allowed s3:* only, through IAMEnforce with queries as the router's
 // Query dispatch. It reports the response and whether the request was served.
-func serveQueryScoped(t *testing.T, queries QueryRouter) (*httptest.ResponseRecorder, bool) {
+func serveQueryScoped(t *testing.T, queries RequestRouter) (*httptest.ResponseRecorder, bool) {
 	t.Helper()
 	st := state.NewMemoryStore()
 	seedIAMUserWithPolicies(t, st, "s3-only", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:*","Resource":"*"}]}`}, nil)
@@ -46,7 +53,7 @@ func serveQueryScoped(t *testing.T, queries QueryRouter) (*httptest.ResponseReco
 
 func TestIAMEnforce_queryRouteNamesTheAction(t *testing.T) {
 	// Given: the router serves the call as IAM CreateUser
-	queries := stubQueryRouter{route: QueryRoute{Service: "iam", Action: "CreateUser"}, isQuery: true}
+	queries := stubRouter{route: QueryRoute{Service: "iam", Action: "CreateUser"}, isQuery: true}
 
 	// When: it arrives signed for s3 from an s3-only principal
 	rec, served := serveQueryScoped(t, queries)
@@ -59,7 +66,7 @@ func TestIAMEnforce_queryRouteNamesTheAction(t *testing.T) {
 
 func TestIAMEnforce_unownedQueryRouteIsNotGated(t *testing.T) {
 	// Given: the router serves no operation for the call; it answers 501 itself
-	queries := stubQueryRouter{route: QueryRoute{Action: "CreateUser"}, isQuery: true}
+	queries := stubRouter{route: QueryRoute{Action: "CreateUser"}, isQuery: true}
 
 	// When: it arrives
 	_, served := serveQueryScoped(t, queries)
@@ -72,7 +79,7 @@ func TestIAMEnforce_unownedQueryRouteIsNotGated(t *testing.T) {
 
 func TestIAMEnforce_queryFormTheRouterRefuses(t *testing.T) {
 	// Given: the router cannot parse the call's form
-	queries := stubQueryRouter{isQuery: true, err: &http.MaxBytesError{Limit: protocol.MaxQueryRequestBody}}
+	queries := stubRouter{isQuery: true, err: &http.MaxBytesError{Limit: protocol.MaxQueryRequestBody}}
 
 	// When: it arrives
 	rec, served := serveQueryScoped(t, queries)
@@ -85,7 +92,7 @@ func TestIAMEnforce_queryFormTheRouterRefuses(t *testing.T) {
 
 func TestIAMEnforce_requestTheRouterDoesNotServeAsQuery(t *testing.T) {
 	// Given: a router that does not dispatch the request as Query
-	queries := stubQueryRouter{}
+	queries := stubRouter{}
 
 	// When: it arrives signed for s3 from an s3-only principal
 	_, served := serveQueryScoped(t, queries)

@@ -53,6 +53,26 @@ func TestRegistryClaimQuery_unknownOperation(t *testing.T) {
 	}
 }
 
+func TestAnswersQuery(t *testing.T) {
+	for service, want := range map[string]bool{
+		// awsQuery, ec2Query, and awsJson1_0 with awsQuery compatibility.
+		"iam": true, "sts": true, "ec2": true, "sqs": true,
+		// Declared only through (Version, Action) pairs it shares with RDS.
+		"neptune": true,
+		// REST and JSON services, whose callers send no Action.
+		"s3": false, "eks": false, "lambda": false, "dynamodb": false,
+		"": false,
+	} {
+		// When: the key is looked up
+		got := AnswersQuery(service)
+
+		// Then: it is true exactly for the services an Action can address
+		if got != want {
+			t.Errorf("AnswersQuery(%q) = %v, want %v", service, got, want)
+		}
+	}
+}
+
 func TestRegistryClaimREST_modeledOperation(t *testing.T) {
 	// Given: the immutable REST trie generated from the pinned model corpus.
 	registry := NewRegistry()

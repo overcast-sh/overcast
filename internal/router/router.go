@@ -163,12 +163,15 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// Serve starts, not before this chain is built.
 	var hostRoutes []middleware.HostRouteRow
 	// root is the dispatch of POST / and GET /?Action=, filled in by the
-	// service registration loop. IAM enforcement reads its Query decisions, so
-	// a Query call is authorised as the operation it is served as (#2229).
+	// service registration loop, and paths the handlers that choose between a
+	// service and the REST fallback, registered below. IAM enforcement reads
+	// the decisions of both, so a request is authorised as the operation it is
+	// served as (#2229, #2271).
 	operationRegistry := awsapi.NewRegistry()
 	root := &rootDispatch{registry: operationRegistry}
+	paths := newPathDispatch(r)
 	chain := requestChain{cfg: cfg, store: store, logger: logger, clk: clk, traceBuf: traceBuf, bus: &bus, hostRoutes: &hostRoutes}
-	r.Use(chain.api(root)...)
+	r.Use(chain.api(requestRouting{root, paths})...)
 	// queryGetMiddleware must be registered here, before any route is added
 	// (chi requirement). root is read at request time, so the service loop
 	// has populated it by then.
@@ -495,6 +498,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// fallback below asks the generated REST registry about otherwise-unmatched
 	// paths before delegating to these routes.
 	s3Router := chi.NewRouter()
+	fallback := &restFallback{registry: operationRegistry, s3: s3Router}
 
 	// Sub-routers the main router picks at request time. See dispatchMount for
 	// why they have to be recorded rather than discovered by walking r.
@@ -1042,8 +1046,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		dispatchMounts = recordDispatchMount(dispatchMounts, "/v2/apis", "appsync", appsyncEventsRouter)
 		if apigwV2Router != nil || appsyncEventsRouter != nil {
 			r.Route("/v2/apis", func(sub chi.Router) {
-				sub.HandleFunc("/*", v2APIsDispatch(apigwV2Router, appsyncEventsRouter))
-				sub.HandleFunc("/", v2APIsDispatch(apigwV2Router, appsyncEventsRouter))
+				sub.Handle("/*", v2APIsDispatch(apigwV2Router, appsyncEventsRouter))
+				sub.Handle("/", v2APIsDispatch(apigwV2Router, appsyncEventsRouter))
 			})
 		}
 	}
@@ -1056,7 +1060,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// and anything a dispatcher does not give to a service, to S3 on the whole
 	// request path (#2098). /v2/apis and /v1/tags need none of it: "v1" and
 	// "v2" are too short to be bucket names.
-	shared := newSharedRoots(r, operationRegistry, s3Router)
+	shared := newSharedRoots(paths, fallback)
 
 	// ---- /applications service dispatch ------------------------------------
 	// AppConfig and Service Catalog AppRegistry both model the /applications
@@ -1107,14 +1111,14 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 			// mount registers "/*" alone, which also matches the bare root; a
 			// separate "/" would register "/namespaces", "/tables" and "/tag",
 			// paths no model binds (only their children are operations).
-			shared.mount(root, signingNameDispatch("s3tables", sub, shared.s3))
+			shared.mount(root, signingNameDispatch{signingName: "s3tables", owner: sub, fallback: shared.s3})
 		}
 		// The Iceberg REST catalog, which AWS serves under /iceberg on the
 		// same endpoint. "iceberg" is a legal bucket name too, so it is
 		// dispatched the same way. It is no model's binding, so it is not
 		// recorded as a dispatch mount; its unsigned twin lives under
 		// /_overcast/ (see s3tables.Service.RegisterRoutes).
-		shared.mount(s3tables.IcebergRoot, signingNameDispatch("s3tables", s3tablesSvc.IcebergRouter(), shared.s3))
+		shared.mount(s3tables.IcebergRoot, signingNameDispatch{signingName: "s3tables", owner: s3tablesSvc.IcebergRouter(), fallback: shared.s3})
 	}
 
 	// ---- /v1/tags service dispatch -----------------------------------------
@@ -1141,7 +1145,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		}
 		if len(tagRouters) > 0 {
 			r.Route("/v1/tags", func(sub chi.Router) {
-				sub.HandleFunc("/*", tagsDispatch(tagRouters, nil))
+				sub.Handle("/*", tagsDispatch{routers: tagRouters})
 			})
 		}
 	}
@@ -1205,7 +1209,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "backup", routes)
 		}
 		if len(tagRouters) > 0 {
-			shared.mount("/tags", tagsDispatch(tagRouters, shared.s3))
+			shared.mount("/tags", tagsDispatch{routers: tagRouters, fallback: shared.s3})
 		}
 	}
 
@@ -1263,12 +1267,15 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// generated registry also owns modeled operations when no configured service
 	// dispatcher does, so this route is present even in a minimal S3-only setup.
 	r.Post("/", root.targetDispatch)
-	r.Post("/service/{service}/operation/{operation}", smithyRPCDispatch(smithyDispatchers, operationRegistry, s3Router))
+	paths.handle(http.MethodPost, "/service/{service}/operation/{operation}", smithyRPCRoute{
+		rpc: smithyRPCDispatch(smithyDispatchers, operationRegistry),
+		s3:  s3Direct{s3Router},
+	})
 	// SigV4's service scope disambiguates the small number of modeled REST root
 	// bindings from S3 ListBuckets; unsigned and S3-signed root requests retain
 	// the established S3 behavior.
-	r.Get("/", restFallback(operationRegistry, s3Router))
-	r.HandleFunc("/*", restFallback(operationRegistry, s3Router))
+	paths.handle(http.MethodGet, "/", fallback)
+	paths.handle("", "/*", fallback)
 
 	r.NotFound(notFoundHandler)
 
@@ -1297,7 +1304,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		cleanups = append(cleanups, mon.Stop)
 	}
 
-	return withDispatchMounts(r, dispatchMounts, routeOwners.ownersByKey()), preShutdown, func(ctx context.Context) {
+	return withDispatchMounts(r, dispatchMounts, routeOwners.ownersByKey(), paths), preShutdown, func(ctx context.Context) {
 			// Stop background service resources (e.g. Runtime API long-poll server).
 			for _, st := range stoppers {
 				t0 := time.Now()
@@ -1561,13 +1568,27 @@ func smithyRPCServiceFor(dispatchers map[string]*smithyRPCService, serviceShape 
 	return nil
 }
 
-func smithyRPCDispatch(dispatchers map[string]*smithyRPCService, operationRegistry *awsapi.Registry, s3Router http.Handler) http.HandlerFunc {
+// smithyRPCRoute answers the Smithy RPC v2 URI, /service/{service}/operation/{operation}.
+// It is an RPC v2 call only when a Smithy-Protocol header says so; without one
+// the same path is an S3 object key in a bucket named "service", and S3's own
+// router serves it.
+type smithyRPCRoute struct {
+	rpc http.Handler
+	s3  s3Direct
+}
+
+func (d smithyRPCRoute) choose(r *http.Request, _ *chi.Context) http.Handler {
+	if strings.TrimSpace(r.Header.Get("Smithy-Protocol")) == "" {
+		return d.s3
+	}
+	return d.rpc
+}
+
+func (d smithyRPCRoute) ServeHTTP(w http.ResponseWriter, r *http.Request) { serveChoice(w, r, d) }
+
+func smithyRPCDispatch(dispatchers map[string]*smithyRPCService, operationRegistry *awsapi.Registry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		protocolHeader := strings.TrimSpace(r.Header.Get("Smithy-Protocol"))
-		if protocolHeader == "" {
-			s3Router.ServeHTTP(w, r)
-			return
-		}
 		var wireProtocol awsapi.Protocol
 		var wireCodec codec.Codec
 		switch {
@@ -1709,45 +1730,29 @@ func claimScopeMismatchesCaller(claim awsapi.Claim, credentialService string) bo
 	return claim.SigningName != "" && awsapi.IsSigningName(credentialService)
 }
 
-// restClaimOutcome classifies what a request positively identified against a
-// modeled REST binding: no claim at all, a claim that answers the caller, or
-// a claim the caller's own credential scope rules out for a different real
-// service.
-type restClaimOutcome uint8
-
-const (
-	// restClaimNone: no modeled binding answers this request; S3 keeps the path.
-	restClaimNone restClaimOutcome = iota
-	// restClaimAnswers: the modeled binding answers this caller.
-	restClaimAnswers
-	// restClaimScopeMismatch: the binding is real, but the caller's credential
-	// scope names a different real AWS service. AWS answers this with a
-	// scoped-credential error rather than routing to any service's handler.
-	restClaimScopeMismatch
-)
-
 // restClaimFor classifies a request against the modeled REST bindings and the
-// caller's SigV4 credential scope. See restClaimOutcome for what each result
-// means; restFallback decides what to write for each.
-func restClaimFor(operationRegistry *awsapi.Registry, r *http.Request) (awsapi.Claim, restClaimOutcome) {
+// caller's SigV4 credential scope: how the REST fallback serves it. See
+// middleware.RESTOutcome for what each result means; restFallback decides
+// what to write for each, and IAM enforcement what to authorise.
+func restClaimFor(operationRegistry *awsapi.Registry, r *http.Request) middleware.RESTRoute {
 	credentialService := middleware.ServiceFromCredential(r)
 	if !addressesNonS3(r, credentialService) {
-		return awsapi.Claim{}, restClaimNone
+		return middleware.RESTRoute{Outcome: middleware.RESTServedByS3}
 	}
 	claim, ok := claimModeledPath(operationRegistry, r)
 	if !ok {
-		return awsapi.Claim{}, restClaimNone
+		return middleware.RESTRoute{Outcome: middleware.RESTServedByS3}
 	}
 	if claimAnswersCaller(claim, credentialService) {
-		return claim, restClaimAnswers
+		return middleware.RESTRoute{Outcome: middleware.RESTNotImplemented, Claim: claim}
 	}
 	if claim.CatchAll {
 		return callerClaim(credentialService)
 	}
 	if claimScopeMismatchesCaller(claim, credentialService) {
-		return claim, restClaimScopeMismatch
+		return middleware.RESTRoute{Outcome: middleware.RESTScopeMismatch, Claim: claim}
 	}
-	return awsapi.Claim{}, restClaimNone
+	return middleware.RESTRoute{Outcome: middleware.RESTServedByS3}
 }
 
 // callerClaim classifies a request that only a root catch-all binding matched
@@ -1765,12 +1770,15 @@ func restClaimFor(operationRegistry *awsapi.Registry, r *http.Request) (awsapi.C
 // so the request gets that service's generated 501, in the envelope its
 // protocol expects. A scope no REST model declares keeps today's S3 fallback,
 // as claimScopeMismatchesCaller does for the same reason.
-func callerClaim(credentialService string) (awsapi.Claim, restClaimOutcome) {
+func callerClaim(credentialService string) middleware.RESTRoute {
 	profile, ok := awsapi.SigningNameErrorProfile(credentialService)
 	if !ok {
-		return awsapi.Claim{}, restClaimNone
+		return middleware.RESTRoute{Outcome: middleware.RESTServedByS3}
 	}
-	return awsapi.Claim{SigningName: credentialService, ErrorProfile: profile}, restClaimAnswers
+	return middleware.RESTRoute{
+		Outcome: middleware.RESTNotImplemented,
+		Claim:   awsapi.Claim{SigningName: credentialService, ErrorProfile: profile},
+	}
 }
 
 // claimModeledPath walks the generated trie for a request, trying the escaped
@@ -1812,17 +1820,20 @@ func claimModeledPath(operationRegistry *awsapi.Registry, r *http.Request) (awsa
 // after every explicit service route, so a modeled binding reaches it only
 // when no implementation or disabled-service route claimed the request. S3 is
 // then the sole remaining legitimate catch-all.
-func restFallback(operationRegistry *awsapi.Registry, s3Router http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		claim, outcome := restClaimFor(operationRegistry, r)
-		switch outcome {
-		case restClaimAnswers:
-			writeNotImplemented(w, r, claim)
-		case restClaimScopeMismatch:
-			writeScopeMismatch(w, r, claim)
-		case restClaimNone:
-			s3Router.ServeHTTP(w, r)
-		}
+type restFallback struct {
+	registry *awsapi.Registry
+	s3       http.Handler
+}
+
+func (f *restFallback) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	route := restClaimFor(f.registry, r)
+	switch route.Outcome {
+	case middleware.RESTNotImplemented:
+		writeNotImplemented(w, r, route.Claim)
+	case middleware.RESTScopeMismatch:
+		writeScopeMismatch(w, r, route.Claim)
+	case middleware.RESTServedByS3:
+		f.s3.ServeHTTP(w, r)
 	}
 }
 
@@ -1854,8 +1865,8 @@ func writeScopeMismatch(w http.ResponseWriter, r *http.Request, claim awsapi.Cla
 // service name. If the credential scope indicates "appsync", the request is
 // routed to the AppSync Events API handler; otherwise it falls back to the
 // API Gateway v2 handler (the more commonly used service at this path).
-func v2APIsDispatch(apigwRouter, appsyncRouter http.Handler) http.HandlerFunc {
-	return signingNameDispatch("appsync", appsyncRouter, apigwRouter)
+func v2APIsDispatch(apigwRouter, appsyncRouter http.Handler) http.Handler {
+	return signingNameDispatch{signingName: "appsync", owner: appsyncRouter, fallback: apigwRouter}
 }
 
 // applicationsDispatch returns a handler that dispatches /applications
@@ -1866,53 +1877,53 @@ func v2APIsDispatch(apigwRouter, appsyncRouter http.Handler) http.HandlerFunc {
 // own "servicecatalog" scope, an unparseable scope, and unsigned traffic such
 // as the web UI's — goes to AppRegistry, which owned this path outright before
 // #854 and must keep answering the callers it already had.
-func applicationsDispatch(appconfigRouter, appregistryRouter http.Handler) http.HandlerFunc {
-	return signingNameDispatch("appconfig", appconfigRouter, appregistryRouter)
+func applicationsDispatch(appconfigRouter, appregistryRouter http.Handler) http.Handler {
+	return signingNameDispatch{signingName: "appconfig", owner: appconfigRouter, fallback: appregistryRouter}
 }
 
-// signingNameDispatch returns a handler that sends a request signed for
-// signingName to owner and every other request to fallback. It serves every
-// path two services share on one listener, where the credential scope is the
-// only evidence of which one the caller meant. A nil owner (its service not
-// registered) sends everything to fallback; a nil fallback answers 404.
-func signingNameDispatch(signingName string, owner, fallback http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if owner != nil && middleware.ServiceFromCredential(r) == signingName {
-			owner.ServeHTTP(w, r)
-			return
-		}
-		if fallback != nil {
-			fallback.ServeHTTP(w, r)
-			return
-		}
-		http.NotFound(w, r)
+// signingNameDispatch sends a request signed for signingName to owner and
+// every other request to fallback. It serves every path two services share on
+// one listener, where the credential scope is the only evidence of which one
+// the caller meant. A nil owner (its service not registered) sends everything
+// to fallback; a nil fallback answers 404.
+type signingNameDispatch struct {
+	signingName     string
+	owner, fallback http.Handler
+}
+
+func (d signingNameDispatch) choose(r *http.Request, _ *chi.Context) http.Handler {
+	if d.owner != nil && middleware.ServiceFromCredential(r) == d.signingName {
+		return d.owner
 	}
+	return d.fallback
 }
 
-// tagsDispatch returns a handler that dispatches tag-route requests
-// (/v1/tags/{resourceArn}, /tags/{resourceArn}) to whichever service's tag
-// router owns the resourceArn, as identified by protocol.ServiceFromARN.
+func (d signingNameDispatch) ServeHTTP(w http.ResponseWriter, r *http.Request) { serveChoice(w, r, d) }
+
+// tagsDispatch dispatches tag-route requests (/v1/tags/{resourceArn},
+// /tags/{resourceArn}) to whichever service's tag router owns the
+// resourceArn, as identified by protocol.ServiceFromARN.
 // A resourceArn that doesn't parse, or whose service isn't one of the given
 // routers, goes to fallback when one is provided — restFallback plays that
 // role on /tags, so a signed caller addressing a service whose tag operations
 // Overcast does not implement gets the generated 501 rather than a plausible
 // answer from a service it never addressed (#976) — and otherwise gets a 404,
 // so no service silently claims a request it doesn't recognize.
-func tagsDispatch(routers map[string]http.Handler, fallback http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		resourceArn := chi.URLParam(r, "*")
-		// AWS SDKs URL-encode the ARN in the path (e.g. ":" as "%3A").
-		if decoded, err := url.PathUnescape(resourceArn); err == nil {
-			resourceArn = decoded
-		}
-		if router, ok := routers[protocol.ServiceFromARN(resourceArn)]; ok {
-			router.ServeHTTP(w, r)
-			return
-		}
-		if fallback != nil {
-			fallback.ServeHTTP(w, r)
-			return
-		}
-		http.NotFound(w, r)
-	}
+type tagsDispatch struct {
+	routers  map[string]http.Handler
+	fallback http.Handler
 }
+
+func (d tagsDispatch) choose(_ *http.Request, rctx *chi.Context) http.Handler {
+	resourceArn := rctx.URLParam("*")
+	// AWS SDKs URL-encode the ARN in the path (e.g. ":" as "%3A").
+	if decoded, err := url.PathUnescape(resourceArn); err == nil {
+		resourceArn = decoded
+	}
+	if router, ok := d.routers[protocol.ServiceFromARN(resourceArn)]; ok {
+		return router
+	}
+	return d.fallback
+}
+
+func (d tagsDispatch) ServeHTTP(w http.ResponseWriter, r *http.Request) { serveChoice(w, r, d) }

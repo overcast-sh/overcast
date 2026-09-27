@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // ErrorProfile identifies the AWS error envelope a caller of an operation
@@ -162,6 +163,33 @@ func (r *Registry) ClaimQuery(version, action string) (Claim, bool) {
 		Ambiguous:    ambiguous,
 	}, true
 }
+
+// AnswersQuery reports whether the Overcast service key is one an AWS Query
+// call can address: the Query index ClaimQuery reads gives it an operation,
+// over awsQuery, ec2Query or awsQuery compatibility. Only those protocols name
+// an operation by an Action parameter, so for any other service an Action on
+// a request names nothing that serves it.
+func AnswersQuery(service string) bool {
+	return queryServices()[service]
+}
+
+// queryServices is AnswersQuery's index, built once on first use: every
+// service the Query index attributes an operation to, and every service
+// sharing a (Version, Action) pair the index declines to attribute.
+var queryServices = sync.OnceValue(func() map[string]bool {
+	services := make(map[string]bool)
+	for _, op := range queryOperations {
+		if op.ModelService != "" {
+			services[overcastService(op.ModelService)] = true
+		}
+	}
+	for _, collision := range queryCollisions {
+		for _, modelService := range collision.Services {
+			services[overcastService(modelService)] = true
+		}
+	}
+	return services
+})
 
 // ClaimRPC classifies a Smithy RPC v2 operation by the explicit service and
 // operation names carried in /service/{service}/operation/{operation}. The

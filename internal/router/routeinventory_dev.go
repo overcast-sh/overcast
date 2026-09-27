@@ -21,13 +21,16 @@ type inspectableMux struct {
 	// routeOwnerTracker in this file for why dispatched sub-routers do not
 	// need it (dispatchMount.Owner already names them).
 	owners map[string]string
+	// paths is the dispatch RouteREST resolves requests through, so a test
+	// can check it against the routes the mux actually serves.
+	paths *pathDispatch
 }
 
-// withDispatchMounts attaches the recorded mounts and direct-registration
-// ownership in dev builds so walkRegisteredRoutes can see the whole served
-// surface and who registered each part of it.
-func withDispatchMounts(r *chi.Mux, mounts []dispatchMount, owners map[string]string) http.Handler {
-	return &inspectableMux{Mux: r, mounts: mounts, owners: owners}
+// withDispatchMounts attaches the recorded mounts, direct-registration
+// ownership and path dispatch in dev builds so walkRegisteredRoutes can see
+// the whole served surface and who registered each part of it.
+func withDispatchMounts(r *chi.Mux, mounts []dispatchMount, owners map[string]string, paths *pathDispatch) http.Handler {
+	return &inspectableMux{Mux: r, mounts: mounts, owners: owners, paths: paths}
 }
 
 // registeredRoute is one method/pattern pair the router serves, attributed to
