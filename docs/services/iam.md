@@ -92,12 +92,18 @@ is signed:
   as `arn:aws:iam::<account>:oidc-provider/<issuer host and path>` or by the
   bare issuer name, such as `accounts.google.com`. An OAuth 2.0 access token
   names its provider in `ProviderId` instead.
-- Conditions can test `<provider>:sub` and `<provider>:aud`. `aud` holds the
-  token's `azp` claim when it has one.
+- Conditions can test `<provider>:sub`, `<provider>:aud` and
+  `sts:RoleSessionName`. `aud` holds the token's `azp` claim when it has one,
+  and the first entry of an `aud` list otherwise. An OAuth 2.0 token sets no
+  provider keys.
+- `<provider>:amr` and `accounts.google.com:oaud` are not set, and the
+  `ForAnyValue` operators Cognito identity pool roles use are not evaluated,
+  so such a trust policy refuses every caller.
 - A trust policy that does not allow the caller, or a role that does not exist,
   gets `AccessDenied` (403) with `Not authorized to perform
   sts:AssumeRoleWithWebIdentity`. A token that is not a JWT gets
-  `InvalidIdentityToken` (400).
+  `InvalidIdentityToken` (400), and a missing `RoleArn`, `RoleSessionName` or
+  `WebIdentityToken` gets `MissingParameter` (400).
 - The token is read, not verified: its signature, its expiry, and whether its
   issuer is a registered OIDC provider are not checked.
 

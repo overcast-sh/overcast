@@ -11,7 +11,7 @@ func (h *Handler) typedOps() map[string]op.Operation {
 		"GetSessionToken":           op.NewTyped[getSessionTokenReq, getSessionTokenResp]("GetSessionToken", h.getSessionTokenTyped),
 		"GetFederationToken":        op.NewTyped[getFederationTokenReq, getFederationTokenResp]("GetFederationToken", h.getFederationTokenTyped),
 		"AssumeRole":                op.NewTyped[assumeRoleReq, assumeRoleResp]("AssumeRole", h.assumeRoleTyped),
-		"AssumeRoleWithWebIdentity": op.NewTyped[assumeRoleReq, assumeRoleWithWebIdentityResp]("AssumeRoleWithWebIdentity", h.assumeRoleWithWebIdentityTyped),
+		"AssumeRoleWithWebIdentity": op.NewTyped[assumeRoleWithWebIdentityReq, assumeRoleWithWebIdentityResp]("AssumeRoleWithWebIdentity", h.assumeRoleWithWebIdentityTyped),
 	}
 }
 

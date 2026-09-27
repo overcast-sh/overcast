@@ -89,7 +89,7 @@ func TestAssumeRole_wireParity(t *testing.T) {
 	})
 
 	t.Run("AssumeRoleWithWebIdentity", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/?Action=AssumeRoleWithWebIdentity&RoleArn="+roleArn+"&RoleSessionName="+sessionName, nil)
+		req := httptest.NewRequest(http.MethodPost, "/?Action=AssumeRoleWithWebIdentity&RoleArn="+roleArn+"&RoleSessionName="+sessionName+"&WebIdentityToken=a.b.c", nil)
 		w := httptest.NewRecorder()
 		h.AssumeRoleWithWebIdentity(w, req)
 		var legacy struct {
@@ -107,7 +107,7 @@ func TestAssumeRole_wireParity(t *testing.T) {
 			t.Errorf("legacy AssumeRoleWithWebIdentity Arn = %q, want %q", legacyArn, wantArn)
 		}
 
-		resp, aerr := h.assumeRoleWithWebIdentityTyped(context.Background(), &assumeRoleReq{RoleArn: roleArn, RoleSessionName: sessionName})
+		resp, aerr := h.assumeRoleWithWebIdentityTyped(context.Background(), &assumeRoleWithWebIdentityReq{RoleArn: roleArn, RoleSessionName: sessionName, WebIdentityToken: "a.b.c"})
 		if aerr != nil {
 			t.Fatalf("assumeRoleWithWebIdentityTyped: %s", aerr.Message)
 		}
