@@ -95,7 +95,7 @@ var divergences = map[string]string{
 	"AbortMultipartUpload":    "selected by uploadId, a query member the model does not make a literal",
 	"CompleteMultipartUpload": "selected by uploadId, a query member the model does not make a literal",
 	"ListDirectoryBuckets":    "selected by directory-buckets; the model has only x-id",
-	// Overcast's routing differs from the model's binding (follow-up to #2284).
+	// Overcast's routing differs from the model's binding (#2286).
 	"GetBucketMetadataConfiguration":         "served on ?metadata; modeled on ?metadataConfiguration",
 	"CreateBucketMetadataConfiguration":      "served on PUT ?metadata; modeled on POST ?metadataConfiguration",
 	"DeleteBucketMetadataConfiguration":      "served on ?metadata; modeled on ?metadataConfiguration",
@@ -171,7 +171,7 @@ func TestOperations_matchTheModel(t *testing.T) {
 }
 
 // unrouted are the modeled S3 operations selected by a sub-resource that
-// Overcast's S3 does not route (follow-up to #2284). S3 serves each as the
+// Overcast's S3 does not route (#2286). S3 serves each as the
 // plain operation of its route, except the four Get*Configuration operations
 // the model tells from their List* counterparts by an id query member: S3
 // serves those as the List* operation, which AWS authorises by the same

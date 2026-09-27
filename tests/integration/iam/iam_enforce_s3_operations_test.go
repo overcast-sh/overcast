@@ -215,6 +215,34 @@ func TestIAMEnforceS3Operations_deleteObjectsAuthorisesEachKey(t *testing.T) {
 	}
 }
 
+func TestIAMEnforceS3Operations_oversizedDeleteObjectsDeletesNothing(t *testing.T) {
+	// Given: an object the principal is denied deleting, under an Allow on
+	// every other delete
+	srv := helpers.NewTestServer(t, helpers.WithEnforceIAM(true))
+	admin := seedBucketWithObject(t, srv, "guarded", "protected/x")
+	seedIAMPrincipal(t, srv, "pruner", `{"Version":"2012-10-17","Statement":[
+		{"Effect":"Allow","Action":"s3:DeleteObject","Resource":"*"},
+		{"Effect":"Deny","Action":"s3:DeleteObject","Resource":"arn:aws:s3:::guarded/protected/*"}]}`)
+
+	// When: it names the object in a DeleteObjects body padded past what S3
+	// reads of one
+	body := `<Delete><Object><Key>protected/x</Key></Object>` + strings.Repeat(" ", 5<<20) + `</Delete>`
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/guarded?delete", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	resp := doSigned(t, req, sigV4Auth("pruner", "s3"))
+	defer resp.Body.Close()
+
+	// Then: the request is refused, and the object stays
+	if resp.StatusCode == http.StatusOK {
+		t.Fatalf("status %d; want the oversized DeleteObjects refused", resp.StatusCode)
+	}
+	if _, err := admin.HeadObject(context.Background(), &s3.HeadObjectInput{Bucket: aws.String("guarded"), Key: aws.String("protected/x")}); err != nil {
+		t.Fatalf("HeadObject after an oversized DeleteObjects: %v", err)
+	}
+}
+
 func TestIAMEnforceS3Operations_rawSubResourceRequests(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, action string

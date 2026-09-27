@@ -70,6 +70,8 @@ type subResource struct {
 // in the order S3 tries them: the first one present wins.
 var subResources = map[route][]subResource{
 	{levelService, http.MethodGet}: {
+		// An Overcast selector: AWS serves ListDirectoryBuckets on the
+		// s3express-control host, which Overcast does not route.
 		{"directory-buckets", "ListDirectoryBuckets"},
 	},
 	{levelBucket, http.MethodGet}: {
@@ -185,6 +187,10 @@ var subResources = map[route][]subResource{
 // plain names the operation a route serves when no sub-resource selects one.
 // A route absent here serves none: S3 answers a POST to a bucket or an object
 // without a sub-resource with an error, not an operation.
+//
+// A modeled sub-resource missing from subResources is served as the plain
+// operation too, which for ?annotation or ?renameObject overwrites or deletes
+// the object; #2286 routes them.
 var plain = map[route]string{
 	{levelService, http.MethodGet}:   "ListBuckets",
 	{levelBucket, http.MethodGet}:    "ListObjects",
@@ -206,6 +212,12 @@ var copies = map[string]string{
 
 // CopySourceHeader names the object a copy reads from.
 const CopySourceHeader = "X-Amz-Copy-Source"
+
+// MaxDeleteObjectsBody is how much of a DeleteObjects body S3 reads. S3
+// accepts at most 1,000 keys of at most 1,024 bytes each, so a valid body fits
+// well inside it. S3's handler and IAM enforcement both read exactly this
+// prefix, so the keys enforcement authorises are the keys S3 deletes.
+const MaxDeleteObjectsBody = 4 << 20
 
 // Operation names the operation S3 serves r as, or "" when S3 serves it none.
 func Operation(r *http.Request) string {

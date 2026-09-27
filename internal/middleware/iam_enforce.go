@@ -20,6 +20,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/awsapi"
 	"github.com/overcast-sh/overcast/internal/iampolicy"
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/s3route"
 	"github.com/overcast-sh/overcast/internal/state"
 )
 
@@ -204,8 +205,9 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router Request
 
 			// Every check must be allowed, and the first one denied answers
 			// the request.
+			eval := newIAMEvaluation(r, st, parts.AccessKey, op.service, cache)
 			for _, check := range requestIAMChecks(r, op) {
-				result := evaluateIAMDecision(r, st, parts.AccessKey, op.service, check, cache)
+				result := eval.decide(check)
 				if reason, denied := iamDenialReason(result); denied && !iamServedWithoutPermission(op, result.callerARN) {
 					// A deny the evaluator could not reason about is a gap in
 					// Overcast, not a decision the user asked for: say so at
@@ -452,11 +454,15 @@ func requestIAMAction(r *http.Request, svc string) string {
 }
 
 // pathIAMAction names the IAM action of the operation r's method and path
-// select for svc. Lambda's paths are named by restOperation alone, the one
-// mapping the request logger reads too.
+// select for svc. Lambda's paths are named by restOperation alone, and S3's by
+// s3route alone, the mappings the request logger reads too, so neither is
+// named by another signal the service does not serve by.
 func pathIAMAction(r *http.Request, svc string) string {
-	if svc == "lambda" {
+	switch svc {
+	case "lambda":
 		return iamAction(svc, restOperation(svc, r))
+	case "s3":
+		return iamAction(svc, s3route.Operation(r))
 	}
 	return iamAction(svc, operationWithoutTarget(r, svc))
 }
@@ -1189,7 +1195,17 @@ type iamEnforceResult struct {
 	boundaryErr error
 }
 
-func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID, service string, check iamCheck, cache *iamEnforceCache) iamEnforceResult {
+// iamEvaluation decides checks for one request made as one principal. The
+// principal's policies and the request's condition context are resolved once,
+// however many checks the request needs: a DeleteObjects needs one per key.
+type iamEvaluation struct {
+	principal *iamEnforceCacheEntry
+	context   map[string]string
+}
+
+// newIAMEvaluation resolves accessKeyID's policies, through cache, and the
+// condition context of r made to service.
+func newIAMEvaluation(r *http.Request, st state.Store, accessKeyID, service string, cache *iamEnforceCache) iamEvaluation {
 	cached, generation := cache.load(accessKeyID)
 	if cached == nil {
 		principal := collectPrincipalPolicies(r.Context(), st, accessKeyID)
@@ -1205,28 +1221,36 @@ func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID, service s
 		}
 		cache.store(generation, accessKeyID, cached)
 	}
-	if cached.compileErr != nil {
-		return iamEnforceResult{callerARN: cached.callerARN, compileErr: cached.compileErr}
+	eval := iamEvaluation{principal: cached}
+	if cached.compileErr != nil || cached.boundaryErr != nil {
+		return eval
 	}
-	if cached.boundaryErr != nil {
-		return iamEnforceResult{callerARN: cached.callerARN, boundaryErr: cached.boundaryErr}
-	}
-
-	reqCtx := buildIAMRequestContext(r, service)
+	eval.context = buildIAMRequestContext(r, service)
 	for k, v := range cached.principalCtx {
-		reqCtx[k] = v
+		eval.context[k] = v
 	}
+	return eval
+}
 
-	return iamEnforceResult{callerARN: cached.callerARN, Result: iampolicy.Evaluate(iampolicy.Input{
+// decide evaluates check.
+func (e iamEvaluation) decide(check iamCheck) iamEnforceResult {
+	principal := e.principal
+	if principal.compileErr != nil {
+		return iamEnforceResult{callerARN: principal.callerARN, compileErr: principal.compileErr}
+	}
+	if principal.boundaryErr != nil {
+		return iamEnforceResult{callerARN: principal.callerARN, boundaryErr: principal.boundaryErr}
+	}
+	return iamEnforceResult{callerARN: principal.callerARN, Result: iampolicy.Evaluate(iampolicy.Input{
 		Request: iampolicy.Request{
 			Action:           check.action,
 			Resource:         check.resource,
-			Context:          reqCtx,
-			PrincipalARN:     cached.principalCtx["aws:principalarn"],
-			PrincipalAccount: cached.principalCtx["aws:principalaccount"],
+			Context:          e.context,
+			PrincipalARN:     principal.principalCtx["aws:principalarn"],
+			PrincipalAccount: principal.principalCtx["aws:principalaccount"],
 		},
-		Identity: cached.statements,
-		Boundary: cached.boundary,
+		Identity: principal.statements,
+		Boundary: principal.boundary,
 	})}
 }
 

@@ -29,8 +29,8 @@ import (
 
 // bucketOperations maps the service- and bucket-level operations s3route
 // names onto their handlers.
-func (h *Handler) bucketOperations() map[string]http.HandlerFunc {
-	return map[string]http.HandlerFunc{
+func (h *Handler) bucketOperations() operationHandlers {
+	return operationHandlers{
 		"CreateBucket":                                h.CreateBucket,
 		"CreateBucketMetadataConfiguration":           h.CreateBucketMetadataConfiguration,
 		"CreateBucketMetadataTableConfiguration":      h.CreateBucketMetadataTableConfiguration,

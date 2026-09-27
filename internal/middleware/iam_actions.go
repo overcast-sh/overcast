@@ -90,7 +90,10 @@ var operationIAMActions = map[string]map[string]iamActionRule{
 		// Reading an object.
 		"GetObject":           {action: "s3:GetObject", versioned: "s3:GetObjectVersion"},
 		"GetObjectAttributes": {action: "s3:GetObject", versioned: "s3:GetObjectVersion"},
-		"HeadObject":          {action: "s3:GetObject"},
+		// HeadObject's row in AWS's table names only s3:GetObject, but its API
+		// reference asks for "the relevant read object (or version)
+		// permission", as GetObject does.
+		"HeadObject":          {action: "s3:GetObject", versioned: "s3:GetObjectVersion"},
 		"GetObjectTorrent":    {action: "s3:GetObject"},
 		"SelectObjectContent": {action: "s3:GetObject"},
 		"GetObjectAcl":        {action: "s3:GetObjectAcl", versioned: "s3:GetObjectVersionAcl"},

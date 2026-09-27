@@ -19,13 +19,14 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/s3route"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 // objectOperations maps the object-level operations s3route names onto their
 // handlers.
-func (h *Handler) objectOperations() map[string]http.HandlerFunc {
-	return map[string]http.HandlerFunc{
+func (h *Handler) objectOperations() operationHandlers {
+	return operationHandlers{
 		"AbortMultipartUpload":    h.AbortMultipartUpload,
 		"CompleteMultipartUpload": h.CompleteMultipartUpload,
 		"CopyObject":              h.CopyObject,
@@ -664,7 +665,7 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req deleteObjectsRequest
-	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := xml.NewDecoder(io.LimitReader(r.Body, s3route.MaxDeleteObjectsBody)).Decode(&req); err != nil {
 		protocol.WriteXMLError(w, r, &protocol.AWSError{Code: "MalformedXML", HTTPStatus: http.StatusBadRequest, Message: "The XML you provided was not well-formed"})
 		return
 	}

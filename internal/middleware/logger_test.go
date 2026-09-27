@@ -171,8 +171,8 @@ func TestDetectOperation(t *testing.T) {
 		// X-Amz-Target
 		{name: "sqs target", method: "POST", path: "/", header: map[string]string{"X-Amz-Target": "AmazonSQS.CreateQueue"}, want: "CreateQueue"},
 
-		// x-id query param
-		{name: "x-id param", method: "GET", path: "/bucket/key?x-id=GetObject", want: "GetObject"},
+		// x-id names nothing S3 serves
+		{name: "x-id param", method: "PUT", path: "/bucket/key?x-id=GetObject", want: "PutObject"},
 
 		// Internal endpoints with known operations
 		{name: "events", method: "GET", path: "/_overcast/events", want: "Subscribe"},

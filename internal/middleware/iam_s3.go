@@ -58,12 +58,6 @@ func s3IAMChecks(r *http.Request) []iamCheck {
 	return checks
 }
 
-// maxDeleteObjectsBody bounds how much of a DeleteObjects body enforcement
-// reads. S3 accepts at most 1,000 keys of at most 1,024 bytes each, so a
-// valid body fits well inside it; a larger one is not read for keys, and is
-// checked against the bucket instead.
-const maxDeleteObjectsBody = 4 << 20
-
 // deleteObjectsBody is the part of a DeleteObjects request body that names
 // what it deletes.
 type deleteObjectsBody struct {
@@ -74,31 +68,38 @@ type deleteObjectsBody struct {
 }
 
 // s3DeleteObjectsChecks is one delete check per object r's body names, or
-// none when the body names none that can be read. The body is left for the
+// none when the body names none that can be read.
+//
+// It reads the prefix of the body S3's handler reads, s3route.MaxDeleteObjectsBody,
+// and decodes it as the handler does, so it names exactly the keys S3
+// deletes. A body that does not decode here does not decode there either:
+// S3 answers MalformedXML and deletes nothing. The body is left for the
 // handler to read in full.
 func s3DeleteObjectsChecks(r *http.Request) []iamCheck {
 	if r.Body == nil {
 		return nil
 	}
-	head, err := io.ReadAll(io.LimitReader(r.Body, maxDeleteObjectsBody+1))
+	head, err := io.ReadAll(io.LimitReader(r.Body, s3route.MaxDeleteObjectsBody))
 	r.Body = struct {
 		io.Reader
 		io.Closer
 	}{io.MultiReader(bytes.NewReader(head), r.Body), r.Body}
-	if err != nil || len(head) > maxDeleteObjectsBody {
-		return nil
-	}
 	var body deleteObjectsBody
-	if xml.Unmarshal(head, &body) != nil {
+	if err != nil || xml.Unmarshal(head, &body) != nil {
 		return nil
 	}
 	bucket := requestS3IAMResource(r)
 	checks := make([]iamCheck, 0, len(body.Objects))
+	seen := make(map[iamCheck]bool, len(body.Objects))
 	for _, object := range body.Objects {
-		checks = append(checks, iamCheck{
+		check := iamCheck{
 			action:   iamActionFor("s3", "DeleteObjects", object.VersionID != ""),
 			resource: bucket + "/" + object.Key,
-		})
+		}
+		if !seen[check] {
+			seen[check] = true
+			checks = append(checks, check)
+		}
 	}
 	return checks
 }

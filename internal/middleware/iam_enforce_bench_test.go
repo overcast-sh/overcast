@@ -46,7 +46,7 @@ func BenchmarkEvaluateIAMDecision_SQSAllow(b *testing.B) {
 	b.ReportAllocs()
 	cache := &iamEnforceCache{}
 	for i := 0; i < b.N; i++ {
-		_ = evaluateIAMDecision(req, st, "test", "sqs", benchCreateQueue, cache)
+		_ = newIAMEvaluation(req, st, "test", "sqs", cache).decide(benchCreateQueue)
 	}
 }
 
@@ -92,7 +92,7 @@ func BenchmarkEvaluateIAMDecision_WarmCache(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = evaluateIAMDecision(req, st, "test", "sqs", benchCreateQueue, cache)
+		_ = newIAMEvaluation(req, st, "test", "sqs", cache).decide(benchCreateQueue)
 	}
 }
 
@@ -108,7 +108,7 @@ func BenchmarkEvaluateIAMDecision_ColdCache(b *testing.B) {
 		// What an IAM mutation does — not a fresh struct, so the benchmark
 		// exercises the real invalidation path.
 		InvalidateIAMEnforceCache()
-		_ = evaluateIAMDecision(req, st, "test", "sqs", benchCreateQueue, cache)
+		_ = newIAMEvaluation(req, st, "test", "sqs", cache).decide(benchCreateQueue)
 	}
 }
 
@@ -125,7 +125,7 @@ func BenchmarkEvaluateIAMDecision_UnknownPrincipal_WarmCache(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = evaluateIAMDecision(req, st, "no-such-key", "sqs", benchCreateQueue, cache)
+		_ = newIAMEvaluation(req, st, "no-such-key", "sqs", cache).decide(benchCreateQueue)
 	}
 }
 
@@ -139,7 +139,7 @@ func BenchmarkEvaluateIAMDecision_UnknownPrincipal_ColdCache(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		InvalidateIAMEnforceCache()
-		_ = evaluateIAMDecision(req, st, "no-such-key", "sqs", benchCreateQueue, cache)
+		_ = newIAMEvaluation(req, st, "no-such-key", "sqs", cache).decide(benchCreateQueue)
 	}
 }
 

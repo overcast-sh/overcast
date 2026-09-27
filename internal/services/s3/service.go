@@ -306,15 +306,18 @@ func (s *Service) RegisterRoutes(r chi.Router) {
 	// NotImplemented: the latter would claim a gap in this emulator for a
 	// request real S3 refuses too, sending a caller after a workaround that
 	// does not exist.
-	for pattern, post := range map[string]http.HandlerFunc{
-		"/{bucket}":   serve,
-		"/{bucket}/":  serve,
-		"/{bucket}/*": s.handler.dispatch(protocol.MethodNotAllowedXML),
+	for _, route := range []struct {
+		pattern string
+		post    http.HandlerFunc
+	}{
+		{"/{bucket}", serve},
+		{"/{bucket}/", serve},
+		{"/{bucket}/*", s.handler.dispatch(protocol.MethodNotAllowedXML)},
 	} {
-		r.Get(pattern, serve)
-		r.Put(pattern, serve)
-		r.Head(pattern, serve)
-		r.Delete(pattern, serve)
-		r.Post(pattern, post)
+		r.Get(route.pattern, serve)
+		r.Put(route.pattern, serve)
+		r.Head(route.pattern, serve)
+		r.Delete(route.pattern, serve)
+		r.Post(route.pattern, route.post)
 	}
 }

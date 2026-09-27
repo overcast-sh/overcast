@@ -50,7 +50,7 @@ func TestS3IAMChecks(t *testing.T) {
 		{"get version", http.MethodGet, "/b/k?versionId=v", "", "", []iamCheck{{"s3:GetObjectVersion", object}}},
 		{"delete version", http.MethodDelete, "/b/k?versionId=v", "", "", []iamCheck{{"s3:DeleteObjectVersion", object}}},
 		{"version tagging", http.MethodPut, "/b/k?tagging&versionId=v", "", "", []iamCheck{{"s3:PutObjectVersionTagging", object}}},
-		{"head version", http.MethodHead, "/b/k?versionId=v", "", "", []iamCheck{{"s3:GetObject", object}}},
+		{"head version", http.MethodHead, "/b/k?versionId=v", "", "", []iamCheck{{"s3:GetObjectVersion", object}}},
 
 		// A copy reads its source too.
 		{"copy", http.MethodPut, "/b/k", "src/a%20b", "", []iamCheck{{"s3:PutObject", object}, {"s3:GetObject", "arn:aws:s3:::src/a b"}}},
@@ -61,6 +61,7 @@ func TestS3IAMChecks(t *testing.T) {
 		{"delete objects", http.MethodPost, "/b?delete", "", `<Delete><Object><Key>x</Key></Object><Object><Key>y/z</Key><VersionId>v</VersionId></Object></Delete>`,
 			[]iamCheck{{"s3:DeleteObject", "arn:aws:s3:::b/x"}, {"s3:DeleteObjectVersion", "arn:aws:s3:::b/y/z"}}},
 		{"delete objects, body unreadable", http.MethodPost, "/b?delete", "", `not xml`, []iamCheck{{"s3:DeleteObject", bucket}}},
+		{"delete objects, key repeated", http.MethodPost, "/b?delete", "", `<Delete><Object><Key>x</Key></Object><Object><Key>x</Key></Object></Delete>`, []iamCheck{{"s3:DeleteObject", "arn:aws:s3:::b/x"}}},
 
 		// x-id names nothing S3 serves.
 		{"x-id on a put", http.MethodPut, "/b/k?x-id=GetObject", "", "", []iamCheck{{"s3:PutObject", object}}},
@@ -114,8 +115,15 @@ func TestIAMAction_isNamedAfterTheOperationUnlessTheTableSaysOtherwise(t *testin
 		{"s3", "", ""},
 		{"internal", "Anything", ""},
 	} {
-		if got := iamAction(tc.svc, tc.op); got != tc.want {
-			t.Errorf("iamAction(%q, %q) = %q, want %q", tc.svc, tc.op, got, tc.want)
-		}
+		t.Run(tc.svc+" "+tc.op, func(t *testing.T) {
+			// Given: an operation of a service
+			// When: its IAM action is named
+			got := iamAction(tc.svc, tc.op)
+
+			// Then: it is the action AWS documents for it
+			if got != tc.want {
+				t.Fatalf("iamAction(%q, %q) = %q, want %q", tc.svc, tc.op, got, tc.want)
+			}
+		})
 	}
 }
