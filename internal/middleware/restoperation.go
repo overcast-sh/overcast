@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/overcast-sh/overcast/internal/awsapi"
@@ -223,58 +222,4 @@ func overcastRESTOperation(svc, method, path string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-// rawQueryHas reports whether a raw query string carries the named parameter,
-// with or without a value. It is the allocation-free equivalent of
-// url.Values.Has on r.URL.Query(), which parses and allocates a whole map for
-// what the S3 shape rules use as a set of flags.
-func rawQueryHas(rawQuery, key string) bool {
-	for rawQuery != "" {
-		part := rawQuery
-		if i := strings.IndexByte(rawQuery, '&'); i >= 0 {
-			part, rawQuery = rawQuery[:i], rawQuery[i+1:]
-		} else {
-			rawQuery = ""
-		}
-		if part == key {
-			return true
-		}
-		if len(part) > len(key) && part[len(key)] == '=' && part[:len(key)] == key {
-			return true
-		}
-	}
-	return false
-}
-
-// rawQueryValue returns the named parameter's value, or "" when it is absent.
-// Percent- and plus-encoded values are decoded; the common case of a plain
-// value costs no allocation.
-func rawQueryValue(rawQuery, key string) string {
-	for rawQuery != "" {
-		part := rawQuery
-		if i := strings.IndexByte(rawQuery, '&'); i >= 0 {
-			part, rawQuery = rawQuery[:i], rawQuery[i+1:]
-		} else {
-			rawQuery = ""
-		}
-		if len(part) <= len(key) || part[len(key)] != '=' || part[:len(key)] != key {
-			continue
-		}
-		value := part[len(key)+1:]
-		if strings.ContainsAny(value, "%+") {
-			if decoded, err := url.QueryUnescape(value); err == nil {
-				return decoded
-			}
-		}
-		return value
-	}
-	return ""
-}
-
-// pathDepth counts a URL path's segments the way strings.Split of its trimmed
-// form does, without allocating the slice. strings.Trim reslices in place, so
-// this is allocation-free.
-func pathDepth(path string) int {
-	return 1 + strings.Count(strings.Trim(path, "/"), "/")
 }

@@ -1,9 +1,9 @@
 package s3
 
 // handler_bucket.go contains all fully-implemented bucket-level S3 handlers
-// and the route tables that map sub-resource query params to those handlers.
+// and the table that maps s3route's operation names onto them.
 // Stubs (NotImplementedXML) live in handler_stubs.go.
-// Dispatchers (BucketGet, BucketPut, …) live in handler.go.
+// The dispatcher lives in handler.go.
 
 import (
 	"context"
@@ -27,88 +27,85 @@ import (
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
-// initBucketRoutes populates the four bucket-level dispatch tables.
-// Called once by newHandler.
-func (h *Handler) initBucketRoutes() {
-	h.bucketGetRoutes = []s3Route{
-		{"list-type", h.listTypeDispatch},
-		{"location", h.GetBucketLocation},
-		{"acl", h.GetBucketAcl},
-		{"cors", h.GetBucketCors},
-		{"policy", h.GetBucketPolicy},
-		{"policyStatus", h.GetBucketPolicyStatus},
-		{"lifecycle", h.GetBucketLifecycleConfiguration},
-		{"versioning", h.GetBucketVersioning},
-		{"notification", h.GetBucketNotificationConfiguration},
-		{"tagging", h.GetBucketTagging},
-		{"website", h.GetBucketWebsite},
-		{"logging", h.GetBucketLogging},
-		{"replication", h.GetBucketReplication},
-		{"encryption", h.GetBucketEncryption},
-		{"accelerate", h.GetBucketAccelerateConfiguration},
-		{"requestPayment", h.GetBucketRequestPayment},
-		{"ownershipControls", h.GetBucketOwnershipControls},
-		{"publicAccessBlock", h.GetPublicAccessBlock},
-		{"uploads", h.ListMultipartUploads},
-		{"versions", h.ListObjectVersions},
-		{"analytics", h.ListBucketAnalyticsConfigurations},
-		{"intelligent-tiering", h.ListBucketIntelligentTieringConfigurations},
-		{"inventory", h.ListBucketInventoryConfigurations},
-		{"metrics", h.ListBucketMetricsConfigurations},
-		{"object-lock", h.GetObjectLockConfiguration},
-		{"abac", h.GetBucketAbac},
-		{"metadata", h.GetBucketMetadataConfiguration},
-		{"metadataTable", h.GetBucketMetadataTableConfiguration},
-		{"session", h.CreateSession},
-	}
-
-	h.bucketPutRoutes = []s3Route{
-		{"acl", h.PutBucketAcl},
-		{"cors", h.PutBucketCors},
-		{"policy", h.PutBucketPolicy},
-		{"lifecycle", h.PutBucketLifecycleConfiguration},
-		{"versioning", h.PutBucketVersioning},
-		{"notification", h.PutBucketNotificationConfiguration},
-		{"tagging", h.PutBucketTagging},
-		{"website", h.PutBucketWebsite},
-		{"logging", h.PutBucketLogging},
-		{"replication", h.PutBucketReplication},
-		{"encryption", h.PutBucketEncryption},
-		{"accelerate", h.PutBucketAccelerateConfiguration},
-		{"requestPayment", h.PutBucketRequestPayment},
-		{"ownershipControls", h.PutBucketOwnershipControls},
-		{"publicAccessBlock", h.PutPublicAccessBlock},
-		{"analytics", h.PutBucketAnalyticsConfiguration},
-		{"intelligent-tiering", h.PutBucketIntelligentTieringConfiguration},
-		{"inventory", h.PutBucketInventoryConfiguration},
-		{"metrics", h.PutBucketMetricsConfiguration},
-		{"object-lock", h.PutObjectLockConfiguration},
-		{"abac", h.PutBucketAbac},
-		{"metadata", h.CreateBucketMetadataConfiguration},
-		{"metadataTable", h.UpdateBucketMetadataTableConfiguration},
-	}
-
-	h.bucketDeleteRoutes = []s3Route{
-		{"cors", h.DeleteBucketCors},
-		{"policy", h.DeleteBucketPolicy},
-		{"lifecycle", h.DeleteBucketLifecycle},
-		{"tagging", h.DeleteBucketTagging},
-		{"website", h.DeleteBucketWebsite},
-		{"replication", h.DeleteBucketReplication},
-		{"encryption", h.DeleteBucketEncryption},
-		{"analytics", h.DeleteBucketAnalyticsConfiguration},
-		{"intelligent-tiering", h.DeleteBucketIntelligentTieringConfiguration},
-		{"inventory", h.DeleteBucketInventoryConfiguration},
-		{"metrics", h.DeleteBucketMetricsConfiguration},
-		{"ownershipControls", h.DeleteBucketOwnershipControls},
-		{"publicAccessBlock", h.DeletePublicAccessBlock},
-		{"metadata", h.DeleteBucketMetadataConfiguration},
-		{"metadataTable", h.DeleteBucketMetadataTableConfiguration},
-	}
-
-	h.bucketPostRoutes = []s3Route{
-		{"delete", h.DeleteObjects},
-		{"metadataTable", h.CreateBucketMetadataTableConfiguration},
+// bucketOperations maps the service- and bucket-level operations s3route
+// names onto their handlers.
+func (h *Handler) bucketOperations() operationHandlers {
+	return operationHandlers{
+		"CreateBucket":                                h.CreateBucket,
+		"CreateBucketMetadataConfiguration":           h.CreateBucketMetadataConfiguration,
+		"CreateBucketMetadataTableConfiguration":      h.CreateBucketMetadataTableConfiguration,
+		"CreateSession":                               h.CreateSession,
+		"DeleteBucket":                                h.DeleteBucket,
+		"DeleteBucketAnalyticsConfiguration":          h.DeleteBucketAnalyticsConfiguration,
+		"DeleteBucketCors":                            h.DeleteBucketCors,
+		"DeleteBucketEncryption":                      h.DeleteBucketEncryption,
+		"DeleteBucketIntelligentTieringConfiguration": h.DeleteBucketIntelligentTieringConfiguration,
+		"DeleteBucketInventoryConfiguration":          h.DeleteBucketInventoryConfiguration,
+		"DeleteBucketLifecycle":                       h.DeleteBucketLifecycle,
+		"DeleteBucketMetadataConfiguration":           h.DeleteBucketMetadataConfiguration,
+		"DeleteBucketMetadataTableConfiguration":      h.DeleteBucketMetadataTableConfiguration,
+		"DeleteBucketMetricsConfiguration":            h.DeleteBucketMetricsConfiguration,
+		"DeleteBucketOwnershipControls":               h.DeleteBucketOwnershipControls,
+		"DeleteBucketPolicy":                          h.DeleteBucketPolicy,
+		"DeleteBucketReplication":                     h.DeleteBucketReplication,
+		"DeleteBucketTagging":                         h.DeleteBucketTagging,
+		"DeleteBucketWebsite":                         h.DeleteBucketWebsite,
+		"DeleteObjects":                               h.DeleteObjects,
+		"DeletePublicAccessBlock":                     h.DeletePublicAccessBlock,
+		"GetBucketAbac":                               h.GetBucketAbac,
+		"GetBucketAccelerateConfiguration":            h.GetBucketAccelerateConfiguration,
+		"GetBucketAcl":                                h.GetBucketAcl,
+		"GetBucketCors":                               h.GetBucketCors,
+		"GetBucketEncryption":                         h.GetBucketEncryption,
+		"GetBucketLifecycleConfiguration":             h.GetBucketLifecycleConfiguration,
+		"GetBucketLocation":                           h.GetBucketLocation,
+		"GetBucketLogging":                            h.GetBucketLogging,
+		"GetBucketMetadataConfiguration":              h.GetBucketMetadataConfiguration,
+		"GetBucketMetadataTableConfiguration":         h.GetBucketMetadataTableConfiguration,
+		"GetBucketNotificationConfiguration":          h.GetBucketNotificationConfiguration,
+		"GetBucketOwnershipControls":                  h.GetBucketOwnershipControls,
+		"GetBucketPolicy":                             h.GetBucketPolicy,
+		"GetBucketPolicyStatus":                       h.GetBucketPolicyStatus,
+		"GetBucketReplication":                        h.GetBucketReplication,
+		"GetBucketRequestPayment":                     h.GetBucketRequestPayment,
+		"GetBucketTagging":                            h.GetBucketTagging,
+		"GetBucketVersioning":                         h.GetBucketVersioning,
+		"GetBucketWebsite":                            h.GetBucketWebsite,
+		"GetObjectLockConfiguration":                  h.GetObjectLockConfiguration,
+		"GetPublicAccessBlock":                        h.GetPublicAccessBlock,
+		"HeadBucket":                                  h.HeadBucket,
+		"ListBucketAnalyticsConfigurations":           h.ListBucketAnalyticsConfigurations,
+		"ListBucketIntelligentTieringConfigurations":  h.ListBucketIntelligentTieringConfigurations,
+		"ListBucketInventoryConfigurations":           h.ListBucketInventoryConfigurations,
+		"ListBucketMetricsConfigurations":             h.ListBucketMetricsConfigurations,
+		"ListBuckets":                                 h.ListBuckets,
+		"ListDirectoryBuckets":                        h.ListDirectoryBuckets,
+		"ListMultipartUploads":                        h.ListMultipartUploads,
+		"ListObjectVersions":                          h.ListObjectVersions,
+		"ListObjects":                                 h.ListObjectsV1,
+		"ListObjectsV2":                               h.ListObjectsV2,
+		"PutBucketAbac":                               h.PutBucketAbac,
+		"PutBucketAccelerateConfiguration":            h.PutBucketAccelerateConfiguration,
+		"PutBucketAcl":                                h.PutBucketAcl,
+		"PutBucketAnalyticsConfiguration":             h.PutBucketAnalyticsConfiguration,
+		"PutBucketCors":                               h.PutBucketCors,
+		"PutBucketEncryption":                         h.PutBucketEncryption,
+		"PutBucketIntelligentTieringConfiguration":    h.PutBucketIntelligentTieringConfiguration,
+		"PutBucketInventoryConfiguration":             h.PutBucketInventoryConfiguration,
+		"PutBucketLifecycleConfiguration":             h.PutBucketLifecycleConfiguration,
+		"PutBucketLogging":                            h.PutBucketLogging,
+		"PutBucketMetricsConfiguration":               h.PutBucketMetricsConfiguration,
+		"PutBucketNotificationConfiguration":          h.PutBucketNotificationConfiguration,
+		"PutBucketOwnershipControls":                  h.PutBucketOwnershipControls,
+		"PutBucketPolicy":                             h.PutBucketPolicy,
+		"PutBucketReplication":                        h.PutBucketReplication,
+		"PutBucketRequestPayment":                     h.PutBucketRequestPayment,
+		"PutBucketTagging":                            h.PutBucketTagging,
+		"PutBucketVersioning":                         h.PutBucketVersioning,
+		"PutBucketWebsite":                            h.PutBucketWebsite,
+		"PutObjectLockConfiguration":                  h.PutObjectLockConfiguration,
+		"PutPublicAccessBlock":                        h.PutPublicAccessBlock,
+		"UpdateBucketMetadataTableConfiguration":      h.UpdateBucketMetadataTableConfiguration,
 	}
 }
 
@@ -289,13 +286,7 @@ func (h *Handler) claimBucketName(ctx context.Context, b *Bucket) (bool, *protoc
 
 // HeadBucket handles HEAD /{bucket}
 // Returns 200 if the bucket exists, 404 if not.
-// Guarded by x-amz-expected-bucket-owner (see expected_owner.go) — HeadBucket
-// is registered directly on the chi router rather than reached through
-// BucketGet's dispatch table, so it carries its own guard call.
 func (h *Handler) HeadBucket(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
 	bucket := chi.URLParam(r, "bucket")
 
 	exists, aerr := h.store.bucketExists(r.Context(), bucket)
@@ -668,16 +659,6 @@ func trimListPage[T any](entries []T, maxKeys int) ([]T, bool) {
 		return entries, false
 	}
 	return entries[:maxKeys], maxKeys > 0
-}
-
-// listTypeDispatch routes list-type=2 to ListObjectsV2 and all other values
-// (including blank/1) to ListObjectsV1.
-func (h *Handler) listTypeDispatch(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("list-type") == "2" {
-		h.ListObjectsV2(w, r)
-	} else {
-		h.ListObjectsV1(w, r)
-	}
 }
 
 // listObjectsV2Response is the XML envelope for ListObjectsV2.

@@ -2,8 +2,7 @@ package s3
 
 // handler_multipart.go contains fully-implemented multipart upload handlers.
 // Stubs (NotImplementedXML) live in handler_stubs.go.
-// Dispatchers (ObjectPost, ObjectDelete, PutObjectOrCopy, BucketGet) live in
-// handler.go.
+// The dispatcher lives in handler.go.
 
 import (
 	"crypto/md5"

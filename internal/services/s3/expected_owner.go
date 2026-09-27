@@ -15,14 +15,9 @@ package s3
 // has no S3 Control operations, so only the first two need excluding.
 //
 // This file holds the one shared guard (checkExpectedBucketOwner /
-// checkExpectedSourceBucketOwner), called from the small set of top-level
-// dispatch entry points in handler.go, plus HeadBucket (handler_bucket.go)
-// and HeadObject (handler_object.go), which are themselves entry points
-// registered directly on the chi router. It is never duplicated inside the
-// ~100 individual operation handlers those entry points fan out to.
-// CreateBucket's exclusion lives here too, as the one entry point
-// (BucketPut) that deliberately does *not* call the guard before falling
-// through to it — see BucketPut in handler.go.
+// checkExpectedSourceBucketOwner) and the operations it skips. Handler.dispatch
+// calls it before every operation's handler, so it is never duplicated inside
+// the ~100 individual operation handlers.
 
 import (
 	"net/http"
@@ -31,6 +26,23 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
+
+// ignoresExpectedBucketOwner are the operations AWS documents as ignoring
+// x-amz-expected-bucket-owner: CreateBucket has no bucket yet to compare an
+// owner against, and ListBuckets no single bucket. ListDirectoryBuckets is the
+// same shape of operation.
+var ignoresExpectedBucketOwner = map[string]bool{
+	"CreateBucket":         true,
+	"ListBuckets":          true,
+	"ListDirectoryBuckets": true,
+}
+
+// copiesObject are the operations that read the object x-amz-copy-source
+// names, whose bucket x-amz-source-expected-bucket-owner guards.
+var copiesObject = map[string]bool{
+	"CopyObject":     true,
+	"UploadPartCopy": true,
+}
 
 const (
 	expectedBucketOwnerHeader       = "x-amz-expected-bucket-owner"

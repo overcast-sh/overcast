@@ -139,32 +139,9 @@ are not authorized to perform this operation.` A denial no policy decided
 — says only `User is not authorized to perform this action` (S3:
 `Access Denied`).
 
-The action evaluated is `<prefix>:<Operation>`, where the prefix is the IAM
-action prefix AWS itself uses — so write policies with the names the AWS
-documentation gives. Ten services differ from their Overcast service key:
-
-| Service            | IAM action prefix       |
-| ------------------ | ------------------------- |
-| MSK                | `kafka:`                  |
-| Step Functions     | `states:`                 |
-| EFS                | `elasticfilesystem:`      |
-| OpenSearch         | `es:`                     |
-| ELBv2              | `elasticloadbalancing:`   |
-| AppRegistry        | `servicecatalog:`         |
-| Cognito user pools | `cognito-idp:`            |
-| WAF                | `wafv2:`                  |
-| DynamoDB Streams   | `dynamodb:`               |
-| AppConfig Data     | `appconfig:`              |
-
-A request is authorised as the operation that serves it, whatever service its
-credential scope names, with one gap:
-
-- An AWS Query call is the operation its `Action` and `Version` name:
-  `CreateUser` signed for `s3` is `iam:CreateUser`.
-- A path no service's route claims is S3's, whatever `Action` it carries:
-  `PUT /my-bucket?Action=GetFederationToken` signed for `sts` is `s3:CreateBucket`.
-- The gap: a service's own route, such as EKS's `/clusters`, is named by the
-  credential scope. Sign for the service you call.
+The action checked is the one the AWS documentation names for the operation
+that serves the request, so write policies with those names. Which operation
+that is, and which action, is on [IAM actions](./iam/actions.md).
 
 ## Differences from AWS
 
@@ -174,6 +151,7 @@ credential scope names, with one gap:
 | Credentials                                                                  | Verified against the signing key          | Accepted without verification                                                         |
 | Web identity tokens                                                          | Verified against the provider's keys      | Claims read without verification                                                      |
 | Credential scope naming another service                                      | Refused at the endpoint                   | Served; Query calls and unclaimed paths are authorised as the operation served        |
+| `DeleteObjects` naming a key the caller may not delete                       | That key is reported in `Errors`; the rest are deleted | The whole request is refused with `AccessDenied`, and nothing is deleted |
 | Policy versions                                                              | Every version is retained and retrievable | A counter only — no `GetPolicyVersion`, `ListPolicyVersions` or `DeletePolicyVersion` |
 | Policy document validation                                                   | The full policy grammar                   | Structure only — see [Limitations](./iam/limitations.md#policy-documents-are-checked-at-the-api-boundary) |
 | Login profiles, MFA devices, SSH keys, signing certificates, Git credentials | Full API                                  | Not modelled                                                                          |
@@ -199,6 +177,7 @@ Per-operation status, notes and AWS API links: [IAM operations](iam/operations.m
 
 ## Related
 
+- [IAM actions](./iam/actions.md)
 - [IAM limitations](./iam/limitations.md)
 - [IAM troubleshooting](./iam/troubleshooting.md)
 - [STS](./sts.md) — where an assumed-role session comes from

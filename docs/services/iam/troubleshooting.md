@@ -68,9 +68,10 @@ order puts instance profiles before their roles. See
 **Cause.** The error message names the principal, the action and the resource
 that were checked, and whether a `Deny` statement or the lack of an `Allow`
 refused them. Either the policy genuinely does not allow that action, or it
-names an action prefix Overcast does not evaluate under. The prefix is the one AWS
-uses, which differs from the service key for ten services — see
-[IAM § Request-time enforcement](../iam.md#request-time-enforcement-opt-in).
+names an action Overcast does not check the call as. The action is the one AWS
+documents, which is not always named after the operation or the service key:
+S3's `ListObjectsV2` is `s3:ListBucket`, and Step Functions uses `states:` — see
+[IAM actions](./actions.md).
 
 Enforcement is fail-closed, so an unsigned request, an unparseable policy, or a
 policy construct the evaluator does not implement also denies. The reason is
@@ -85,5 +86,6 @@ are not stored here and grant nothing.
 ## Related
 
 - [IAM](../iam.md) — quick start and what works
+- [IAM actions](./actions.md) — which action a request is checked as
 - [IAM limitations](./limitations.md) — what the policy evaluator covers
 - [IAM operations](./operations.md) — per-operation status

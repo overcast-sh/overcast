@@ -298,7 +298,7 @@ func TestDetectOperationLoggerAndIAMAgree(t *testing.T) {
 				}
 				continue
 			}
-			want := "lambda:" + lambdaIAMAction(label)
+			want := iamAction("lambda", label)
 			if action != want {
 				t.Errorf("%s %s: label %q implies action %q, got %q", method, path, label, want, action)
 			}
@@ -439,7 +439,7 @@ func TestDetectOperationS3TablesLegacyGetTable(t *testing.T) {
 
 // TestDetectOperationS3Unchanged is the counterweight to the fix: it must not
 // have been achieved by labelling less. Every S3 shape the old switch knew
-// still resolves.
+// still resolves, as the operation S3 serves it as (#2284).
 func TestDetectOperationS3Unchanged(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -455,7 +455,7 @@ func TestDetectOperationS3Unchanged(t *testing.T) {
 		{"put bucket versioning", http.MethodPut, "/my-bucket?versioning", nil, "PutBucketVersioning"},
 		{"get bucket location", http.MethodGet, "/my-bucket?location", nil, "GetBucketLocation"},
 		{"list objects v2", http.MethodGet, "/my-bucket?list-type=2", nil, "ListObjectsV2"},
-		{"list objects by prefix", http.MethodGet, "/my-bucket?prefix=logs%2F", nil, "ListObjectsV2"},
+		{"list objects by prefix", http.MethodGet, "/my-bucket?prefix=logs%2F", nil, "ListObjects"},
 		{"get object", http.MethodGet, "/my-bucket/key", nil, "GetObject"},
 		{"get nested object", http.MethodGet, "/my-bucket/a/b/c.txt", nil, "GetObject"},
 		{"put object", http.MethodPut, "/my-bucket/key", nil, "PutObject"},
@@ -466,11 +466,13 @@ func TestDetectOperationS3Unchanged(t *testing.T) {
 		{"upload part", http.MethodPut, "/my-bucket/key?partNumber=1&uploadId=abc", nil, "UploadPart"},
 		{"list parts", http.MethodGet, "/my-bucket/key?uploadId=abc", nil, "ListParts"},
 		{"abort multipart upload", http.MethodDelete, "/my-bucket/key?uploadId=abc", nil, "AbortMultipartUpload"},
-		{"delete objects", http.MethodPost, "/my-bucket?delete", nil, ""},
-		{"delete objects on key", http.MethodPost, "/my-bucket/key?delete", nil, "DeleteObjects"},
-		{"x-id wins over shape", http.MethodGet, "/bucket/key?x-id=GetObject", nil, "GetObject"},
-		{"x-id names a bucket operation", http.MethodPost, "/?x-id=ListBuckets", nil, "ListBuckets"},
-		{"x-id percent decoded", http.MethodGet, "/bucket/key?x-id=Get%4Fbject", nil, "GetObject"},
+		{"delete objects", http.MethodPost, "/my-bucket?delete", nil, "DeleteObjects"},
+		{"no delete sub-resource on a key", http.MethodPost, "/my-bucket/key?delete", nil, ""},
+		{"put bucket policy", http.MethodPut, "/my-bucket?policy", nil, "PutBucketPolicy"},
+		{"put bucket tagging", http.MethodPut, "/my-bucket/?tagging", nil, "PutBucketTagging"},
+		// S3 never reads x-id, so it names nothing.
+		{"x-id cannot rename a put", http.MethodPut, "/bucket/key?x-id=GetObject", nil, "PutObject"},
+		{"x-id names no root POST", http.MethodPost, "/?x-id=ListBuckets", nil, ""},
 		{"x-id among other params", http.MethodPut, "/bucket/key?partNumber=1&x-id=UploadPart", nil, "UploadPart"},
 		// An S3-signed request must not pick up another service's binding even
 		// when the bucket name happens to match one of its literal segments.
@@ -801,70 +803,6 @@ func concreteRESTPath(uri string) (path, query string) {
 		segments[i] = fmt.Sprintf("v%d", i)
 	}
 	return strings.Join(segments, "/"), query
-}
-
-func TestRawQueryHas(t *testing.T) {
-	tests := []struct {
-		rawQuery string
-		key      string
-		want     bool
-	}{
-		{"", "uploads", false},
-		{"uploads", "uploads", true},
-		{"uploads=", "uploads", true},
-		{"uploads=1", "uploads", true},
-		{"partNumber=1&uploadId=abc", "uploadId", true},
-		{"partNumber=1&uploadId=abc", "partNumber", true},
-		{"uploadIdentifier=abc", "uploadId", false},
-		{"xuploads", "uploads", false},
-		{"a=1&uploads&b=2", "uploads", true},
-	}
-	for _, tt := range tests {
-		if got := rawQueryHas(tt.rawQuery, tt.key); got != tt.want {
-			t.Errorf("rawQueryHas(%q, %q) = %v, want %v", tt.rawQuery, tt.key, got, tt.want)
-		}
-	}
-}
-
-func TestRawQueryValue(t *testing.T) {
-	tests := []struct {
-		rawQuery string
-		key      string
-		want     string
-	}{
-		{"", "x-id", ""},
-		{"x-id", "x-id", ""},
-		{"x-id=", "x-id", ""},
-		{"x-id=GetObject", "x-id", "GetObject"},
-		{"a=1&x-id=PutObject&b=2", "x-id", "PutObject"},
-		{"prefix-x-id=Nope", "x-id", ""},
-		{"x-id=Get%4Fbject", "x-id", "GetObject"},
-		{"x-id=a+b", "x-id", "a b"},
-	}
-	for _, tt := range tests {
-		if got := rawQueryValue(tt.rawQuery, tt.key); got != tt.want {
-			t.Errorf("rawQueryValue(%q, %q) = %q, want %q", tt.rawQuery, tt.key, got, tt.want)
-		}
-	}
-}
-
-func TestPathDepth(t *testing.T) {
-	tests := []struct {
-		path string
-		want int
-	}{
-		{"/", 1},
-		{"/bucket", 1},
-		{"/bucket/", 1},
-		{"/bucket/key", 2},
-		{"/bucket/a/b/c", 4},
-		{"/bucket//key", 3},
-	}
-	for _, tt := range tests {
-		if got := pathDepth(tt.path); got != tt.want {
-			t.Errorf("pathDepth(%q) = %d, want %d", tt.path, got, tt.want)
-		}
-	}
 }
 
 func BenchmarkDetectOperationS3Object(b *testing.B) {

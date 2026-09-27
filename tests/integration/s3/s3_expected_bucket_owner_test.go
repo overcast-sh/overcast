@@ -369,9 +369,31 @@ func TestExpectedSourceBucketOwner_match_copyObjectProceeds(t *testing.T) {
 	helpers.AssertStatus(t, resp, http.StatusOK)
 }
 
+func TestExpectedSourceBucketOwner_ignoredOffACopy(t *testing.T) {
+	// Given: an object
+	srv := helpers.NewTestServer(t)
+	createBucket(t, srv, "dst-bucket")
+	putObject(t, srv, "dst-bucket", "key.txt", []byte("hello"), "text/plain")
+
+	// When: its tags are set by a request that also carries a copy source and
+	// a mismatched source owner, neither of which PutObjectTagging reads
+	req := put(srv, "/dst-bucket/key.txt?tagging", []byte(`<Tagging><TagSet><Tag><Key>k</Key><Value>v</Value></Tag></TagSet></Tagging>`), map[string]string{
+		"x-amz-copy-source":                  "/src-bucket/key.txt",
+		"x-amz-source-expected-bucket-owner": wrongAccountID,
+	})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// Then: the source owner is checked only by a copy, so the tags are set
+	helpers.AssertStatus(t, resp, http.StatusOK)
+}
+
 // TestExpectedSourceBucketOwner_destinationMismatch_deniedBeforeSourceRead
 // verifies the destination-bucket expected-owner header (which the shared
-// dispatch-entry guard also enforces on PutObjectOrCopy) still applies to
+// dispatch-entry guard, Handler.dispatch, also enforces) still applies to
 // CopyObject requests, independent of the source-owner header.
 func TestExpectedBucketOwner_destinationMismatch_copyObjectDenied(t *testing.T) {
 	srv := helpers.NewTestServer(t)

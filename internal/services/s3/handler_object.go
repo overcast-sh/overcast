@@ -1,9 +1,9 @@
 package s3
 
 // handler_object.go contains all fully-implemented object-level S3 handlers
-// and the route tables that map sub-resource query params to those handlers.
+// and the table that maps s3route's operation names onto them.
 // Stubs (NotImplementedXML) live in handler_stubs.go.
-// Dispatchers (ObjectGet, ObjectDelete, …, PutObjectOrCopy) live in handler.go.
+// The dispatcher lives in handler.go.
 
 import (
 	"context"
@@ -19,42 +19,41 @@ import (
 
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/s3route"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
-// initObjectRoutes populates the four object-level dispatch tables.
-// Called once by newHandler.
-func (h *Handler) initObjectRoutes() {
-	h.objectGetRoutes = []s3Route{
-		{"acl", h.GetObjectAcl},
-		{"tagging", h.GetObjectTagging},
-		{"attributes", h.GetObjectAttributes},
-		{"legal-hold", h.GetObjectLegalHold},
-		{"retention", h.GetObjectRetention},
-		{"torrent", h.GetObjectTorrent},
-		{"uploadId", h.ListParts},
-	}
-
-	h.objectPutRoutes = []s3Route{
-		{"acl", h.PutObjectAcl},
-		{"tagging", h.PutObjectTagging},
-		{"legal-hold", h.PutObjectLegalHold},
-		{"retention", h.PutObjectRetention},
-		{"rename", h.RenameObject},
-		{"encryption", h.UpdateObjectEncryption},
-	}
-
-	h.objectDeleteRoutes = []s3Route{
-		{"tagging", h.DeleteObjectTagging},
-		{"uploadId", h.AbortMultipartUpload},
-	}
-
-	h.objectPostRoutes = []s3Route{
-		{"uploads", h.CreateMultipartUpload},
-		{"uploadId", h.CompleteMultipartUpload},
-		{"restore", h.RestoreObject},
-		{"select", h.SelectObjectContent},
-		{"writeGetObjectResponse", h.WriteGetObjectResponse},
+// objectOperations maps the object-level operations s3route names onto their
+// handlers.
+func (h *Handler) objectOperations() operationHandlers {
+	return operationHandlers{
+		"AbortMultipartUpload":    h.AbortMultipartUpload,
+		"CompleteMultipartUpload": h.CompleteMultipartUpload,
+		"CopyObject":              h.CopyObject,
+		"CreateMultipartUpload":   h.CreateMultipartUpload,
+		"DeleteObject":            h.DeleteObject,
+		"DeleteObjectTagging":     h.DeleteObjectTagging,
+		"GetObject":               h.GetObject,
+		"GetObjectAcl":            h.GetObjectAcl,
+		"GetObjectAttributes":     h.GetObjectAttributes,
+		"GetObjectLegalHold":      h.GetObjectLegalHold,
+		"GetObjectRetention":      h.GetObjectRetention,
+		"GetObjectTagging":        h.GetObjectTagging,
+		"GetObjectTorrent":        h.GetObjectTorrent,
+		"HeadObject":              h.HeadObject,
+		"ListParts":               h.ListParts,
+		"PutObject":               h.PutObject,
+		"PutObjectAcl":            h.PutObjectAcl,
+		"PutObjectLegalHold":      h.PutObjectLegalHold,
+		"PutObjectRetention":      h.PutObjectRetention,
+		"PutObjectTagging":        h.PutObjectTagging,
+		"RenameObject":            h.RenameObject,
+		"RestoreObject":           h.RestoreObject,
+		"SelectObjectContent":     h.SelectObjectContent,
+		"UpdateObjectEncryption":  h.UpdateObjectEncryption,
+		"UploadPart":              h.UploadPart,
+		"UploadPartCopy":          h.UploadPartCopy,
+		"WriteGetObjectResponse":  h.WriteGetObjectResponse,
 	}
 }
 
@@ -582,13 +581,7 @@ func etagMatches(objectETag, headerVal string) bool {
 // HeadObject handles HEAD /{bucket}/{key}
 // Returns the same headers as GetObject but no body.
 // AWS docs: https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html
-// Guarded by x-amz-expected-bucket-owner (see expected_owner.go) — HeadObject
-// is registered directly on the chi router rather than reached through
-// ObjectGet's dispatch table, so it carries its own guard call.
 func (h *Handler) HeadObject(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
 	bucket := chi.URLParam(r, "bucket")
 	key := objectKey(r)
 
@@ -672,7 +665,7 @@ func (h *Handler) DeleteObjects(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req deleteObjectsRequest
-	if err := xml.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := xml.NewDecoder(io.LimitReader(r.Body, s3route.MaxDeleteObjectsBody)).Decode(&req); err != nil {
 		protocol.WriteXMLError(w, r, &protocol.AWSError{Code: "MalformedXML", HTTPStatus: http.StatusBadRequest, Message: "The XML you provided was not well-formed"})
 		return
 	}
