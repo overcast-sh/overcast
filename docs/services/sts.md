@@ -38,7 +38,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | `GetCallerIdentity`         | A fixed account, user ID and root ARN                            |
 | `GetSessionToken`           | Temporary credentials (default 12 hours)                         |
 | `AssumeRole`                | Temporary credentials plus an `AssumedRoleUser` (default 1 hour) |
-| `AssumeRoleWithWebIdentity` | Temporary credentials; the token is not parsed                   |
+| `AssumeRoleWithWebIdentity` | Temporary credentials; unsigned, as SDKs send it                 |
 | `GetFederationToken`        | Temporary credentials plus a `FederatedUser`                     |
 
 Access keys are `ASIA`-prefixed, with a random secret and session token as on
@@ -56,7 +56,7 @@ AWS. `DurationSeconds` is honoured wherever it is accepted.
 | -------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------- |
 | `AssumeRole`                                                         | The role must exist and its trust policy must allow you | Any `RoleArn` is accepted, existing or not     |
 | `GetCallerIdentity`                                                  | Reports the actual signing principal                    | Always the account root ARN, whoever called    |
-| Web identity tokens                                                  | The OIDC token is validated against the provider        | Not parsed; a fixed subject is returned        |
+| Web identity tokens                                                  | The OIDC token is validated against the provider        | Not verified; a fixed subject is returned. [IAM enforcement](./iam.md#web-identity-federation) matches its claims to the trust policy |
 | Credential expiry                                                    | Expired credentials are refused                         | Never checked — no credential is ever verified |
 | SAML, `AssumeRoot`, `DecodeAuthorizationMessage`, `GetAccessKeyInfo` | Full API                                                | Not implemented — `NotImplemented`             |
 

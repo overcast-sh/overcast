@@ -104,7 +104,10 @@ func (h *Handler) validateKeyPolicyPrincipals(ctx context.Context, statements []
 		if principal == nil {
 			return errInvalidKeyPolicyPrincipal
 		}
-		if len(principal.Unsupported) > 0 {
+		// A key policy's principals are AWS principals and services; an
+		// identity provider (Federated) is refused like a type the evaluator
+		// does not know.
+		if len(principal.Unsupported) > 0 || len(principal.Federated) > 0 {
 			return errInvalidKeyPolicyPrincipal
 		}
 		for _, pattern := range principal.AWS {

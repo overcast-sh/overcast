@@ -146,19 +146,10 @@ func signJWT(priv *rsa.PrivateKey, kid string, claims map[string]any) (string, e
 // parseJWTClaims decodes the payload of a JWT without verifying the signature.
 // Used to extract the issuer before loading the signing key.
 func parseJWTClaims(tokenStr string) (map[string]any, error) {
-	parts := strings.SplitN(tokenStr, ".", 3)
-	if len(parts) != 3 {
+	if parts := strings.SplitN(tokenStr, ".", 3); len(parts) != 3 {
 		return nil, fmt.Errorf("malformed JWT: expected 3 parts, got %d", len(parts))
 	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, fmt.Errorf("JWT payload decode: %w", err)
-	}
-	var claims map[string]any
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, fmt.Errorf("JWT payload JSON: %w", err)
-	}
-	return claims, nil
+	return serviceutil.DecodeJWTClaims(tokenStr)
 }
 
 // verifyJWTSignature checks the RS256 signature of a JWT against the given public key.

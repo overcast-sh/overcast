@@ -176,6 +176,10 @@ func (h *Handler) AssumeRoleWithWebIdentity(w http.ResponseWriter, r *http.Reque
 		protocol.WriteQueryXMLError(w, r, protocol.ErrMissingParameter("RoleSessionName"))
 		return
 	}
+	if r.FormValue("WebIdentityToken") == "" {
+		protocol.WriteQueryXMLError(w, r, protocol.ErrMissingParameter("WebIdentityToken"))
+		return
+	}
 	dur := parseDurationSeconds(r.FormValue("DurationSeconds"), 3600)
 	creds := newTempCredentials(h.clk, dur)
 	if h.bus != nil {

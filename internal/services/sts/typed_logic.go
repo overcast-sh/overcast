@@ -27,6 +27,13 @@ type assumeRoleReq struct {
 	DurationSeconds int    `json:"DurationSeconds"`
 }
 
+type assumeRoleWithWebIdentityReq struct {
+	RoleArn          string `json:"RoleArn"`
+	RoleSessionName  string `json:"RoleSessionName"`
+	WebIdentityToken string `json:"WebIdentityToken"`
+	DurationSeconds  int    `json:"DurationSeconds"`
+}
+
 // ---- Response types (xml tags for QueryXML codec WriteResponse) ----
 
 type getCallerIdentityResp struct {
@@ -186,12 +193,15 @@ func (h *Handler) assumeRoleTyped(ctx context.Context, req *assumeRoleReq) (*ass
 	}, nil
 }
 
-func (h *Handler) assumeRoleWithWebIdentityTyped(ctx context.Context, req *assumeRoleReq) (*assumeRoleWithWebIdentityResp, *protocol.AWSError) {
+func (h *Handler) assumeRoleWithWebIdentityTyped(ctx context.Context, req *assumeRoleWithWebIdentityReq) (*assumeRoleWithWebIdentityResp, *protocol.AWSError) {
 	if req.RoleArn == "" {
 		return nil, protocol.ErrMissingParameter("RoleArn")
 	}
 	if req.RoleSessionName == "" {
 		return nil, protocol.ErrMissingParameter("RoleSessionName")
+	}
+	if req.WebIdentityToken == "" {
+		return nil, protocol.ErrMissingParameter("WebIdentityToken")
 	}
 	dur := defaultDuration(req.DurationSeconds, 3600)
 	creds := typedCredentials(h.clk, dur)

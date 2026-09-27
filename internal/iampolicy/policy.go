@@ -109,8 +109,12 @@ type PrincipalSet struct {
 	AWS []Pattern
 	// Service holds service principals (e.g. lambda.amazonaws.com).
 	Service []string
+	// Federated holds identity providers (an oidc-provider or saml-provider
+	// ARN, or a provider name such as accounts.google.com). They match only a
+	// caller that authenticated with that provider; see [Request.Federated].
+	Federated []string
 	// Unsupported names principal types this evaluator cannot match
-	// (Federated, CanonicalUser), reported rather than ignored.
+	// (CanonicalUser), reported rather than ignored.
 	Unsupported []string
 }
 
@@ -310,7 +314,7 @@ func containsString(values []string, want string) bool {
 }
 
 func principalHasValues(set *PrincipalSet) bool {
-	return set != nil && (set.Anonymous || len(set.AWS) > 0 || len(set.Service) > 0 || len(set.Unsupported) > 0)
+	return set != nil && (set.Anonymous || len(set.AWS) > 0 || len(set.Service) > 0 || len(set.Federated) > 0 || len(set.Unsupported) > 0)
 }
 
 func patternsHaveValues(patterns []Pattern) bool {
@@ -404,6 +408,8 @@ func parsePrincipal(raw json.RawMessage, where, field string) (*PrincipalSet, er
 			}
 		case "service":
 			set.Service = append(set.Service, values...)
+		case "federated":
+			set.Federated = append(set.Federated, values...)
 		default:
 			set.Unsupported = append(set.Unsupported,
 				fmt.Sprintf("%s: %s type %q is not evaluated", where, field, key))

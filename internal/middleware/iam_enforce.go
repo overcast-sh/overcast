@@ -138,6 +138,17 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, queries QueryR
 				return
 			}
 
+			if iamAuthorizedByTrustPolicy(op) {
+				// Signed or not: the trust policy decides, never the signer's
+				// identity policies.
+				if aerr := authorizeWebIdentity(r, st, logger); aerr != nil {
+					protocol.WriteQueryXMLError(w, r, aerr)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			if !isSignedIAMRequest(r) {
 				denyIAMRequest(w, r, op, logger, "unsigned request", nil)
 				return
@@ -298,10 +309,11 @@ type RoleSessionRecord struct {
 }
 
 type iamRoleRecord struct {
-	RoleName         string            `json:"RoleName"`
-	Arn              string            `json:"Arn"`
-	InlinePolicies   map[string]string `json:"InlinePolicies"`
-	AttachedPolicies []struct {
+	RoleName                 string            `json:"RoleName"`
+	Arn                      string            `json:"Arn"`
+	AssumeRolePolicyDocument string            `json:"AssumeRolePolicyDocument"`
+	InlinePolicies           map[string]string `json:"InlinePolicies"`
+	AttachedPolicies         []struct {
 		PolicyArn string `json:"PolicyArn"`
 	} `json:"AttachedPolicies"`
 	PermissionsBoundary string `json:"PermissionsBoundary"`
@@ -1306,36 +1318,43 @@ func ResolvePrincipalIdentity(ctx context.Context, st state.Store, accessKeyID s
 // to handle account roots, STS sessions, service principals, and remote
 // accounts, none of which this local IAM store can authoritatively validate.
 func LocalIAMPrincipalExists(ctx context.Context, st state.Store, principalARN string) (bool, error) {
-	if st == nil {
-		return false, nil
-	}
-	parts := strings.SplitN(strings.TrimSpace(principalARN), ":", 6)
+	principalARN = strings.TrimSpace(principalARN)
+	parts := strings.SplitN(principalARN, ":", 6)
 	if len(parts) != 6 || parts[0] != "arn" || parts[2] != "iam" {
 		return false, nil
 	}
-	resource := parts[5]
-	var namespace, name string
-	switch {
+	var namespace string
+	switch resource := parts[5]; {
 	case strings.HasPrefix(resource, "user/"):
 		namespace = iamUsersNamespace
-		name = resource[strings.LastIndex(resource, "/")+1:]
 	case strings.HasPrefix(resource, "role/"):
 		namespace = iamRolesNamespace
-		name = resource[strings.LastIndex(resource, "/")+1:]
 	default:
 		return false, nil
 	}
-	raw, found, err := st.Get(ctx, namespace, name)
+	_, found, err := iamRecordByARN(ctx, st, namespace, principalARN)
+	return found, err
+}
+
+// iamRecordByARN reads the record namespace keeps for the user or role arn
+// names, which is keyed by the ARN's last path segment. found is false when
+// there is none, or when the record there does not decode or is a different
+// entity's: a role of the same name under another path or account.
+func iamRecordByARN(ctx context.Context, st state.Store, namespace, arn string) (raw string, found bool, err error) {
+	if st == nil {
+		return "", false, nil
+	}
+	raw, found, err = st.Get(ctx, namespace, arn[strings.LastIndex(arn, "/")+1:])
 	if err != nil || !found {
-		return false, err
+		return "", false, err
 	}
 	var record struct {
 		ARN string `json:"Arn"`
 	}
-	if err := json.Unmarshal([]byte(raw), &record); err != nil {
-		return false, nil
+	if json.Unmarshal([]byte(raw), &record) != nil || strings.TrimSpace(record.ARN) != arn {
+		return "", false, nil
 	}
-	return strings.TrimSpace(record.ARN) == strings.TrimSpace(principalARN), nil
+	return raw, true, nil
 }
 
 func appendGroupPolicyDocuments(ctx context.Context, st state.Store, docs []iampolicy.SourcedDocument, userName string) []iampolicy.SourcedDocument {
