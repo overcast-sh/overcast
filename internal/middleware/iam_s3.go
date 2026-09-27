@@ -19,10 +19,20 @@ type iamCheck struct {
 
 // requestIAMChecks lists what r must be allowed to be served as op: op's
 // action on the resource r names, and, for S3, what else the operation
-// reads or deletes.
+// reads or deletes, and for an Iceberg REST call, every action AWS checks.
 func requestIAMChecks(r *http.Request, op iamOperation) []iamCheck {
-	if op.service == "s3" {
+	switch op.service {
+	case "s3":
 		return s3IAMChecks(r)
+	case "s3tables":
+		if actions := icebergIAMActions(r); len(actions) > 0 {
+			resource := requestIAMResource(r, op)
+			checks := make([]iamCheck, len(actions))
+			for i, action := range actions {
+				checks[i] = iamCheck{action: action, resource: resource}
+			}
+			return checks
+		}
 	}
 	return []iamCheck{{action: op.action, resource: requestIAMResource(r, op)}}
 }

@@ -120,8 +120,8 @@ func (c *iamEnforceCache) store(generation uint64, accessKeyID string, entry *ia
 // IAMEnforce enforces opt-in IAM authorization.
 //
 // router is the router's dispatch, which names the operation a request is
-// served as. A nil router serves no Query traffic and has no REST fallback,
-// and every request is then classified from its own content.
+// served as. A nil router serves no Query traffic and routes no path, and
+// every request is then classified from its own content.
 func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router RequestRouter) func(http.Handler) http.Handler {
 	cache := &iamEnforceCache{}
 
@@ -174,12 +174,15 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router Request
 				// This is deliberately fail-open, and it is the one place in
 				// this middleware that is: iamDenialReason fails closed on
 				// everything it can reason about, down to policy constructs the
-				// evaluator does not implement. Failing closed here instead
-				// would deny requests no handler serves an operation for — an
-				// S3 POST without a sub-resource, a path no model binds — which
-				// answer with an error of their own anyway. S3 names every
-				// operation it serves (s3route), so its traffic no longer
-				// reaches this branch; before #2284 its DeleteObjects did.
+				// evaluator does not implement. It is reached only by a request
+				// no service is known to serve an operation for: the router's
+				// own endpoints, a modeled binding's 501, a scope the router
+				// refuses, an S3 request S3 answers with an error of its own. A
+				// request a service's route serves always carries an action
+				// (serviceRouteIAMOperation), except an invocation of a
+				// deployed API on API Gateway's route (#2291). S3 names every operation
+				// it serves (s3route), so its traffic no longer reaches this
+				// branch; before #2284 its DeleteObjects did.
 				//
 				// What must never happen is the third option: inferring the
 				// *wrong* action. That is not a safe default in either
@@ -365,16 +368,22 @@ type iamOperation struct {
 // name different services whenever a caller signs for one service and calls
 // another's Action (#2229). A request the router's REST fallback serves is
 // named by the service the fallback serves it as (S3, for a path no other
-// service claims) whatever Action or credential scope it carries (#2271).
-// Everything else reaches a service's own route and is classified from its
-// own content by detectService.
+// service claims) whatever Action or credential scope it carries (#2271). A
+// request a service's own route serves, or a router-owned dispatcher hands to
+// one of the service's routers, is named as that service's, whatever its
+// credential scope names (#2283). Everything else — the router's own
+// endpoints, or no route at all — is classified from its own content by
+// detectService.
 func requestIAMOperation(w http.ResponseWriter, r *http.Request, router RequestRouter) (iamOperation, error) {
 	if router != nil {
 		route, isQuery, err := router.RouteQuery(w, r)
 		if err != nil || isQuery {
 			return queryIAMOperation(route), err
 		}
-		if route, isFallback := router.RouteREST(r); isFallback {
+		if route, routed := router.RouteREST(r); routed {
+			if route.Outcome == RESTServedByService {
+				return serviceRouteIAMOperation(r, route.Service), nil
+			}
 			return restIAMOperation(r, route), nil
 		}
 	}
@@ -442,6 +451,11 @@ func requestIAMAction(r *http.Request, svc string) string {
 	case "s3":
 		// S3 serves by method and path alone.
 		return pathIAMAction(r, svc)
+	case "s3tables":
+		// The Iceberg REST catalog S3 Tables serves beside its own API.
+		if actions := icebergIAMActions(r); len(actions) > 0 {
+			return actions[0]
+		}
 	case "lambda":
 		if action := pathIAMAction(r, svc); action != "" {
 			return action

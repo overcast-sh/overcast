@@ -28,11 +28,7 @@ const stsOnlyPolicy = `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","A
 // signedPut sends PUT path signed for signingName by accessKey.
 func signedPut(t *testing.T, srv *helpers.TestServer, path, accessKey, signingName string) *http.Response {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodPut, srv.URL+path, nil)
-	if err != nil {
-		t.Fatalf("build PUT %s: %v", path, err)
-	}
-	return doSigned(t, req, sigV4Auth(accessKey, signingName))
+	return signedRequest(t, srv, http.MethodPut, path, accessKey, signingName)
 }
 
 // assertS3Denied checks resp is S3's AccessDenied for action.

@@ -108,16 +108,23 @@ That last row is the one divergence, and it needs a simulation supplying a
 
 ## What enforcement does not see
 
-`OVERCAST_ENFORCE_IAM` gates identity policies only. Three further gaps:
+`OVERCAST_ENFORCE_IAM` gates identity policies only. Further gaps:
 
 - **Resource-based policies** — S3 bucket policies, Lambda/SQS/SNS policies —
   are not consulted at request time. The simulator accepts one explicitly,
   which is the way to test one today.
-- **A request whose operation cannot be named** is not gated. S3 reaches this
-  routinely, because its sub-resource operations (`?tagging`, `?restore`,
-  `?legal-hold`, …) are identified by query parameters rather than by path.
-  Denying them would break ordinary S3 traffic the moment enforcement was
-  switched on. The gap is logged at debug level rather than passing silently.
+- **A request no service serves an operation for** is not gated: one of
+  Overcast's own endpoints, a path no route matches, a modeled operation
+  Overcast answers with a 501, or an S3 request S3 refuses with an error of its
+  own. The gap is logged at debug level rather than passing silently. A request
+  a service's route does serve, but no operation names, is checked as
+  `<prefix>:*` instead, so a caller allowed less than the whole service gets
+  `AccessDenied`; see [IAM actions](./actions.md#which-operation).
+- **API Gateway invocations** are not gated, on the `execute-api` host or on
+  API Gateway's own invocation routes. `execute-api:Invoke` is not checked for
+  an `AWS_IAM` method either, so it is served like a `NONE` one.
+- **S3 Tables actions** are checked against resource `*`, so a policy scoped
+  to a table bucket or table ARN does not allow them.
 - **Calls a service makes for its caller** are not checked as that caller.
   Athena's query engine reads Glue and S3 without enforcement, so only
   `StartQueryExecution` is checked; see

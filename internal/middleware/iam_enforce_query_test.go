@@ -19,8 +19,8 @@ type stubRouter struct {
 	isQuery bool
 	err     error
 
-	rest       RESTRoute
-	isFallback bool
+	rest   RESTRoute
+	routed bool
 }
 
 func (s stubRouter) RouteQuery(http.ResponseWriter, *http.Request) (QueryRoute, bool, error) {
@@ -28,7 +28,7 @@ func (s stubRouter) RouteQuery(http.ResponseWriter, *http.Request) (QueryRoute, 
 }
 
 func (s stubRouter) RouteREST(*http.Request) (RESTRoute, bool) {
-	return s.rest, s.isFallback
+	return s.rest, s.routed
 }
 
 // serveQueryScoped sends an IAM CreateUser Query call signed for s3, by a

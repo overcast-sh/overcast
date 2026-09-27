@@ -50,11 +50,11 @@ func (s sharedRoots) mount(root string, dispatch http.Handler) {
 	s.paths.mount(root, s3First{dispatch: dispatch, s3: s.s3})
 }
 
-// delegate makes a dispatched sub-router hand what it does not serve to S3's
-// REST fallback (see delegateUnmatched), and returns it for recording.
-func (s sharedRoots) delegate(sub chi.Router) chi.Router {
+// delegate makes service's dispatched sub-router hand what it does not serve
+// to S3's REST fallback (see delegateUnmatched), and returns it for recording.
+func (s sharedRoots) delegate(service string, sub chi.Router) chi.Router {
 	delegateUnmatched(sub, s.s3)
-	return delegatedRouter{Router: sub, fallback: s.s3}
+	return delegatedRouter{Router: sub, service: service, fallback: s.s3}
 }
 
 // s3First sends a request that positively addresses S3 — virtual-hosted to a
