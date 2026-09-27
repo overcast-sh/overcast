@@ -1,0 +1,77 @@
+---
+title: "IAM actions"
+description: "Which operation and which IAM action a request is checked as under OVERCAST_ENFORCE_IAM: action prefixes, S3's actions, and the credential scope."
+section: "Service Reference"
+tags:
+  - docs
+  - iam
+  - services
+---
+
+# IAM actions
+
+With [enforcement](../iam.md#request-time-enforcement-opt-in) on, a request is
+checked as the IAM action AWS documents for the operation that serves it. Write
+policies with the names the AWS documentation gives.
+
+## Which operation
+
+A request is the operation that serves it, whatever service its credential
+scope names, with one gap:
+
+- An AWS Query call is the operation its `Action` and `Version` name:
+  `CreateUser` signed for `s3` is `iam:CreateUser`.
+- A path no service's route claims is S3's, whatever `Action` it carries:
+  `PUT /my-bucket?Action=GetFederationToken` signed for `sts` is `s3:CreateBucket`.
+- An S3 request is the operation S3 serves, chosen by its method, path and
+  sub-resource: `PUT /my-bucket?policy` is `PutBucketPolicy`, not
+  `CreateBucket`. The `x-id` query parameter the SDKs add plays no part, as it
+  plays none in what S3 serves.
+- The gap: a service's own route, such as EKS's `/clusters`, is named by the
+  credential scope. Sign for the service you call.
+
+## Which action
+
+The action is `<prefix>:<Operation>`, where the prefix is the one AWS uses. Ten
+services differ from their Overcast service key:
+
+| Service            | IAM action prefix       |
+| ------------------ | ----------------------- |
+| MSK                | `kafka:`                |
+| Step Functions     | `states:`               |
+| EFS                | `elasticfilesystem:`    |
+| OpenSearch         | `es:`                   |
+| ELBv2              | `elasticloadbalancing:` |
+| AppRegistry        | `servicecatalog:`       |
+| Cognito user pools | `cognito-idp:`          |
+| WAF                | `wafv2:`                |
+| DynamoDB Streams   | `dynamodb:`             |
+| AppConfig Data     | `appconfig:`            |
+
+Where AWS checks an action not named after the operation, that action is
+checked. Lambda's three invoke operations are `lambda:InvokeFunction`. S3
+follows AWS's
+[required permissions for S3 API operations](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-with-s3-policy-actions.html):
+
+| S3 operation                                                     | Action checked                                             |
+| ---------------------------------------------------------------- | ---------------------------------------------------------- |
+| `ListBuckets`                                                    | `s3:ListAllMyBuckets`                                      |
+| `ListObjects`, `ListObjectsV2`, `HeadBucket`                     | `s3:ListBucket`                                            |
+| `HeadObject`, `GetObjectAttributes`                              | `s3:GetObject`                                             |
+| `CreateMultipartUpload`, `UploadPart`, `CompleteMultipartUpload` | `s3:PutObject`                                             |
+| `ListParts`                                                      | `s3:ListMultipartUploadParts`                              |
+| `CopyObject`, `UploadPartCopy`                                   | `s3:PutObject` on the target, `s3:GetObject` on the source |
+| `DeleteObjects`                                                  | `s3:DeleteObject` on each key it names                     |
+| `DeleteBucketCors` and the other configuration deletes           | The put action, such as `s3:PutBucketCORS`                 |
+
+A `versionId` selects the version action where AWS has one, such as
+`s3:GetObjectVersion` or `s3:DeleteObjectVersion`.
+
+AWS answers a `DeleteObjects` key the caller may not delete with an entry in
+`Errors` and deletes the rest. Overcast refuses the whole request with
+`AccessDenied`, and deletes nothing.
+
+## Related
+
+- [IAM](../iam.md) — enforcement, and the error each protocol gets
+- [IAM troubleshooting](./troubleshooting.md) — `AccessDenied` after switching enforcement on

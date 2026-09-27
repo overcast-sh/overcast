@@ -446,7 +446,7 @@ func TestIAMEnforceIntegration_signedAllowOnS3ListBuckets(t *testing.T) {
 	srv := helpers.NewTestServer(t,
 		helpers.WithEnforceIAM(true),
 	)
-	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListBuckets","Resource":"*"}]}`)
+	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListAllMyBuckets","Resource":"*"}]}`)
 
 	resp := s3CallWithAuth(
 		t,
@@ -464,7 +464,7 @@ func TestIAMEnforceIntegration_signedDenyOnS3ListBuckets(t *testing.T) {
 	srv := helpers.NewTestServer(t,
 		helpers.WithEnforceIAM(true),
 	)
-	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"s3:ListBuckets","Resource":"*"}]}`)
+	seedIAMPrincipal(t, srv, "test", `{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"s3:ListAllMyBuckets","Resource":"*"}]}`)
 
 	resp := s3CallWithAuth(
 		t,

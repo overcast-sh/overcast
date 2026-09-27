@@ -339,7 +339,7 @@ func TestIAMEnforce_enabled_arnLabelledPathAllowPasses(t *testing.T) {
 
 func TestIAMEnforce_enabled_restFallbackS3ExplicitDenyBlocks(t *testing.T) {
 	st := state.NewMemoryStore()
-	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"s3:ListBuckets","Resource":"*"}]}`}, nil)
+	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Deny","Action":"s3:ListAllMyBuckets","Resource":"*"}]}`}, nil)
 
 	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -362,7 +362,7 @@ func TestIAMEnforce_enabled_restFallbackS3ExplicitDenyBlocks(t *testing.T) {
 
 func TestIAMEnforce_enabled_restFallbackS3AllowPasses(t *testing.T) {
 	st := state.NewMemoryStore()
-	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListBuckets","Resource":"*"}]}`}, nil)
+	seedIAMUserWithPolicies(t, st, "test", []string{`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"s3:ListAllMyBuckets","Resource":"*"}]}`}, nil)
 
 	called := false
 	h := IAMEnforce(true, st, zap.NewNop(), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

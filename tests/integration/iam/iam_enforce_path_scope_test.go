@@ -96,8 +96,9 @@ func TestIAMEnforcePathScope_smithyURIWithoutItsHeaderIsS3(t *testing.T) {
 	}
 	resp := doSigned(t, req, sigV4Auth("sts-only", "sts"))
 
-	// Then: it is authorised as the S3 operation served, and denied
-	assertS3Denied(t, resp, "s3:CreateMultipartUpload")
+	// Then: it is authorised as the S3 operation served, CreateMultipartUpload,
+	// whose action is s3:PutObject, and denied
+	assertS3Denied(t, resp, "s3:PutObject")
 }
 
 func TestIAMEnforcePathScope_servedOperationAllowedWhateverTheScope(t *testing.T) {

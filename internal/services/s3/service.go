@@ -2,8 +2,8 @@
 //
 // S3 uses a REST-style XML API. Each HTTP method+path combination maps to an
 // AWS S3 operation. Sub-resource query parameters (e.g. ?acl, ?cors, ?policy)
-// further specialise the operation. Each sub-resource routes to its own named
-// handler in handler.go, which either implements the operation or returns a
+// further specialise the operation. internal/s3route names the operation, and
+// each has its own named handler, which either implements it or returns a
 // clear HTTP 501 with x-emulator-unsupported: true.
 //
 // Implemented:
@@ -29,6 +29,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -291,34 +292,29 @@ func (s *Service) ensureValidatedBucket(ctx context.Context, bucket, region stri
 }
 
 // RegisterRoutes mounts all S3 endpoints onto the given router.
-// Route order matters in chi — more specific routes must come before wildcards.
-// Every route delegates to a named dispatcher or handler; there are no inline
-// protocol.NotImplementedXML calls here.
+// Every route serves through Handler.dispatch, which picks the operation by
+// s3route; chi's part is to bind {bucket} and the key. Both bucket forms are
+// registered because the AWS SDK sends PUT /bucket/ for CreateBucket and some
+// other bucket operations, and /* matches keys with slashes
+// (e.g. logs/2024/jan.log).
 func (s *Service) RegisterRoutes(r chi.Router) {
-	h := s.handler
-
-	// Root-level: ListBuckets, ListDirectoryBuckets
-	r.Get("/", h.RootGet)
-
-	// Bucket-level — all methods dispatched through named dispatchers so each
-	// sub-resource (e.g. ?acl, ?cors) calls its own handler in handler.go.
-	// Both with and without trailing slash: the AWS SDK sends PUT /bucket/ for
-	// CreateBucket and some other bucket operations.
-	r.Get("/{bucket}", h.BucketGet)
-	r.Get("/{bucket}/", h.BucketGet)
-	r.Put("/{bucket}", h.BucketPut)
-	r.Put("/{bucket}/", h.BucketPut)
-	r.Head("/{bucket}", h.HeadBucket)
-	r.Head("/{bucket}/", h.HeadBucket)
-	r.Delete("/{bucket}", h.BucketDelete)
-	r.Delete("/{bucket}/", h.BucketDelete)
-	r.Post("/{bucket}", h.BucketPost)
-	r.Post("/{bucket}/", h.BucketPost)
-
-	// Object-level — /* wildcard matches keys with slashes (e.g. logs/2024/jan.log).
-	r.Get("/{bucket}/*", h.ObjectGet)
-	r.Put("/{bucket}/*", h.PutObjectOrCopy)
-	r.Head("/{bucket}/*", h.HeadObject)
-	r.Delete("/{bucket}/*", h.ObjectDelete)
-	r.Post("/{bucket}/*", h.ObjectPost)
+	serve := s.handler.dispatch(protocol.NotImplementedXML)
+	r.Get("/", serve)
+	// POST on an object is only an operation when a sub-resource selects one
+	// — ?uploads, ?uploadId=, ?restore, ?select. Without one there is no such
+	// AWS operation, so the answer is MethodNotAllowed rather than
+	// NotImplemented: the latter would claim a gap in this emulator for a
+	// request real S3 refuses too, sending a caller after a workaround that
+	// does not exist.
+	for pattern, post := range map[string]http.HandlerFunc{
+		"/{bucket}":   serve,
+		"/{bucket}/":  serve,
+		"/{bucket}/*": s.handler.dispatch(protocol.MethodNotAllowedXML),
+	} {
+		r.Get(pattern, serve)
+		r.Put(pattern, serve)
+		r.Head(pattern, serve)
+		r.Delete(pattern, serve)
+		r.Post(pattern, post)
+	}
 }

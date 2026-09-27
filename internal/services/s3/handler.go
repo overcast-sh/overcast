@@ -9,7 +9,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/config"
 	"github.com/overcast-sh/overcast/internal/events"
-	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/s3route"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/state"
 )
@@ -71,33 +71,8 @@ type Handler struct {
 	// bucket and one S3BucketCreated event. See createBucket.
 	bucketLocks serviceutil.RecordLocks
 
-	bucketGetRoutes    []s3Route
-	bucketPutRoutes    []s3Route
-	bucketDeleteRoutes []s3Route
-	bucketPostRoutes   []s3Route
-	objectGetRoutes    []s3Route
-	objectPutRoutes    []s3Route
-	objectDeleteRoutes []s3Route
-	objectPostRoutes   []s3Route
-}
-
-// s3Route maps a query-parameter name to its handler.
-// Order matters: the first matching param wins (mirrors AWS priority behaviour).
-type s3Route struct {
-	param string
-	fn    http.HandlerFunc
-}
-
-// dispatchByQuery iterates routes in order and calls the first handler whose
-// query param is present. Falls back to fallback if none match.
-func dispatchByQuery(w http.ResponseWriter, r *http.Request, routes []s3Route, fallback http.HandlerFunc) {
-	for _, rt := range routes {
-		if serviceutil.HasQueryParam(r, rt.param) {
-			rt.fn(w, r)
-			return
-		}
-	}
-	fallback(w, r)
+	// operations maps each operation s3route can name onto its handler.
+	operations map[string]http.HandlerFunc
 }
 
 func newHandler(cfg *config.Config, store state.Store, log *serviceutil.ServiceLogger, clk clock.Clock, bus *events.Bus) *Handler {
@@ -109,157 +84,36 @@ func newHandler(cfg *config.Config, store state.Store, log *serviceutil.ServiceL
 		bus:   bus,
 	}
 
-	h.initBucketRoutes()
-	h.initObjectRoutes()
-
+	h.operations = h.bucketOperations()
+	for operation, serve := range h.objectOperations() {
+		h.operations[operation] = serve
+	}
 	return h
 }
 
-// ---- Bucket dispatchers ---------------------------------------------------
-
-// BucketGet dispatches GET /{bucket} by sub-resource query param.
-// Guarded by x-amz-expected-bucket-owner (see expected_owner.go) — every
-// sub-resource here, and the ListObjectsV1 fallback, targets an existing
-// bucket.
-func (h *Handler) BucketGet(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
-	dispatchByQuery(w, r, h.bucketGetRoutes, h.ListObjectsV1)
-}
-
-// BucketPut dispatches PUT /{bucket} by sub-resource query param.
+// dispatch serves r as the operation s3route names it, which is the name IAM
+// enforcement authorises and the request log records: S3 has no other
+// dispatch, so what is authorised, logged and served cannot differ (#2284).
+// unserved answers a request s3route names no operation — a POST to a bucket
+// or an object without a sub-resource that selects one.
 //
-// CreateBucket — the fallback when no sub-resource query param matches — is
-// deliberately NOT guarded by x-amz-expected-bucket-owner: AWS documents
-// CreateBucket as one of the operations that ignores the header, since there
-// is no existing bucket yet to compare an owner against. Every sub-resource
-// PUT in bucketPutRoutes targets an existing bucket, so those are guarded
-// like any other bucket/object operation. This is why BucketPut cannot use
-// the same "guard once, then dispatchByQuery" shape as the other dispatchers
-// below — the guard has to sit inside the loop, not in front of it.
-func (h *Handler) BucketPut(w http.ResponseWriter, r *http.Request) {
-	for _, rt := range h.bucketPutRoutes {
-		if serviceutil.HasQueryParam(r, rt.param) {
-			if !h.checkExpectedBucketOwner(w, r) {
-				return
-			}
-			rt.fn(w, r)
+// Every operation is guarded by x-amz-expected-bucket-owner except the ones AWS
+// documents as ignoring it (see expected_owner.go), and a copy is guarded by
+// x-amz-source-expected-bucket-owner as well. Both checks run before the
+// operation's handler, so a denial never reaches it.
+func (h *Handler) dispatch(unserved http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		operation := s3route.Operation(r)
+		if !ignoresExpectedBucketOwner[operation] && !h.checkExpectedBucketOwner(w, r) {
 			return
 		}
-	}
-	h.CreateBucket(w, r)
-}
-
-// BucketDelete dispatches DELETE /{bucket} by sub-resource query param.
-// Guarded by x-amz-expected-bucket-owner — the DeleteBucket fallback and
-// every sub-resource here target an existing bucket.
-func (h *Handler) BucketDelete(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
-	dispatchByQuery(w, r, h.bucketDeleteRoutes, h.DeleteBucket)
-}
-
-// BucketPost dispatches POST /{bucket} by sub-resource query param.
-// Guarded by x-amz-expected-bucket-owner.
-func (h *Handler) BucketPost(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
-	dispatchByQuery(w, r, h.bucketPostRoutes, protocol.NotImplementedXML)
-}
-
-// ListObjectsV2OrLocation dispatches GET /{bucket} based on query parameters:
-// ?list-type=2        → ListObjectsV2
-// ?location           → GetBucketLocation
-// (no params)         → ListObjectsV2 (default)
-//
-// Deprecated: use BucketGet which handles all S3 bucket-level query params.
-func (h *Handler) ListObjectsV2OrLocation(w http.ResponseWriter, r *http.Request) {
-	h.BucketGet(w, r)
-}
-
-// ---- Object handlers -------------------------------------------------------
-
-// ObjectGet dispatches GET /{bucket}/{key} by sub-resource query param.
-// Guarded by x-amz-expected-bucket-owner.
-func (h *Handler) ObjectGet(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
-	dispatchByQuery(w, r, h.objectGetRoutes, h.GetObject)
-}
-
-// ObjectDelete dispatches DELETE /{bucket}/{key} by sub-resource query param.
-// Guarded by x-amz-expected-bucket-owner.
-func (h *Handler) ObjectDelete(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
-	dispatchByQuery(w, r, h.objectDeleteRoutes, h.DeleteObject)
-}
-
-// ObjectPost dispatches POST /{bucket}/{key} by sub-resource query param.
-// POST on an object is only an operation when a subresource selects one —
-// ?uploads, ?uploadId=, ?restore, ?select. Without one there is no such AWS
-// operation, so the fallback is MethodNotAllowed rather than NotImplemented:
-// the latter would claim a gap in this emulator for a request real S3 refuses
-// too, sending a caller after a workaround that does not exist.
-// Guarded by x-amz-expected-bucket-owner.
-func (h *Handler) ObjectPost(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
-	dispatchByQuery(w, r, h.objectPostRoutes, protocol.MethodNotAllowedXML)
-}
-
-// PutObjectOrCopy dispatches PUT /{bucket}/{key}.
-// partNumber is checked first because it requires a secondary header discriminant
-// that the route table can't express. All other sub-resources use the table.
-//
-// Guarded by x-amz-expected-bucket-owner (destination bucket, always) and, on
-// a copy (x-amz-copy-source present — CopyObject or UploadPartCopy), by
-// x-amz-source-expected-bucket-owner (source bucket) as well. Both checks
-// happen up front, before any branch below runs, so a denial never reaches
-// PutObject/CopyObject/UploadPart/UploadPartCopy.
-func (h *Handler) PutObjectOrCopy(w http.ResponseWriter, r *http.Request) {
-	if !h.checkExpectedBucketOwner(w, r) {
-		return
-	}
-	copySource := r.Header.Get("x-amz-copy-source")
-	if copySource != "" && !h.checkExpectedSourceBucketOwner(w, r, copySource) {
-		return
-	}
-
-	if serviceutil.HasQueryParam(r, "partNumber") {
-		if copySource != "" {
-			h.UploadPartCopy(w, r)
-		} else {
-			h.UploadPart(w, r)
+		if copySource := r.Header.Get(s3route.CopySourceHeader); copiesObject[operation] && !h.checkExpectedSourceBucketOwner(w, r, copySource) {
+			return
 		}
-		return
-	}
-	dispatchByQuery(w, r, h.objectPutRoutes, func(w http.ResponseWriter, r *http.Request) {
-		if copySource != "" {
-			h.CopyObject(w, r)
-		} else {
-			h.PutObject(w, r)
+		if serve, ok := h.operations[operation]; ok {
+			serve(w, r)
+			return
 		}
-	})
-}
-
-// ---- Root-level dispatcher -------------------------------------------------
-
-// RootGet dispatches GET / — either ListBuckets or ListDirectoryBuckets.
-// Deliberately NOT guarded by x-amz-expected-bucket-owner: AWS documents
-// ListBuckets as ignoring the header (there is no single target bucket to
-// compare an owner against), and ListDirectoryBuckets is the same shape of
-// operation. See expected_owner.go.
-func (h *Handler) RootGet(w http.ResponseWriter, r *http.Request) {
-	if serviceutil.HasQueryParam(r, "directory-buckets") {
-		h.ListDirectoryBuckets(w, r)
-		return
+		unserved(w, r)
 	}
-	h.ListBuckets(w, r)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/awsapi"
 	"github.com/overcast-sh/overcast/internal/clock"
 	"github.com/overcast-sh/overcast/internal/protocol"
+	"github.com/overcast-sh/overcast/internal/s3route"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 	"github.com/overcast-sh/overcast/internal/trace"
 )
@@ -350,8 +351,7 @@ func queryClaimFromBody(body ...[]byte) (awsapi.Claim, bool) {
 // alone here left every such request labelled s3 with no operation — and IAM
 // enforcement's unnamed-action branch lets those through.
 //
-// The operation is then taken from the URI as the caller wrote it, which is the
-// same trust step 2 of detectOperationForService makes of `x-id`. It is not a
+// The operation is then taken from the URI as the caller wrote it. It is not a
 // licence to mislabel: the router dispatches on this very label, so what the
 // classifier names and what answers the request are the same service by
 // construction.
@@ -607,18 +607,21 @@ func detectOperation(r *http.Request, body ...[]byte) string {
 //
 // Priority:
 //  1. X-Amz-Target suffix  ("AmazonSQS.CreateQueue" → "CreateQueue")
-//  2. x-id query param     ("?x-id=ListBuckets"     → "ListBuckets")
-//  3. Query-protocol Action parameter (needs the body)
-//  4. Smithy RPC v2 operation label in the URI
-//  5. Method + path, resolved against svc
+//  2. Query-protocol Action parameter (needs the body)
+//  3. Smithy RPC v2 operation label in the URI
+//  4. Method + path, resolved against svc
 //
-// Step 5 is where this used to go wrong. It ran one flat switch whose Lambda
+// The x-id query parameter the S3 SDKs add is not read: S3 never reads it
+// either, so it named PUT /bucket/key?x-id=GetObject a GetObject that S3
+// served as PutObject (#2284).
+//
+// Step 4 is where this used to go wrong. It ran one flat switch whose Lambda
 // arm handled two methods under one path prefix and whose S3 arm was reachable
 // by anything the arms above it failed to claim, so every other Lambda method
 // and API version was labelled — and metered — as an S3 object operation.
 // Resolution is now scoped to the classified service throughout: restOperation
-// answers for a REST-routed service from the pinned Smithy models, the S3
-// shape rules are reachable only when the request is S3's, and a path neither
+// answers for a REST-routed service from the pinned Smithy models, s3route
+// names a request only when it is S3's, and a path neither
 // recognises yields "" instead of borrowing a name from whichever service's
 // heuristics happened to sit lower in the switch.
 func detectOperationForService(r *http.Request, svc string, body ...[]byte) string {
@@ -636,17 +639,12 @@ func detectOperationForService(r *http.Request, svc string, body ...[]byte) stri
 // target only on POST /, so a request its REST fallback serves by method and
 // path is named without one (#2271).
 func operationWithoutTarget(r *http.Request, svc string, body ...[]byte) string {
-	// 2. x-id query param (S3 SDK sends this for several operations)
-	if xid := rawQueryValue(r.URL.RawQuery, "x-id"); xid != "" {
-		return xid
-	}
-
-	// 3. Query-protocol Action parameter.
+	// 2. Query-protocol Action parameter.
 	if claim, ok := queryClaimFromBody(body...); ok {
 		return claim.Operation
 	}
 
-	// 4. Smithy RPC v2 names the operation in the URI. Resolved through the
+	// 3. Smithy RPC v2 names the operation in the URI. Resolved through the
 	// registry rather than taken from the path so the answer is a modeled
 	// operation name and not whatever a caller put there.
 	if claim, ok := smithyRPCClaim(r); ok && claim.Operation != "" {
@@ -682,67 +680,13 @@ func operationWithoutTarget(r *http.Request, svc string, body ...[]byte) string 
 		return ""
 	}
 
-	// 5. Method + path, resolved against the classified service.
-	if svc != "s3" {
-		return restOperation(svc, r)
+	// 4. Method + path, resolved against the classified service. S3 is named
+	// by the decision its own dispatch makes, so the name is the operation it
+	// serves.
+	if svc == "s3" {
+		return s3route.Operation(r)
 	}
-	return s3ShapeOperation(r)
-}
-
-// s3ShapeOperation names an S3 request from its method, path depth and
-// sub-resource query parameters. S3 alone needs shape rules rather than the
-// generated model bindings: it has no distinguishing header or path prefix,
-// and in the shared model trie its own `/{Bucket}/{Key+}` bindings sit behind
-// other services' greedy bindings, so a lookup for "/my-bucket/key" answers
-// with MediaStore Data's GetObject long before it reaches S3's.
-//
-// Reachable only for requests detectService classified as S3 — which is the
-// same determination the router makes when it decides S3 keeps a path.
-func s3ShapeOperation(r *http.Request) string {
-	depth := pathDepth(r.URL.Path)
-	query := r.URL.RawQuery
-
-	switch {
-	// Bucket-level
-	case depth == 1 && r.Method == http.MethodGet && r.URL.Path == "/":
-		return "ListBuckets"
-	case depth == 1 && r.Method == http.MethodPut && rawQueryHas(query, "versioning"):
-		return "PutBucketVersioning"
-	case depth == 1 && r.Method == http.MethodGet && rawQueryHas(query, "location"):
-		return "GetBucketLocation"
-	case depth == 1 && r.Method == http.MethodGet && (rawQueryHas(query, "list-type") || rawQueryHas(query, "prefix")):
-		return "ListObjectsV2"
-	case depth == 1 && r.Method == http.MethodPut:
-		return "CreateBucket"
-	case depth == 1 && r.Method == http.MethodDelete:
-		return "DeleteBucket"
-	case depth == 1 && r.Method == http.MethodHead:
-		return "HeadBucket"
-
-	// Object-level
-	case depth >= 2 && r.Method == http.MethodPut && r.Header.Get("X-Amz-Copy-Source") != "":
-		return "CopyObject"
-	case depth >= 2 && r.Method == http.MethodPut && rawQueryHas(query, "uploadId"):
-		return "UploadPart"
-	case depth >= 2 && r.Method == http.MethodPut:
-		return "PutObject"
-	case depth >= 2 && r.Method == http.MethodGet && rawQueryHas(query, "uploadId"):
-		return "ListParts"
-	case depth >= 2 && r.Method == http.MethodGet:
-		return "GetObject"
-	case depth >= 2 && r.Method == http.MethodHead:
-		return "HeadObject"
-	case depth >= 2 && r.Method == http.MethodDelete && rawQueryHas(query, "uploadId"):
-		return "AbortMultipartUpload"
-	case depth >= 2 && r.Method == http.MethodDelete:
-		return "DeleteObject"
-	case depth >= 2 && r.Method == http.MethodPost && rawQueryHas(query, "uploads"):
-		return "CreateMultipartUpload"
-	case depth >= 2 && r.Method == http.MethodPost && rawQueryHas(query, "delete"):
-		return "DeleteObjects"
-	}
-
-	return ""
+	return restOperation(svc, r)
 }
 
 // responseWriter wraps http.ResponseWriter to capture the status code written

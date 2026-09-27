@@ -174,13 +174,11 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router Request
 				// this middleware that is: iamDenialReason fails closed on
 				// everything it can reason about, down to policy constructs the
 				// evaluator does not implement. Failing closed here instead
-				// would deny far more than it protected: S3 reaches this branch
-				// routinely, because its sub-resource operations (?tagging,
-				// ?restore, ?legal-hold, …) are named by query parameters the
-				// shape rules do not enumerate. A closed default would break
-				// ordinary S3 traffic the moment IAM enforcement was switched
-				// on, to guard paths that mostly do not resolve to a handler in
-				// the first place.
+				// would deny requests no handler serves an operation for — an
+				// S3 POST without a sub-resource, a path no model binds — which
+				// answer with an error of their own anyway. S3 names every
+				// operation it serves (s3route), so its traffic no longer
+				// reaches this branch; before #2284 its DeleteObjects did.
 				//
 				// What must never happen is the third option: inferring the
 				// *wrong* action. That is not a safe default in either
@@ -204,21 +202,24 @@ func IAMEnforce(enabled bool, st state.Store, logger *zap.Logger, router Request
 				return
 			}
 
-			resource := requestIAMResource(r, op)
-			result := evaluateIAMDecision(r, st, parts.AccessKey, op, resource, cache)
-			if reason, denied := iamDenialReason(result); denied && !iamServedWithoutPermission(op, result.callerARN) {
-				// A deny the evaluator could not reason about is a gap in
-				// Overcast, not a decision the user asked for: say so at warn
-				// level rather than burying it in debug output.
-				if logger != nil && (result.compileErr != nil || result.boundaryErr != nil || len(result.Unsupported) > 0) {
-					logger.Warn("iam enforcement denied a request it could not evaluate",
-						zap.String("service", op.service),
-						zap.String("action", op.action),
-						zap.String("reason", reason),
-					)
+			// Every check must be allowed, and the first one denied answers
+			// the request.
+			for _, check := range requestIAMChecks(r, op) {
+				result := evaluateIAMDecision(r, st, parts.AccessKey, op.service, check, cache)
+				if reason, denied := iamDenialReason(result); denied && !iamServedWithoutPermission(op, result.callerARN) {
+					// A deny the evaluator could not reason about is a gap in
+					// Overcast, not a decision the user asked for: say so at
+					// warn level rather than burying it in debug output.
+					if logger != nil && (result.compileErr != nil || result.boundaryErr != nil || len(result.Unsupported) > 0) {
+						logger.Warn("iam enforcement denied a request it could not evaluate",
+							zap.String("service", op.service),
+							zap.String("action", check.action),
+							zap.String("reason", reason),
+						)
+					}
+					denyIAMRequest(w, r, op, logger, reason, result.denial(check.action, check.resource))
+					return
 				}
-				denyIAMRequest(w, r, op, logger, reason, result.denial(op.action, resource))
-				return
 			}
 
 			next.ServeHTTP(w, r)
@@ -435,7 +436,11 @@ func restFallbackService(r *http.Request, route RESTRoute) string {
 // evaluated against a policy the user wrote from the AWS documentation, so it
 // has to be the name that documentation gives — see iamActionPrefix.
 func requestIAMAction(r *http.Request, svc string) string {
-	if svc == "lambda" {
+	switch svc {
+	case "s3":
+		// S3 serves by method and path alone.
+		return pathIAMAction(r, svc)
+	case "lambda":
 		if action := pathIAMAction(r, svc); action != "" {
 			return action
 		}
@@ -447,10 +452,11 @@ func requestIAMAction(r *http.Request, svc string) string {
 }
 
 // pathIAMAction names the IAM action of the operation r's method and path
-// select for svc.
+// select for svc. Lambda's paths are named by restOperation alone, the one
+// mapping the request logger reads too.
 func pathIAMAction(r *http.Request, svc string) string {
 	if svc == "lambda" {
-		return iamAction(svc, requestLambdaIAMOperation(r))
+		return iamAction(svc, restOperation(svc, r))
 	}
 	return iamAction(svc, operationWithoutTarget(r, svc))
 }
@@ -483,16 +489,6 @@ func wireIAMOperation(r *http.Request, svc string) string {
 		target = target[idx+1:]
 	}
 	return target
-}
-
-// iamAction is op's IAM action for svc, "<prefix>:<Op>", or "" when there is
-// no operation or svc is not a service IAM authorises.
-func iamAction(svc, op string) string {
-	op = strings.TrimSpace(op)
-	if op == "" || svc == "" || svc == "internal" || svc == "metrics" || svc == "events" {
-		return ""
-	}
-	return iamActionPrefix(svc) + ":" + op
 }
 
 // requestIAMResource names the resource op acts on, as an ARN or "*".
@@ -549,37 +545,6 @@ func requestIAMResource(r *http.Request, op iamOperation) string {
 		return requestELBv2IAMResource(r, fields)
 	default:
 		return "*"
-	}
-}
-
-// requestLambdaIAMOperation returns the IAM action suffix for a Lambda REST
-// request — "InvokeFunction" in "lambda:InvokeFunction".
-//
-// It shares one path mapping with the request logger (restOperation, which
-// reads the pinned Smithy `@http` bindings) and adds only what authorization
-// needs on top: the translation from an API operation name to the IAM action
-// name where AWS makes them differ. Keeping a second hand-written copy of the
-// paths here is what let the two drift — the logger's copy mislabelled most of
-// Lambda as S3 while this one did not, and every path this one missed fell
-// through to the logger's copy and produced actions like "lambda:PutObject".
-func requestLambdaIAMOperation(r *http.Request) string {
-	operation := restOperation("lambda", r)
-	if operation == "" {
-		return ""
-	}
-	return lambdaIAMAction(operation)
-}
-
-// lambdaIAMAction maps a Lambda API operation name onto the IAM action name
-// that authorizes it. AWS authorizes all three invoke operations with the
-// single action lambda:InvokeFunction — there is no lambda:Invoke — and every
-// other Lambda operation's action is named after the operation itself.
-func lambdaIAMAction(operation string) string {
-	switch operation {
-	case "Invoke", "InvokeAsync", "InvokeWithResponseStream":
-		return "InvokeFunction"
-	default:
-		return operation
 	}
 }
 
@@ -1224,7 +1189,7 @@ type iamEnforceResult struct {
 	boundaryErr error
 }
 
-func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op iamOperation, resource string, cache *iamEnforceCache) iamEnforceResult {
+func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID, service string, check iamCheck, cache *iamEnforceCache) iamEnforceResult {
 	cached, generation := cache.load(accessKeyID)
 	if cached == nil {
 		principal := collectPrincipalPolicies(r.Context(), st, accessKeyID)
@@ -1247,15 +1212,15 @@ func evaluateIAMDecision(r *http.Request, st state.Store, accessKeyID string, op
 		return iamEnforceResult{callerARN: cached.callerARN, boundaryErr: cached.boundaryErr}
 	}
 
-	reqCtx := buildIAMRequestContext(r, op.service)
+	reqCtx := buildIAMRequestContext(r, service)
 	for k, v := range cached.principalCtx {
 		reqCtx[k] = v
 	}
 
 	return iamEnforceResult{callerARN: cached.callerARN, Result: iampolicy.Evaluate(iampolicy.Input{
 		Request: iampolicy.Request{
-			Action:           op.action,
-			Resource:         resource,
+			Action:           check.action,
+			Resource:         check.resource,
 			Context:          reqCtx,
 			PrincipalARN:     cached.principalCtx["aws:principalarn"],
 			PrincipalAccount: cached.principalCtx["aws:principalaccount"],
