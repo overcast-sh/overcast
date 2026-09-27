@@ -30,6 +30,14 @@ func TestS3IAMChecks(t *testing.T) {
 		{"object lock", http.MethodPut, "/b?object-lock", "", "", []iamCheck{{"s3:PutBucketObjectLockConfiguration", bucket}}},
 		{"metadata table", http.MethodPost, "/b?metadataTable", "", "", []iamCheck{{"s3:CreateBucketMetadataTableConfiguration", bucket}}},
 		{"create bucket", http.MethodPut, "/b", "", "", []iamCheck{{"s3:CreateBucket", bucket}}},
+		// Modeled sub-resources Overcast does not implement are still
+		// their own operations (#2286).
+		{"journal table", http.MethodPut, "/b?metadataJournalTable", "", "", []iamCheck{{"s3:UpdateBucketMetadataJournalTableConfiguration", bucket}}},
+		{"inventory table", http.MethodPut, "/b?metadataInventoryTable", "", "", []iamCheck{{"s3:UpdateBucketMetadataInventoryTableConfiguration", bucket}}},
+		{"metadata configuration", http.MethodPost, "/b?metadataConfiguration", "", "", []iamCheck{{"s3:CreateBucketMetadataTableConfiguration", bucket}}},
+		{"metadata configuration removal", http.MethodDelete, "/b?metadataConfiguration", "", "", []iamCheck{{"s3:DeleteBucketMetadataTableConfiguration", bucket}}},
+		{"analytics configuration", http.MethodGet, "/b?analytics&id=a", "", "", []iamCheck{{"s3:GetAnalyticsConfiguration", bucket}}},
+		{"object lambda response", http.MethodPost, "/WriteGetObjectResponse", "", "", []iamCheck{{"s3-object-lambda:WriteGetObjectResponse", "*"}}},
 
 		// Operations AWS authorises by another action.
 		{"list buckets", http.MethodGet, "/", "", "", []iamCheck{{"s3:ListAllMyBuckets", "*"}}},
