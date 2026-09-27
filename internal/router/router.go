@@ -551,7 +551,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		if svc.Name() == "s3" {
 			svc.RegisterRoutes(s3Router)
 		} else {
-			svc.RegisterRoutes(r)
+			svc.RegisterRoutes(paths.routesFor(svc.Name()))
 			routeOwners.attribute(r, svc.Name())
 		}
 		prof.mark("  routes: " + svc.Name())
@@ -1045,10 +1045,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		dispatchMounts = recordDispatchMount(dispatchMounts, "/v2/apis", "apigateway", apigwV2Router)
 		dispatchMounts = recordDispatchMount(dispatchMounts, "/v2/apis", "appsync", appsyncEventsRouter)
 		if apigwV2Router != nil || appsyncEventsRouter != nil {
-			r.Route("/v2/apis", func(sub chi.Router) {
-				sub.Handle("/*", v2APIsDispatch(apigwV2Router, appsyncEventsRouter))
-				sub.Handle("/", v2APIsDispatch(apigwV2Router, appsyncEventsRouter))
-			})
+			paths.mount("/v2/apis", v2APIsDispatch(
+				servedByService(apigwSvc.Name(), apigwV2Router),
+				servedByService(appsyncSvc.Name(), appsyncEventsRouter),
+			))
 		}
 	}
 
@@ -1082,10 +1082,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	{
 		var appconfigApps, appregistryApps chi.Router
 		if registeredForTest(cfg, "appconfig") {
-			appconfigApps = shared.delegate(appconfigSvc.ApplicationsRouter())
+			appconfigApps = shared.delegate(appconfigSvc.Name(), appconfigSvc.ApplicationsRouter())
 		}
 		if registeredForTest(cfg, "appregistry") {
-			appregistryApps = shared.delegate(appregistrySvc.ApplicationsRouter())
+			appregistryApps = shared.delegate(appregistrySvc.Name(), appregistrySvc.ApplicationsRouter())
 		}
 		dispatchMounts = recordDispatchMount(dispatchMounts, "/applications", "appconfig", appconfigApps)
 		dispatchMounts = recordDispatchFallback(dispatchMounts, "/applications", "appregistry", appregistryApps)
@@ -1106,7 +1106,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	if registeredForTest(cfg, "s3tables") {
 		roots := s3tablesSvc.RootRouters()
 		for _, root := range s3tables.Roots {
-			sub := shared.delegate(roots[root])
+			sub := shared.delegate(s3tablesSvc.Name(), roots[root])
 			dispatchMounts = recordDispatchMount(dispatchMounts, root, "s3tables", sub)
 			// mount registers "/*" alone, which also matches the bare root; a
 			// separate "/" would register "/namespaces", "/tables" and "/tag",
@@ -1118,7 +1118,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		// dispatched the same way. It is no model's binding, so it is not
 		// recorded as a dispatch mount; its unsigned twin lives under
 		// /_overcast/ (see s3tables.Service.RegisterRoutes).
-		shared.mount(s3tables.IcebergRoot, signingNameDispatch{signingName: "s3tables", owner: s3tablesSvc.IcebergRouter(), fallback: shared.s3})
+		shared.mount(s3tables.IcebergRoot, signingNameDispatch{signingName: "s3tables", owner: servedByService(s3tablesSvc.Name(), s3tablesSvc.IcebergRouter()), fallback: shared.s3})
 	}
 
 	// ---- /v1/tags service dispatch -----------------------------------------
@@ -1135,18 +1135,16 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		tagRouters := map[string]http.Handler{}
 		if registeredForTest(cfg, "appsync") {
 			routes := appsyncSvc.TagsRouter()
-			tagRouters["appsync"] = routes
+			tagRouters["appsync"] = servedByService(appsyncSvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/v1/tags", "appsync", routes)
 		}
 		if registeredForTest(cfg, "msk") {
 			routes := mskSvc.TagsRouter()
-			tagRouters["kafka"] = routes
+			tagRouters["kafka"] = servedByService(mskSvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/v1/tags", "msk", routes)
 		}
 		if len(tagRouters) > 0 {
-			r.Route("/v1/tags", func(sub chi.Router) {
-				sub.Handle("/*", tagsDispatch{routers: tagRouters})
-			})
+			paths.mount("/v1/tags", tagsDispatch{routers: tagRouters})
 		}
 	}
 
@@ -1174,28 +1172,31 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		tagRouters := map[string]http.Handler{}
 		if registeredForTest(cfg, "pipes") {
 			routes := pipesSvc.TagsRouter()
-			tagRouters["pipes"] = routes
+			tagRouters["pipes"] = servedByService(pipesSvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "pipes", routes)
 		}
 		if registeredForTest(cfg, "eks") {
 			routes := eksSvc.TagsRouter()
-			tagRouters["eks"] = routes
+			tagRouters["eks"] = servedByService(eksSvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "eks", routes)
 		}
 		if registeredForTest(cfg, "scheduler") {
 			routes := schedulerSvc.TagsRouter()
-			tagRouters["scheduler"] = routes
+			tagRouters["scheduler"] = servedByService(schedulerSvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "scheduler", routes)
 		}
 		if registeredForTest(cfg, "appconfig") {
 			routes := appconfigSvc.TagsRouter()
-			tagRouters["appconfig"] = routes
+			tagRouters["appconfig"] = servedByService(appconfigSvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "appconfig", routes)
 		}
 		if registeredForTest(cfg, "apigateway") {
+			// Each ARN is authorised as its own service's: an AppRegistry
+			// ARN's tag operation is servicecatalog:TagResource, though API
+			// Gateway's tag store serves it.
 			routes := apigwSvc.TagsRouter()
-			tagRouters["apigateway"] = routes
-			tagRouters["servicecatalog"] = routes
+			tagRouters["apigateway"] = servedByService(apigwSvc.Name(), routes)
+			tagRouters["servicecatalog"] = servedByService(appregistrySvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "apigateway", routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "appregistry", routes)
 		}
@@ -1205,7 +1206,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 			// /untag/{ResourceArn}, registered directly by Backup's own
 			// RegisterRoutes, since no other service answers there.
 			routes := backupSvc.TagsRouter()
-			tagRouters["backup"] = routes
+			tagRouters["backup"] = servedByService(backupSvc.Name(), routes)
 			dispatchMounts = recordDispatchMount(dispatchMounts, "/tags", "backup", routes)
 		}
 		if len(tagRouters) > 0 {
@@ -1827,6 +1828,9 @@ type restFallback struct {
 
 func (f *restFallback) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := restClaimFor(f.registry, r)
+	// restClaimFor decides among the fallback's own outcomes; a service's
+	// route (RESTServedByService) is never one of them.
+	//exhaustive:ignore
 	switch route.Outcome {
 	case middleware.RESTNotImplemented:
 		writeNotImplemented(w, r, route.Claim)

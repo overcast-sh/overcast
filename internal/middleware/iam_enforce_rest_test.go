@@ -31,7 +31,7 @@ func TestRequestIAMOperation_restFallbackNamesTheServedOperation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// When: the router says its REST fallback serves it
-			op, err := requestIAMOperation(httptest.NewRecorder(), r, stubRouter{rest: tc.rest, isFallback: true})
+			op, err := requestIAMOperation(httptest.NewRecorder(), r, stubRouter{rest: tc.rest, routed: true})
 
 			// Then: it is named as the fallback serves it
 			if err != nil || op != tc.want {

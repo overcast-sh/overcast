@@ -17,7 +17,7 @@ policies with the names the AWS documentation gives.
 ## Which operation
 
 A request is the operation that serves it, whatever service its credential
-scope names, with one gap:
+scope names:
 
 - An AWS Query call is the operation its `Action` and `Version` name:
   `CreateUser` signed for `s3` is `iam:CreateUser`.
@@ -27,8 +27,17 @@ scope names, with one gap:
   sub-resource: `PUT /my-bucket?policy` is `PutBucketPolicy`, not
   `CreateBucket`. The `x-id` query parameter the SDKs add plays no part, as it
   plays none in what S3 serves.
-- The gap: a service's own route, such as EKS's `/clusters`, is named by the
-  credential scope. Sign for the service you call.
+- A service's own route is that service's: `GET /clusters` signed for `sts`
+  is `eks:ListClusters`, with or without an `?Action=`.
+- A `/tags/{resourceArn}` call is the tag operation of the service the ARN
+  names: an AppRegistry application's tags are `servicecatalog:` actions.
+
+When a service's route serves a request no operation names, such as a POST to
+an SQS queue URL with no `Action`, the request is checked as `<prefix>:*`, so
+only a policy that allows the whole service allows it. An invocation of a
+deployed API on API Gateway's own `/restapis/{id}/{stage}/_user_request_/` or
+`/v2/apis/{id}/stages/{stage}/` route is not checked here: API Gateway checks
+`execute-api:Invoke` itself, as it does on the `execute-api` host.
 
 ## Which action
 
@@ -70,6 +79,30 @@ A `versionId` selects the version action where AWS has one, such as
 AWS answers a `DeleteObjects` key the caller may not delete with an entry in
 `Errors` and deletes the rest. Overcast refuses the whole request with
 `AccessDenied`, and deletes nothing.
+
+### S3 Tables' Iceberg REST catalog
+
+A call to the [Iceberg REST endpoint](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-tables-integrating-open-source.html)
+checks every action AWS lists for it. Loading a table, for example, needs both
+`s3tables:GetTableMetadataLocation` and `s3tables:GetTableData`:
+
+| Iceberg operation        | Actions checked                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `getConfig`              | `s3tables:GetTableBucket`                                                              |
+| `listNamespaces`         | `s3tables:ListNamespaces`                                                              |
+| `createNamespace`        | `s3tables:CreateNamespace`                                                             |
+| `loadNamespaceMetadata`, `namespaceExists` | `s3tables:GetNamespace`                                              |
+| `dropNamespace`          | `s3tables:DeleteNamespace`                                                             |
+| `listTables`             | `s3tables:ListTables`                                                                  |
+| `createTable`            | `s3tables:CreateTable`, `s3tables:PutTableData`                                        |
+| `loadTable`              | `s3tables:GetTableMetadataLocation`, `s3tables:GetTableData`                           |
+| `updateTable`            | `s3tables:UpdateTableMetadataLocation`, `s3tables:PutTableData`, `s3tables:GetTableData` |
+| `tableExists`            | `s3tables:GetTable`                                                                    |
+| `dropTable`              | `s3tables:DeleteTable`                                                                 |
+| `renameTable`            | `s3tables:RenameTable`                                                                 |
+
+AWS does not serve `updateProperties`, `registerTable` or `reportMetrics`.
+Overcast does, and checks them as `s3tables:*`.
 
 ## Related
 

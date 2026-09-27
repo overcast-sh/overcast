@@ -15,8 +15,9 @@ type QueryRoute struct {
 	Action  string
 }
 
-// RESTOutcome is what the router's REST fallback does with a request no
-// service's own route claims.
+// RESTOutcome is how the router serves a request by its path: through the
+// REST fallback, which serves a request no service's own route claims, or by
+// a service's route.
 type RESTOutcome uint8
 
 const (
@@ -30,16 +31,23 @@ const (
 	// scope names a different real AWS service. The router refuses the
 	// request, as AWS does, and serves no operation.
 	RESTScopeMismatch
+	// RESTServedByService: a service's own route serves the request, or a
+	// router-owned dispatcher hands it to one of the service's routers:
+	// Service names it.
+	RESTServedByService
 )
 
-// RESTRoute is how the router's REST fallback serves a request.
+// RESTRoute is how the router serves a request by its path.
 type RESTRoute struct {
 	Outcome RESTOutcome
 	// Claim is the modeled binding the fallback answers from. It is zero when
-	// S3 serves the request, and names no Service when the binding is shared
-	// by several services or is a root catch-all: the caller's own credential
-	// scope then names the service whose 501 it gets.
+	// S3 or a service's route serves the request, and names no Service when
+	// the binding is shared by several services or is a root catch-all: the
+	// caller's own credential scope then names the service whose 501 it gets.
 	Claim awsapi.Claim
+	// Service is the key of the service whose route serves the request, for
+	// RESTServedByService.
+	Service string
 }
 
 // RequestRouter is the router's dispatch, as IAM enforcement reads it.
@@ -53,15 +61,17 @@ type RESTRoute struct {
 // s3:CreateUser (#2229). A request the router serves by its path can carry an
 // Action and a credential scope too, and the router serves it by neither: a
 // PUT /bucket?Action=GetFederationToken signed for sts is S3's CreateBucket,
-// and was checked as sts:GetFederationToken (#2271). IAM enforcement asks
-// this instead, so the action it evaluates is the operation the router serves.
+// and was checked as sts:GetFederationToken (#2271); GET /clusters signed for
+// sts is EKS's ListClusters, and was checked as an STS call it could not name
+// (#2283). IAM enforcement asks this instead, so the action it evaluates is the
+// operation the router serves.
 type RequestRouter interface {
 	// RouteQuery reports how r is served when the router dispatches it as AWS
 	// Query traffic, and false when it does not. It parses r's form the way the
 	// router does, and err is the failure the router refuses the request with.
 	RouteQuery(w http.ResponseWriter, r *http.Request) (route QueryRoute, isQuery bool, err error)
-	// RouteREST reports how r is served when the router's REST fallback serves
-	// it, because no service's own route claims it, and false when a service's
-	// route does.
-	RouteREST(r *http.Request) (route RESTRoute, isFallback bool)
+	// RouteREST reports how r is served by its path: through the router's REST
+	// fallback, or by a service's own route. It reports false when r reaches
+	// neither, such as a route the router answers itself, or no route.
+	RouteREST(r *http.Request) (route RESTRoute, routed bool)
 }
