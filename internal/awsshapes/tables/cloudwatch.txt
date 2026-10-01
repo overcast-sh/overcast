@@ -107,6 +107,12 @@ ConflictException structure error=client code=409
 ContributorAttributes map k=AttributeName v=AttributeValue
 ContributorId string
 Counts list m=DatapointValue
+CreateResourceMetricsConfiguration operation in=CreateResourceMetricsConfigurationInput out=CreateResourceMetricsConfigurationOutput err=ConflictException,ResourceNotFoundException
+CreateResourceMetricsConfigurationInput structure
+.MetricSelections ResourceMetricSelectionList
+.ResourceArn ResourceArn
+CreateResourceMetricsConfigurationOutput structure
+.ResourceMetricsConfiguration ResourceMetricsConfiguration
 DashboardArn string
 DashboardBody string
 DashboardEntries list m=DashboardEntry
@@ -175,6 +181,10 @@ DeleteMetricStream operation in=DeleteMetricStreamInput out=DeleteMetricStreamOu
 DeleteMetricStreamInput structure
 .Name MetricStreamName
 DeleteMetricStreamOutput structure
+DeleteResourceMetricsConfiguration operation in=DeleteResourceMetricsConfigurationInput out=DeleteResourceMetricsConfigurationOutput err=ResourceNotFoundException
+DeleteResourceMetricsConfigurationInput structure
+.ResourceArn ResourceArn
+DeleteResourceMetricsConfigurationOutput structure
 DescribeAlarmContributors operation in=DescribeAlarmContributorsInput out=DescribeAlarmContributorsOutput err=InvalidNextToken,ResourceNotFoundException
 DescribeAlarmContributorsInput structure
 .AlarmName AlarmName
@@ -403,7 +413,16 @@ GetMetricWidgetImageOutput structure
 GetOTelEnrichment operation in=GetOTelEnrichmentInput out=GetOTelEnrichmentOutput
 GetOTelEnrichmentInput structure
 GetOTelEnrichmentOutput structure
+.CreatedAt Timestamp
+.ExcludeFilters OTelEnrichmentMetricSelectorList
+.IncludeFilters OTelEnrichmentMetricSelectorList
 .Status OTelEnrichmentStatus
+.UpdatedAt Timestamp
+GetResourceMetricsConfiguration operation in=GetResourceMetricsConfigurationInput out=GetResourceMetricsConfigurationOutput err=ResourceNotFoundException
+GetResourceMetricsConfigurationInput structure
+.ResourceArn ResourceArn
+GetResourceMetricsConfigurationOutput structure
+.ResourceMetricsConfiguration ResourceMetricsConfiguration
 HistoryData string
 HistoryItemType enum
 HistorySummary string
@@ -652,6 +671,7 @@ MetricLabel string
 MetricMathAnomalyDetector structure
 .MetricDataQueries MetricDataQueries
 MetricName string
+MetricNameList list m=MetricName
 MetricStat structure
 .Metric Metric
 .Period Period
@@ -697,6 +717,11 @@ MuteType string
 Name string
 Namespace string
 NextToken string
+OTelEnrichmentMetricNameList list m=MetricName
+OTelEnrichmentMetricSelector structure
+.MetricNames OTelEnrichmentMetricNameList
+.Namespace Namespace
+OTelEnrichmentMetricSelectorList list m=OTelEnrichmentMetricSelector
 OTelEnrichmentStatus enum
 OnlyStartEvaluatingAfterWarmUpPeriodEnds boolean
 OutputFormat string
@@ -837,10 +862,19 @@ Range structure
 .StartTime Timestamp
 RecentlyActive enum
 RecoveryPeriod integer
+ResourceArn string
 ResourceConflict structure qerr=ResourceConflict error=client code=409
 .message ErrorMessage
 ResourceId string
 ResourceList list m=ResourceName
+ResourceMetricSelection structure
+.IncludeMetrics MetricNameList
+ResourceMetricSelectionList list m=ResourceMetricSelection
+ResourceMetricsConfiguration structure
+.CreatedAt Timestamp
+.MetricSelections ResourceMetricSelectionList
+.ResourceArn ResourceArn
+.UpdatedAt Timestamp
 ResourceName string
 ResourceNotFound structure qerr=ResourceNotFound error=client code=404
 .message ErrorMessage
@@ -889,9 +923,15 @@ StartMetricStreams operation in=StartMetricStreamsInput out=StartMetricStreamsOu
 StartMetricStreamsInput structure
 .Names MetricStreamNames
 StartMetricStreamsOutput structure
-StartOTelEnrichment operation in=StartOTelEnrichmentInput out=StartOTelEnrichmentOutput
+StartOTelEnrichment operation in=StartOTelEnrichmentInput out=StartOTelEnrichmentOutput err=ValidationException
 StartOTelEnrichmentInput structure
+.ExcludeFilters OTelEnrichmentMetricSelectorList
+.IncludeFilters OTelEnrichmentMetricSelectorList
 StartOTelEnrichmentOutput structure
+.CreatedAt Timestamp
+.ExcludeFilters OTelEnrichmentMetricSelectorList
+.IncludeFilters OTelEnrichmentMetricSelectorList
+.UpdatedAt Timestamp
 StartTimeOffset long
 Stat string
 StateReason string
@@ -939,6 +979,24 @@ UntagResourceInput structure
 .ResourceARN AmazonResourceName
 .TagKeys TagKeyList
 UntagResourceOutput structure
+UpdateOTelEnrichment operation in=UpdateOTelEnrichmentInput out=UpdateOTelEnrichmentOutput err=ResourceNotFoundException,ValidationException
+UpdateOTelEnrichmentInput structure
+.ExcludeFilters OTelEnrichmentMetricSelectorList
+.IncludeFilters OTelEnrichmentMetricSelectorList
+UpdateOTelEnrichmentOutput structure
+.CreatedAt Timestamp
+.ExcludeFilters OTelEnrichmentMetricSelectorList
+.IncludeFilters OTelEnrichmentMetricSelectorList
+.UpdatedAt Timestamp
+UpdateResourceMetricsConfiguration operation in=UpdateResourceMetricsConfigurationInput out=UpdateResourceMetricsConfigurationOutput err=ResourceNotFoundException
+UpdateResourceMetricsConfigurationInput structure
+.MetricSelections ResourceMetricSelectionList
+.ResourceArn ResourceArn
+UpdateResourceMetricsConfigurationOutput structure
+.ResourceMetricsConfiguration ResourceMetricsConfiguration
+ValidationException structure qerr=ValidationError error=client code=400
+.message ValidationExceptionMessage
+ValidationExceptionMessage string
 Values list m=DatapointValue
 WallClockWindow structure
 .Timezone Timezone

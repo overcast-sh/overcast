@@ -363,6 +363,7 @@ DescribeEventBusResponse structure
 .KmsKeyIdentifier KmsKeyIdentifier
 .LastModifiedTime Timestamp
 .LogConfig LogConfig
+.ManagedBy ManagedBy
 .Name String
 .Policy String
 DescribeEventSource operation in=DescribeEventSourceRequest out=DescribeEventSourceResponse err=InternalException,OperationDisabledException,ResourceNotFoundException
@@ -467,6 +468,7 @@ EventBus structure
 .CreationTime Timestamp
 .Description EventBusDescription
 .LastModifiedTime Timestamp
+.ManagedBy ManagedBy
 .Name String
 .Policy String
 EventBusArn string

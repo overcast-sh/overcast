@@ -106,6 +106,7 @@ CreateChannelOutput structure
 CreateStream operation in=CreateStreamInput out=~Unit err=InvalidArgumentException,LimitExceededException,ResourceInUseException,ValidationException
 CreateStreamInput structure
 .MaxRecordSizeInKiB MaxRecordSizeInKiB
+.RecordDistributionStrategy RecordDistributionStrategy
 .ShardCount PositiveIntegerObject
 .StreamModeDetails StreamModeDetails
 .StreamName StreamName
@@ -425,6 +426,7 @@ Record structure
 RecordConfiguration structure
 .GSRSchemaARN GSRSchemaARN
 .RecordFormatType RecordFormatType
+RecordDistributionStrategy enum
 RecordFormatType enum
 RecordList list m=Record
 RegisterStreamConsumer operation in=RegisterStreamConsumerInput out=RegisterStreamConsumerOutput err=InvalidArgumentException,LimitExceededException,ResourceInUseException,ResourceNotFoundException
@@ -556,6 +558,7 @@ StreamDescriptionSummary structure
 .KeyId KeyId
 .MaxRecordSizeInKiB MaxRecordSizeInKiB
 .OpenShardCount ShardCountObject
+.RecordDistributionStrategy RecordDistributionStrategy
 .RetentionPeriodHours RetentionPeriodHours
 .StreamARN StreamARN
 .StreamCreationTimestamp Timestamp
@@ -663,6 +666,11 @@ UpdateStreamModeInput structure
 .StreamId StreamId
 .StreamModeDetails StreamModeDetails
 .WarmThroughputMiBps NaturalIntegerObject
+UpdateStreamRecordDistributionStrategy operation in=UpdateStreamRecordDistributionStrategyInput out=~Unit err=AccessDeniedException,InvalidArgumentException,LimitExceededException,ResourceInUseException,ResourceNotFoundException,ValidationException
+UpdateStreamRecordDistributionStrategyInput structure
+.RecordDistributionStrategy RecordDistributionStrategy
+.StreamARN StreamARN
+.StreamId StreamId
 UpdateStreamWarmThroughput operation in=UpdateStreamWarmThroughputInput out=UpdateStreamWarmThroughputOutput err=AccessDeniedException,InvalidArgumentException,LimitExceededException,ResourceInUseException,ResourceNotFoundException,ValidationException
 UpdateStreamWarmThroughputInput structure
 .StreamARN StreamARN

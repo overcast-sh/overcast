@@ -3039,6 +3039,7 @@ GetTablesRequest structure
 .MaxResults CatalogGetterPageSize
 .NextToken Token
 .QueryAsOfTime Timestamp
+.ResourceShareType TableResourceShareType
 .TransactionId TransactionIdString
 GetTablesResponse structure
 .NextToken Token
@@ -4263,6 +4264,7 @@ NullValueFields list m=NullValueField
 NullableBoolean boolean
 NullableDouble double
 NullableInteger integer
+NullableLong long
 NullableString string
 NumberTargetPartitionsString string
 OAuth2ClientApplication structure
@@ -5260,6 +5262,9 @@ SparkConnectorTarget structure
 .Inputs OneInput
 .Name NodeName
 .OutputSchemas GlueSchemas
+SparkPipelineInfoKey string
+SparkPipelineInfoMap map k=SparkPipelineInfoKey v=SparkPipelineInfoValue
+SparkPipelineInfoValue string
 SparkSQL structure
 .Inputs ManyInputs
 .Name NodeName
@@ -5523,6 +5528,14 @@ StringColumnStatisticsData structure
 .NumberOfNulls NonNegativeLong
 StringList list m=GenericString
 StringToStringMap map k=NullableString v=NullableString
+SubObjectSourceType enum
+SubObjectStatistics structure
+.FileCount NullableLong
+.GlueVersionId NullableString
+.PartitionCount NullableLong
+.SourceType SubObjectSourceType
+.TotalFileBytes NullableLong
+SubObjectsStatisticsList list m=SubObjectStatistics
 SupportedDialect structure
 .Dialect ViewDialect
 .DialectVersion ViewDialectVersionString
@@ -5567,6 +5580,7 @@ TableIdentifier structure
 .Region NameString
 TableInput structure
 .Description DescriptionString
+.FederatedTable FederatedTable
 .LastAccessTime Timestamp
 .LastAnalyzedTime Timestamp
 .Name NameString
@@ -5611,6 +5625,7 @@ TableOptimizerType enum
 TableOptimizerVpcConfiguration union
 .glueConnectionName glueConnectionNameString
 TablePrefix string
+TableResourceShareType enum
 TableStatus structure
 .Action ResourceAction
 .Details StatusDetails
@@ -6156,8 +6171,10 @@ ViewDefinition structure
 .LastRefreshType LastRefreshType
 .RefreshSeconds RefreshSeconds
 .Representations ViewRepresentationList
+.SparkPipelineInfo SparkPipelineInfoMap
 .SubObjectVersionIds ViewSubObjectVersionIdsList
 .SubObjects ViewSubObjectsList
+.SubObjectsStatistics SubObjectsStatisticsList
 .ViewVersionId TableVersionId
 .ViewVersionToken HashString
 ViewDefinitionInput structure
@@ -6166,8 +6183,10 @@ ViewDefinitionInput structure
 .LastRefreshType LastRefreshType
 .RefreshSeconds RefreshSeconds
 .Representations ViewRepresentationInputList
+.SparkPipelineInfo SparkPipelineInfoMap
 .SubObjectVersionIds ViewSubObjectVersionIdsList
 .SubObjects ViewSubObjectsList
+.SubObjectsStatistics SubObjectsStatisticsList
 .ViewVersionId TableVersionId
 .ViewVersionToken VersionString
 ViewDialect enum
