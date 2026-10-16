@@ -64,6 +64,7 @@ import (
 	"github.com/overcast-sh/overcast/internal/services/kinesis"
 	"github.com/overcast-sh/overcast/internal/services/kms"
 	"github.com/overcast-sh/overcast/internal/services/lambda"
+	"github.com/overcast-sh/overcast/internal/services/lambdaweb"
 	"github.com/overcast-sh/overcast/internal/services/msk"
 	"github.com/overcast-sh/overcast/internal/services/opensearch"
 	"github.com/overcast-sh/overcast/internal/services/organizations"
@@ -424,6 +425,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	prof.mark("  new: efs")
 	s3tablesSvc := s3tables.New(cfg, store, logger, clk)
 	prof.mark("  new: s3tables")
+	lambdaWebSvc := lambdaweb.New(cfg, store, logger, clk)
+	prof.mark("  new: lambdaweb")
 
 	prof.mark("service constructors (48)")
 
@@ -480,6 +483,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		transferSvc,
 		efsSvc,
 		s3tablesSvc,
+		lambdaWebSvc,
 		s3Svc, // must be last — registers /{bucket}/* wildcard
 	}
 
@@ -804,6 +808,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	athenaSvc.InitBus(bus)
 	glueSvc.InitBus(bus)
 	s3tablesSvc.InitBus(bus)
+	// Lambda Web Functions: wire bus for web function, revision and endpoint lifecycle events.
+	lambdaWebSvc.InitBus(bus)
 	// EventBridge: wire bus for bus/rule lifecycle events.
 	ebSvc.InitBus(bus)
 	ebSvc.InitLambdaAuthorizer(lambdaSvc)

@@ -66,7 +66,8 @@ var registeredRouteClassification = map[string]string{
 	// Dated API-version prefixes, all claimed explicitly by detectService.
 	// TestDetectServiceCoversModeledLambdaVersions guards Lambda's list against
 	// a model refresh adding one; the other three services bind a single
-	// version each.
+	// version each. "/2025-03-07" is Lambda Web Functions, a separate service
+	// that signs as "lambda".
 	"/2013-04-01": "route53",
 	"/2015-02-01": "efs",
 	"/2015-03-31": "lambda",
@@ -81,6 +82,7 @@ var registeredRouteClassification = map[string]string{
 	"/2021-01-01": "opensearch",
 	"/2021-10-31": "lambda",
 	"/2021-11-15": "lambda",
+	"/2025-03-07": "lambdaweb",
 	"/2026-07-09": "lambda",
 
 	// Emulator-internal paths. S3 bucket names cannot begin with "_", so these

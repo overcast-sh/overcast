@@ -147,6 +147,8 @@ var manifest = []target{
 	{"internal/topology", "QueryRun", "TopologyQueryRun"},
 	{"internal/topology", "DataTable", "TopologyDataTable"},
 	{"internal/topology", "TableCommit", "TopologyTableCommit"},
+	{"internal/topology", "WebEndpoint", "TopologyWebEndpoint"},
+	{"internal/topology", "WebRevisionWeight", "TopologyWebRevisionWeight"},
 
 	// GET /_overcast/ses/inbox/messages — the Inbox page.
 	{"internal/smtp", "CapturedMessage", "CapturedMessage"},

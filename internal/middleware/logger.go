@@ -108,6 +108,10 @@ func detectService(r *http.Request, body ...[]byte) string {
 		return "lambda"
 	case strings.HasPrefix(r.URL.Path, "/2015-02-01/"):
 		return "efs"
+	case strings.HasPrefix(r.URL.Path, "/2025-03-07/"):
+		// Lambda Web Functions (the lambda-web model), signed "lambda" like Lambda but
+		// on an API version none of Lambda's operations use.
+		return "lambdaweb"
 	case strings.HasPrefix(r.URL.Path, "/v1/pipes"):
 		return "pipes"
 	case strings.HasPrefix(r.URL.Path, "/v1/apis"),

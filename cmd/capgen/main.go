@@ -2102,6 +2102,7 @@ var statusDisplayNames = map[string]string{
 	"route53":         "Route 53",
 	"s3":              "S3",
 	"s3tables":        "S3 Tables",
+	"lambdaweb":       "Lambda Web Functions",
 	"scheduler":       "Scheduler",
 	"secretsmanager":  "Secrets Manager",
 	"ses":             "SES",
@@ -2121,7 +2122,7 @@ var statusTableOrder = []string{
 	"s3", "sqs", "dynamodb", "lambda", "apigateway", "appsync", "cloudfront",
 	"cognito", "ec2", "sns", "stepfunctions",
 	"iam", "ecs", "ecr", "kms", "kinesis", "eventbridge", "scheduler",
-	"cloudformation", "rds", "elasticache", "efs", "s3tables", "appconfig", "appconfigdata",
+	"cloudformation", "rds", "elasticache", "efs", "s3tables", "lambdaweb", "appconfig", "appconfigdata",
 	"secretsmanager", "ssm", "cloudwatch-logs", "ses", "sts", "route53", "autoscaling",
 	"pipes", "waf", "shield", "acm", "athena", "bedrock",
 	"cloudwatch", "dynamodbstreams", "firehose", "glue", "opensearch",
@@ -2167,6 +2168,7 @@ var serviceIndexTiers = map[string]string{
 	"acm":             "Minimal / targeted support",
 	"athena":          "Core CRUD + common workflows",
 	"s3tables":        "Core CRUD + common workflows",
+	"lambdaweb":       "Core CRUD + common workflows",
 	"bedrock":         "Minimal / targeted support",
 	"cloudwatch":      "Minimal / targeted support",
 	"dynamodbstreams": "Minimal / targeted support",
@@ -2184,7 +2186,8 @@ var serviceIndexTiers = map[string]string{
 }
 
 var serviceDocFileNames = map[string]string{
-	"elbv2": "elb",
+	"elbv2":     "elb",
+	"lambdaweb": "lambda-web",
 }
 
 // serviceConfigNames maps a capgen service key to the config service name when
@@ -2253,6 +2256,7 @@ var serviceCDKInfo = map[string]serviceCDK{
 	"firehose":        {Modules: []string{"aws-kinesisfirehose"}},
 	"athena":          {Modules: []string{"aws-athena"}},
 	"s3tables":        {Modules: []string{"aws-s3tables"}},
+	"lambdaweb":       {Modules: []string{"aws-lambda"}},
 	"elasticache":     {Modules: []string{"aws-elasticache"}},
 	"msk":             {Modules: []string{"aws-msk"}},
 	"scheduler":       {Modules: []string{"aws-scheduler"}},

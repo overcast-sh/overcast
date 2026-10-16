@@ -783,6 +783,10 @@ export interface TopologyNode {
   glueResourceType?: TopologyGlueResourceType
   /** Glue database and S3 Tables bucket only — the tables it holds */
   tables?: TopologyDataTable[]
+  /** Lambda Web Functions only — the endpoints, and the revisions each serves */
+  webEndpoints?: TopologyWebEndpoint[]
+  /** Lambda Web Functions only — how many revisions the function holds */
+  webRevisions?: number
 }
 
 /**
@@ -893,6 +897,36 @@ export interface TopologyTableCommit {
   deletedRecords?: number
   /** CommittedAt is the snapshot's timestamp, in Unix milliseconds. */
   committedAt: number
+}
+
+/**
+ * WebEndpoint is one endpoint of a Lambda Web Function node, with the
+ * revisions it routes traffic to.
+ *
+ * Generated from Go `topology.WebEndpoint` (internal/topology/types.go).
+ */
+export interface TopologyWebEndpoint {
+  name: string
+  /** Type is HomeRegion, MultiRegion or PerRegion. */
+  type: string
+  /** AuthType is ApplicationManaged or IamAuth. */
+  authType: string
+  /** AutoDeployment is LatestRevision or Disabled. */
+  autoDeployment: string
+  /** DomainName is the endpoint's domain; nothing serves it yet. */
+  domainName: string
+  /** Serves lists the revisions traffic goes to, by weight. */
+  serves: TopologyWebRevisionWeight[]
+}
+
+/**
+ * WebRevisionWeight is a share of an endpoint's traffic.
+ *
+ * Generated from Go `topology.WebRevisionWeight` (internal/topology/types.go).
+ */
+export interface TopologyWebRevisionWeight {
+  revisionId: string
+  weight: number
 }
 
 /**

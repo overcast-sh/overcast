@@ -149,6 +149,10 @@ func iamActionPrefix(serviceKey string) string {
 		return "dynamodb"
 	case "appconfigdata":
 		return "appconfig"
+	case "lambdaweb":
+		// Web Functions are a separate API but authorize under the lambda: prefix
+		// (lambda:CreateWebFunction, lambda:InvokeWebFunctionEndpoint).
+		return "lambda"
 	default:
 		return serviceKey
 	}

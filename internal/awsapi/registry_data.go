@@ -120,6 +120,9 @@ var serviceAliases = []serviceAlias{
 	{ModelService: "dynamodb-streams", OvercastService: "dynamodbstreams"},
 	{ModelService: "elastic-load-balancing-v2", OvercastService: "elbv2"},
 	{ModelService: "kafka", OvercastService: "msk"},
+	// Lambda Web Functions. Overcast keys the service "lambdaweb": the key is the
+	// OVERCAST_STATE_<SERVICE> name, which cannot hold a hyphen.
+	{ModelService: "lambda-web", OvercastService: "lambdaweb"},
 	{ModelService: "route-53", OvercastService: "route53"},
 	{ModelService: "secrets-manager", OvercastService: "secretsmanager"},
 	{ModelService: "service-catalog-appregistry", OvercastService: "appregistry"},

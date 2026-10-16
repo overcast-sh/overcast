@@ -74,11 +74,17 @@ func restOperation(svc string, r *http.Request) string {
 // IAMEnforce lets an unnamed request through, so an unnamed retired binding
 // would be a way around a policy that denies the operation on its current one.
 //
-// One binding has moved so far: S3 Tables' GetTable, from
+// Two bindings have moved so far: S3 Tables' GetTable, from
 // GET /tables/{tableBucketARN}/{namespace}/{name} to GET /get-table on
-// 2025-06-06 (#2264; see s3tables.fillLegacyGetTable). The escaped path is
-// read because the bucket ARN label carries a percent-encoded '/'.
+// 2025-06-06 (#2264; see s3tables.fillLegacyGetTable), and SES v2's
+// ListEmailIdentities, from GET /v2/email/identities to
+// POST /v2/email/list-identities in the 2026-10 models (#2302; see
+// ses.Service.RegisterRoutes). The escaped path is read for the first because
+// the bucket ARN label carries a percent-encoded '/'.
 func retiredRESTOperation(svc string, r *http.Request) string {
+	if svc == "ses" && r.Method == http.MethodGet && r.URL.Path == "/v2/email/identities" {
+		return "ListEmailIdentities"
+	}
 	if svc != "s3tables" || r.Method != http.MethodGet {
 		return ""
 	}

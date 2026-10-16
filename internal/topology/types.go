@@ -71,6 +71,9 @@ type Node struct {
 	EngineState      string           `json:"engineState,omitempty"`      // Athena workgroup only — the query engine's state while it cannot run a query yet
 	GlueResourceType GlueResourceType `json:"glueResourceType,omitempty"` // Glue only — whether this node is a database or a federated catalog
 	Tables           []DataTable      `json:"tables,omitempty"`           // Glue database and S3 Tables bucket only — the tables it holds
+
+	WebEndpoints     []WebEndpoint    `json:"webEndpoints,omitempty"`     // Lambda Web Functions only — the endpoints, and the revisions each serves
+	WebRevisions     *int             `json:"webRevisions,omitempty"`     // Lambda Web Functions only — how many revisions the function holds
 }
 
 // GlueResourceType says which kind of Data Catalog resource a Glue node is:
@@ -130,6 +133,28 @@ type TableCommit struct {
 	DeletedRecords *int64 `json:"deletedRecords,omitempty"`
 	// CommittedAt is the snapshot's timestamp, in Unix milliseconds.
 	CommittedAt int64 `json:"committedAt"`
+}
+
+// WebEndpoint is one endpoint of a Lambda Web Function node, with the
+// revisions it routes traffic to.
+type WebEndpoint struct {
+	Name string `json:"name"`
+	// Type is HomeRegion, MultiRegion or PerRegion.
+	Type string `json:"type"`
+	// AuthType is ApplicationManaged or IamAuth.
+	AuthType string `json:"authType"`
+	// AutoDeployment is LatestRevision or Disabled.
+	AutoDeployment string `json:"autoDeployment"`
+	// DomainName is the endpoint's domain; nothing serves it yet.
+	DomainName string `json:"domainName"`
+	// Serves lists the revisions traffic goes to, by weight.
+	Serves []WebRevisionWeight `json:"serves"`
+}
+
+// WebRevisionWeight is a share of an endpoint's traffic.
+type WebRevisionWeight struct {
+	RevisionID string `json:"revisionId"`
+	Weight     int    `json:"weight"`
 }
 
 // Edge is one connection of GET /_overcast/topology's graph.
