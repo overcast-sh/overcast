@@ -196,7 +196,7 @@ func (h *Handler) newFunctionVersion(fn *Function, description string) *Function
 //     (see functionChangedSinceVersion), because LastModified-fallback hashing
 //     for a function with no zip on record would otherwise make every image
 //     function's code compare unequal to itself;
-//   - Tags and ReservedConcurrency, which are associated with the function's
+//   - Tags, ReservedConcurrency and RecursiveLoop, which are associated with the function's
 //     unqualified ARN, not with a published snapshot — TagResource and
 //     PutFunctionConcurrency neither one bumps RevisionId or LastModified in
 //     this codebase, which is the existing signal that AWS does not treat
@@ -218,6 +218,7 @@ func versionSnapshotFields(fn *Function) Function {
 	snap.CodeGeneration = ""
 	snap.Tags = nil
 	snap.ReservedConcurrency = nil
+	snap.RecursiveLoop = ""
 	return snap
 }
 
