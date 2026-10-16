@@ -1,3 +1,4 @@
-* [lambda-web] AWS Lambda Web Functions control plane: `CreateWebFunction`, `GetWebFunction`, `ListWebFunctions` and `DeleteWebFunction`; immutable revisions; `HomeRegion`, `MultiRegion` and `PerRegion` endpoints with revision weights, `LatestRevision` auto-deployment and scaling and throttle config; resource policies, tags and account settings — all 20 operations of the `lambda-web` model (#2302).
-  Revisions and endpoints are stored and routed but nothing runs yet: a revision's package is never fetched and an endpoint's domain name is allocated but not served.
-  CloudFormation `AWS::Lambda::WebFunction`, `WebFunctionRevision` and `WebFunctionEndpoint`; web functions appear on the system map with their endpoints and the revisions each serves.
+* [lambda-web] AWS Lambda Web Functions control plane: all 20 operations of the `lambda-web` model, with CloudFormation and system-map support (#2302).
+  Web functions, immutable revisions, and `HomeRegion`, `MultiRegion` and `PerRegion` endpoints with revision weights and `LatestRevision` auto-deployment.
+  Nothing runs yet: a revision's package is never fetched and an endpoint's domain name is allocated but not served.
+  CloudFormation `AWS::Lambda::WebFunction`, `WebFunctionRevision` and `WebFunctionEndpoint`; the system map shows each function's endpoints.
