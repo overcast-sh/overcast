@@ -26,6 +26,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/lambdaweb"
 	"github.com/aws/aws-sdk-go-v2/service/pipes"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -78,6 +79,7 @@ type Clients struct {
 	glueC        *glue.Client
 	athenaC      *athena.Client
 	efsC         *efs.Client
+	lambdaWebC   *lambdaweb.Client
 	s3tablesC    *s3tables.Client
 }
 
@@ -339,6 +341,17 @@ func (c *Clients) S3Tables() *s3tables.Client {
 		c.s3tablesC = s3tables.NewFromConfig(cfg)
 	}
 	return c.s3tablesC
+}
+
+// LambdaWeb returns a lazily-initialised Lambda Web Functions client.
+func (c *Clients) LambdaWeb() *lambdaweb.Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.lambdaWebC == nil {
+		cfg := c.awsCfgLocked()
+		c.lambdaWebC = lambdaweb.NewFromConfig(cfg)
+	}
+	return c.lambdaWebC
 }
 
 // Cognito returns a lazily-initialised Cognito Identity Provider client.
