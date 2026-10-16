@@ -130,19 +130,21 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
             ),
           },
           {
-            header: "Deployment",
-            cellClassName: "text-fg-muted",
-            cell: (e) => (e.autoDeploymentMode === "LatestRevision" ? "Latest revision" : "Pinned"),
-          },
-          {
             header: "Serves",
-            cellClassName: "font-mono text-xs",
-            cell: (e) => describeServes(e.revisionWeights),
-          },
-          {
-            header: "Limits",
-            cellClassName: "font-mono text-xs text-fg-muted",
-            cell: (e) => limitsText(e) || "—",
+            cellClassName: "font-mono text-xs whitespace-nowrap",
+            cell: (e) => (
+              <>
+                {e.autoDeploymentMode === "LatestRevision" && (
+                  <span className="mr-1.5 text-accent" title="Follows the newest revision">
+                    latest
+                  </span>
+                )}
+                {describeServes(e.revisionWeights)}
+                {limitsText(e) && (
+                  <span className="block text-2xs text-fg-muted">{limitsText(e)}</span>
+                )}
+              </>
+            ),
           },
           {
             header: "Domain",

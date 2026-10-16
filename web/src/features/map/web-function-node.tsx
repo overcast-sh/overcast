@@ -32,7 +32,6 @@ import {
   WEB_REVISIONS_ROW,
   type RowOverlay,
 } from "./data-lake-overlay"
-import { TickCount } from "./data-table-row"
 import { SERVICE_THEME, toSweep } from "./map-theme"
 import { nodeRoute, useNodeNavigation, type NodeRoute } from "./node-route"
 import {
@@ -73,22 +72,31 @@ export const WebFunctionNode = memo(function WebFunctionNode({ data }: NodeProps
         <>
           <span className="shrink-0">Web function</span>
           <span aria-hidden>·</span>
-          <TickCount ticks={revisionTicks}>
-            <span className="truncate">{formatQuantity(node.webRevisions ?? 0, "revision")}</span>
-          </TickCount>
+          <span
+            key={revisionTicks ?? 0}
+            className="origin-left truncate tabular-nums"
+            style={revisionTicks ? { animation: "overcastTick 600ms ease-out" } : undefined}
+          >
+            {formatQuantity(node.webRevisions ?? 0, "revision")}
+          </span>
         </>
       }
     >
       {nodeFlashes > 0 && (
+        // The sweep travels beyond the box, so it is clipped to the card.
         <span
-          key={nodeFlashes}
           aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-lg"
-          style={{
-            background: `linear-gradient(90deg, transparent 0%, ${toSweep(color)} 50%, transparent 100%)`,
-            animation: `overcastSweep ${FLASH_TTL}ms ease-out forwards`,
-          }}
-        />
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-lg"
+        >
+          <span
+            key={nodeFlashes}
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(90deg, transparent 0%, ${toSweep(color)} 50%, transparent 100%)`,
+              animation: `overcastSweep ${FLASH_TTL}ms ease-out forwards`,
+            }}
+          />
+        </span>
       )}
       {list.items.length > 0 && (
         <div className="map-detail -mx-1.5 mt-1.5 flex flex-col">

@@ -64,7 +64,7 @@ function EndpointForm({
       description={
         creating
           ? `An endpoint exposes ${functionName} and routes its traffic to revisions.`
-          : "Name, type and Regions are fixed. An omitted setting keeps its value; clearing a limit removes it."
+          : "Name, type and Regions are fixed. Emptying a limit removes it."
       }
       action={creating ? "create" : "save"}
       submitLabel={creating ? "Create endpoint" : "Save changes"}

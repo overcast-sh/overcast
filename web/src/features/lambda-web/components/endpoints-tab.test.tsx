@@ -59,7 +59,6 @@ describe("EndpointsTab", () => {
     const row = (await screen.findByText("prod")).closest("tr") as HTMLElement
     expect(within(row).getByText("HomeRegion")).toBeInTheDocument()
     expect(within(row).getByText("App managed")).toBeInTheDocument()
-    expect(within(row).getByText("Pinned")).toBeInTheDocument()
     expect(within(row).getByText("rev-ab12c 100%")).toBeInTheDocument()
     expect(within(row).getByText("500 req/s")).toBeInTheDocument()
   })
