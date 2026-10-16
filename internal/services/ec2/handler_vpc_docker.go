@@ -263,6 +263,59 @@ func (h *Handler) ensureRegionReconciled(ctx context.Context) {
 	if h.reconciledAll.Load() || !h.regionReconcileDue(region) {
 		return // the full pass, or another placement, got here first
 	}
+	h.reconcileRegionLocked(ctx, region)
+}
+
+// unbackedRetryInterval is how soon a VPC with no network may be retried:
+// every launchability check on it asks, and each attempt is a Docker round-trip
+// under reconcileMu.
+const unbackedRetryInterval = 5 * time.Second
+
+// healUnbackedVPC gives a VPC recorded `unbacked` another chance at a network,
+// and returns the status afterwards. A create the daemon refused once — an
+// address pool a stranded network held, Docker mid-restart — is otherwise
+// final until Docker next reappears: the full pass has run, reconciledAll
+// vouches for the region, and the first anyone hears of it is an RDS instance
+// refused as "not launchable" long after the cause is gone. The pass is the
+// region's own (adopt what exists, create what is missing), so a network that
+// has since been freed or created is picked up exactly as it would be on a
+// restart.
+func (h *Handler) healUnbackedVPC(ctx context.Context, vpcID string) string {
+	status := func() string {
+		vpc, aerr := h.store.getVPC(ctx, vpcID)
+		if aerr != nil {
+			return ""
+		}
+		if vpc.NetworkStatus == "" {
+			return vpcNetworkStatusOK
+		}
+		return vpc.NetworkStatus
+	}
+	if !h.dockerReady.Load() || h.docker == nil {
+		return status()
+	}
+	h.reconcileMu.Lock()
+	defer h.reconcileMu.Unlock()
+	// Another caller may have healed it while this one waited for the lock.
+	if st := status(); st != vpcNetworkStatusUnbacked {
+		return st
+	}
+	now := h.clk.Now()
+	if last, ok := h.unbackedRetries.Load(vpcID); ok && now.Before(last.(time.Time).Add(unbackedRetryInterval)) {
+		return vpcNetworkStatusUnbacked
+	}
+	h.unbackedRetries.Store(vpcID, now)
+	h.reconcileRegionLocked(ctx, h.store.region(ctx))
+	st := status()
+	if st != vpcNetworkStatusUnbacked {
+		h.unbackedRetries.Delete(vpcID)
+	}
+	return st
+}
+
+// reconcileRegionLocked is the per-region pass: adopt the region's networks and
+// create the missing ones. The caller holds reconcileMu.
+func (h *Handler) reconcileRegionLocked(ctx context.Context, region string) {
 	log := h.log.WithRecorder(ctx)
 
 	// Every region's VPCs, not this one's: the index has to know which VPCs
