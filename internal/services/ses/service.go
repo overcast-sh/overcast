@@ -22,7 +22,7 @@
 // SES v2 (REST-JSON) implemented operations:
 //   - POST /v2/email/outbound-emails (SendEmail)
 //   - POST /v2/email/identities (CreateEmailIdentity)
-//   - GET  /v2/email/identities (ListEmailIdentities)
+//   - POST /v2/email/list-identities (ListEmailIdentities; GET /v2/email/identities for older SDKs)
 //   - GET  /v2/email/identities/{EmailIdentity} (GetEmailIdentity)
 //   - DELETE /v2/email/identities/{EmailIdentity} (DeleteEmailIdentity)
 //   - POST /v2/email/tags (TagResource)
@@ -94,6 +94,10 @@ func (s *Service) RegisterRoutes(r chi.Router) {
 	// SES v2 (REST-JSON) — path-based routing.
 	r.Post("/v2/email/outbound-emails", s.handler.V2SendEmail)
 	r.Post("/v2/email/identities", s.handler.V2CreateEmailIdentity)
+	// ListEmailIdentities moved from GET /v2/email/identities to
+	// POST /v2/email/list-identities in the 2026-10 model (the pagination
+	// inputs became body members). The GET stays for SDKs that predate it.
+	r.Post("/v2/email/list-identities", s.handler.V2ListEmailIdentities)
 	r.Get("/v2/email/identities", s.handler.V2ListEmailIdentities)
 	r.Get("/v2/email/identities/{EmailIdentity}", s.handler.V2GetEmailIdentity)
 	r.Delete("/v2/email/identities/{EmailIdentity}", s.handler.V2DeleteEmailIdentity)

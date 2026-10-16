@@ -2524,6 +2524,7 @@ ViewerMtlsConfig structure
 .TrustStoreConfig TrustStoreConfig
 ViewerMtlsMode enum
 ViewerProtocolPolicy enum
+VpcIpAddressType enum
 VpcOrigin structure
 .AccountId string
 .Arn string
@@ -2541,6 +2542,7 @@ VpcOriginEndpointConfig structure
 .Arn string
 .HTTPPort integer
 .HTTPSPort integer
+.IpAddressType VpcIpAddressType
 .Name string
 .OriginProtocolPolicy OriginProtocolPolicy
 .OriginSslProtocols OriginSslProtocols
@@ -2556,6 +2558,7 @@ VpcOriginSummary structure
 .Arn string
 .CreatedTime timestamp
 .Id string
+.IpAddressType VpcIpAddressType
 .LastModifiedTime timestamp
 .Name string
 .OriginEndpointArn string

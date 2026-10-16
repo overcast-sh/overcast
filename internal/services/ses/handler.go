@@ -526,7 +526,8 @@ func (h *Handler) V2CreateEmailIdentity(w http.ResponseWriter, r *http.Request) 
 	fmt.Fprintf(w, `{"IdentityType":%q,"VerifiedForSendingStatus":true}`, iTypeAPI)
 }
 
-// V2ListEmailIdentities handles GET /v2/email/identities.
+// V2ListEmailIdentities handles POST /v2/email/list-identities, and GET
+// /v2/email/identities from SDKs that predate the move.
 func (h *Handler) V2ListEmailIdentities(w http.ResponseWriter, r *http.Request) {
 	identities, aerr := h.sesStore.listIdentities(r.Context())
 	if aerr != nil {

@@ -522,6 +522,39 @@ func TestSESV2_ListEmailIdentities(t *testing.T) {
 	}
 }
 
+// ─── SES v2 — POST /v2/email/list-identities ─────────────────────────────────
+
+// ListEmailIdentities is modeled as POST /v2/email/list-identities since the
+// 2026-10 models; the GET above is what older SDKs still send.
+func TestSESV2_ListEmailIdentities_postBinding(t *testing.T) {
+	// Given a server with an identity
+	srv := helpers.NewTestServer(t)
+	r := v2Call(t, srv, http.MethodPost, "/v2/email/identities", map[string]string{"EmailIdentity": "post-list@example.com"})
+	r.Body.Close()
+
+	// When I list identities on the modeled binding
+	resp := v2Call(t, srv, http.MethodPost, "/v2/email/list-identities", map[string]any{})
+	defer resp.Body.Close()
+
+	// Then the identity appears
+	helpers.AssertStatus(t, resp, http.StatusOK)
+	var result struct {
+		EmailIdentities []struct {
+			IdentityName string `json:"IdentityName"`
+		} `json:"EmailIdentities"`
+	}
+	decodeJSON(t, resp, &result)
+	found := false
+	for _, id := range result.EmailIdentities {
+		if id.IdentityName == "post-list@example.com" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected post-list@example.com in identities")
+	}
+}
+
 // ─── SES v2 — GET /v2/email/identities/{EmailIdentity} ────────────────────────
 
 func TestSESV2_GetEmailIdentity(t *testing.T) {
