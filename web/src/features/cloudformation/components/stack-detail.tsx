@@ -829,6 +829,25 @@ function ResourceLink({
           {logicalId}
         </Link>
       )
+    case "AWS::Lambda::WebFunction":
+    case "AWS::Lambda::WebFunctionRevision":
+    case "AWS::Lambda::WebFunctionEndpoint": {
+      // All three answer Ref with an ARN: .../web-function/<name>[/endpoint|revision/<id>].
+      const [, name, kind] =
+        /web-function\/([^/]+)(?:\/(endpoint|revision))?/.exec(physicalId) ?? []
+      if (!name) return <span>{logicalId}</span>
+      return (
+        <Link
+          to="/lambda-web/$name"
+          params={{ name }}
+          search={kind ? { tab: kind === "endpoint" ? "endpoints" : "revisions" } : {}}
+          className={cls}
+          onClick={stop}
+        >
+          {logicalId}
+        </Link>
+      )
+    }
     case "AWS::Kinesis::Stream":
       return (
         <Link

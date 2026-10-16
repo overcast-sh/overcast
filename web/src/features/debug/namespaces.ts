@@ -11,6 +11,7 @@ export const DEBUG_SERVICE_LABELS: Record<string, string> = {
   sns: "SNS",
   dynamodb: "DynamoDB",
   lambda: "Lambda",
+  "lambda-web": "Lambda Web Functions",
   cfn: "CloudFormation",
   appsync: "AppSync",
   eb: "EventBridge",
