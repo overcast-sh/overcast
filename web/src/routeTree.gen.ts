@@ -62,6 +62,8 @@ import { Route as KinesisIndexRouteImport } from './routes/kinesis/index'
 import { Route as KinesisStreamNameRouteImport } from './routes/kinesis/$streamName'
 import { Route as KmsIndexRouteImport } from './routes/kms/index'
 import { Route as KmsKeyIdRouteImport } from './routes/kms/$keyId'
+import { Route as LambdaWebIndexRouteImport } from './routes/lambda-web/index'
+import { Route as LambdaWebNameRouteImport } from './routes/lambda-web/$name'
 import { Route as LambdaIndexRouteImport } from './routes/lambda/index'
 import { Route as LambdaNameRouteImport } from './routes/lambda/$name'
 import { Route as MskIndexRouteImport } from './routes/msk/index'
@@ -383,6 +385,16 @@ const KmsKeyIdRoute = KmsKeyIdRouteImport.update({
   path: '/kms/$keyId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LambdaWebIndexRoute = LambdaWebIndexRouteImport.update({
+  id: '/lambda-web/',
+  path: '/lambda-web/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LambdaWebNameRoute = LambdaWebNameRouteImport.update({
+  id: '/lambda-web/$name',
+  path: '/lambda-web/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LambdaIndexRoute = LambdaIndexRouteImport.update({
   id: '/lambda/',
   path: '/lambda/',
@@ -677,6 +689,7 @@ export interface FileRoutesByFullPath {
   '/eventbridge/$busName': typeof EventbridgeBusNameRoute
   '/kinesis/$streamName': typeof KinesisStreamNameRoute
   '/kms/$keyId': typeof KmsKeyIdRoute
+  '/lambda-web/$name': typeof LambdaWebNameRoute
   '/lambda/$name': typeof LambdaNameRoute
   '/pipes/$pipeName': typeof PipesPipeNameRoute
   '/rds/$instance': typeof RdsInstanceRoute
@@ -707,6 +720,7 @@ export interface FileRoutesByFullPath {
   '/glue/': typeof GlueIndexRoute
   '/kinesis/': typeof KinesisIndexRoute
   '/kms/': typeof KmsIndexRoute
+  '/lambda-web/': typeof LambdaWebIndexRoute
   '/lambda/': typeof LambdaIndexRoute
   '/msk/': typeof MskIndexRoute
   '/pipes/': typeof PipesIndexRoute
@@ -778,6 +792,7 @@ export interface FileRoutesByTo {
   '/eventbridge/$busName': typeof EventbridgeBusNameRoute
   '/kinesis/$streamName': typeof KinesisStreamNameRoute
   '/kms/$keyId': typeof KmsKeyIdRoute
+  '/lambda-web/$name': typeof LambdaWebNameRoute
   '/lambda/$name': typeof LambdaNameRoute
   '/pipes/$pipeName': typeof PipesPipeNameRoute
   '/rds/$instance': typeof RdsInstanceRoute
@@ -806,6 +821,7 @@ export interface FileRoutesByTo {
   '/glue': typeof GlueIndexRoute
   '/kinesis': typeof KinesisIndexRoute
   '/kms': typeof KmsIndexRoute
+  '/lambda-web': typeof LambdaWebIndexRoute
   '/lambda': typeof LambdaIndexRoute
   '/msk': typeof MskIndexRoute
   '/pipes': typeof PipesIndexRoute
@@ -883,6 +899,7 @@ export interface FileRoutesById {
   '/eventbridge/$busName': typeof EventbridgeBusNameRoute
   '/kinesis/$streamName': typeof KinesisStreamNameRoute
   '/kms/$keyId': typeof KmsKeyIdRoute
+  '/lambda-web/$name': typeof LambdaWebNameRoute
   '/lambda/$name': typeof LambdaNameRoute
   '/pipes/$pipeName': typeof PipesPipeNameRoute
   '/rds/$instance': typeof RdsInstanceRoute
@@ -913,6 +930,7 @@ export interface FileRoutesById {
   '/glue/': typeof GlueIndexRoute
   '/kinesis/': typeof KinesisIndexRoute
   '/kms/': typeof KmsIndexRoute
+  '/lambda-web/': typeof LambdaWebIndexRoute
   '/lambda/': typeof LambdaIndexRoute
   '/msk/': typeof MskIndexRoute
   '/pipes/': typeof PipesIndexRoute
@@ -991,6 +1009,7 @@ export interface FileRouteTypes {
     | '/eventbridge/$busName'
     | '/kinesis/$streamName'
     | '/kms/$keyId'
+    | '/lambda-web/$name'
     | '/lambda/$name'
     | '/pipes/$pipeName'
     | '/rds/$instance'
@@ -1021,6 +1040,7 @@ export interface FileRouteTypes {
     | '/glue/'
     | '/kinesis/'
     | '/kms/'
+    | '/lambda-web/'
     | '/lambda/'
     | '/msk/'
     | '/pipes/'
@@ -1092,6 +1112,7 @@ export interface FileRouteTypes {
     | '/eventbridge/$busName'
     | '/kinesis/$streamName'
     | '/kms/$keyId'
+    | '/lambda-web/$name'
     | '/lambda/$name'
     | '/pipes/$pipeName'
     | '/rds/$instance'
@@ -1120,6 +1141,7 @@ export interface FileRouteTypes {
     | '/glue'
     | '/kinesis'
     | '/kms'
+    | '/lambda-web'
     | '/lambda'
     | '/msk'
     | '/pipes'
@@ -1196,6 +1218,7 @@ export interface FileRouteTypes {
     | '/eventbridge/$busName'
     | '/kinesis/$streamName'
     | '/kms/$keyId'
+    | '/lambda-web/$name'
     | '/lambda/$name'
     | '/pipes/$pipeName'
     | '/rds/$instance'
@@ -1226,6 +1249,7 @@ export interface FileRouteTypes {
     | '/glue/'
     | '/kinesis/'
     | '/kms/'
+    | '/lambda-web/'
     | '/lambda/'
     | '/msk/'
     | '/pipes/'
@@ -1302,6 +1326,7 @@ export interface RootRouteChildren {
   EventbridgeBusNameRoute: typeof EventbridgeBusNameRoute
   KinesisStreamNameRoute: typeof KinesisStreamNameRoute
   KmsKeyIdRoute: typeof KmsKeyIdRoute
+  LambdaWebNameRoute: typeof LambdaWebNameRoute
   LambdaNameRoute: typeof LambdaNameRoute
   PipesPipeNameRoute: typeof PipesPipeNameRoute
   RdsInstanceRoute: typeof RdsInstanceRoute
@@ -1331,6 +1356,7 @@ export interface RootRouteChildren {
   GlueIndexRoute: typeof GlueIndexRoute
   KinesisIndexRoute: typeof KinesisIndexRoute
   KmsIndexRoute: typeof KmsIndexRoute
+  LambdaWebIndexRoute: typeof LambdaWebIndexRoute
   LambdaIndexRoute: typeof LambdaIndexRoute
   MskIndexRoute: typeof MskIndexRoute
   PipesIndexRoute: typeof PipesIndexRoute
@@ -1734,6 +1760,20 @@ declare module '@tanstack/react-router' {
       path: '/kms/$keyId'
       fullPath: '/kms/$keyId'
       preLoaderRoute: typeof KmsKeyIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lambda-web/': {
+      id: '/lambda-web/'
+      path: '/lambda-web'
+      fullPath: '/lambda-web/'
+      preLoaderRoute: typeof LambdaWebIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lambda-web/$name': {
+      id: '/lambda-web/$name'
+      path: '/lambda-web/$name'
+      fullPath: '/lambda-web/$name'
+      preLoaderRoute: typeof LambdaWebNameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lambda/': {
@@ -2227,6 +2267,7 @@ const rootRouteChildren: RootRouteChildren = {
   EventbridgeBusNameRoute: EventbridgeBusNameRoute,
   KinesisStreamNameRoute: KinesisStreamNameRoute,
   KmsKeyIdRoute: KmsKeyIdRoute,
+  LambdaWebNameRoute: LambdaWebNameRoute,
   LambdaNameRoute: LambdaNameRoute,
   PipesPipeNameRoute: PipesPipeNameRoute,
   RdsInstanceRoute: RdsInstanceRoute,
@@ -2256,6 +2297,7 @@ const rootRouteChildren: RootRouteChildren = {
   GlueIndexRoute: GlueIndexRoute,
   KinesisIndexRoute: KinesisIndexRoute,
   KmsIndexRoute: KmsIndexRoute,
+  LambdaWebIndexRoute: LambdaWebIndexRoute,
   LambdaIndexRoute: LambdaIndexRoute,
   MskIndexRoute: MskIndexRoute,
   PipesIndexRoute: PipesIndexRoute,

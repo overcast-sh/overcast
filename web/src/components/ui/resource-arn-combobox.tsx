@@ -6,6 +6,7 @@
  *   "sqs"              — lists all SQS queues; value = queue ARN
  *   "lambda"           — no backend list yet; free-form input with ARN placeholder
  *   "dynamodb-stream"  — lists DynamoDB tables that have streams enabled; value = stream ARN
+ *   "iam-role"         — lists IAM roles; value = role ARN
  *   "esm-source"       — combined SQS queues + DynamoDB streams (for Lambda event source mappings)
  *
  * For protocols that don't use ARNs (http / https / email) use a plain <Input>
@@ -17,12 +18,13 @@ import { Combobox } from "@/components/ui/combobox"
 import { Input } from "@/components/ui/input"
 import { sqsQueuesQueryOptions } from "@/features/sqs/data"
 import { dynamoTablesQueryOptions } from "@/features/dynamodb/data"
+import { iamRolesQueryOptions } from "@/features/iam/data"
 import { SERVICES } from "@/lib/service-registry"
 import { cn } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ArnResourceType = "sqs" | "lambda" | "dynamodb-stream" | "esm-source"
+export type ArnResourceType = "sqs" | "lambda" | "dynamodb-stream" | "esm-source" | "iam-role"
 
 interface ResourceItem {
   /** Human-readable name shown in the dropdown. */
@@ -32,7 +34,7 @@ interface ResourceItem {
   /** Optional sub-label (e.g. URL, region) shown below the name. */
   detail?: string
   /** Service identifier — used to pick an icon when items are mixed. */
-  service?: "sqs" | "dynamodb" | "lambda"
+  service?: "sqs" | "dynamodb" | "lambda" | "iam"
 }
 
 export interface ResourceArnComboboxProps {
@@ -83,6 +85,19 @@ function useDynamoStreamItems(enabled: boolean): ResourceData {
   }
 }
 
+function useIamRoleItems(enabled: boolean): ResourceData {
+  const { data = [], isPending } = useQuery({ ...iamRolesQueryOptions(), enabled })
+  return {
+    items: data.map((r) => ({
+      label: r.RoleName ?? "",
+      arn: r.Arn ?? "",
+      detail: r.Path,
+      service: "iam" as const,
+    })),
+    isPending: enabled && isPending,
+  }
+}
+
 // TODO(priority:P2): replace queryFn with a real Lambda ListFunctions call once
 // the backend supports it — no other changes will be needed.
 function lambdaFunctionsQueryOptions() {
@@ -110,10 +125,12 @@ function useResourceItems(resourceType: ArnResourceType): ResourceData {
   const dynamoData = useDynamoStreamItems(
     resourceType === "dynamodb-stream" || resourceType === "esm-source",
   )
+  const roleData = useIamRoleItems(resourceType === "iam-role")
 
   if (resourceType === "sqs") return sqsData
   if (resourceType === "lambda") return lambdaData
   if (resourceType === "dynamodb-stream") return dynamoData
+  if (resourceType === "iam-role") return roleData
   return {
     items: [...sqsData.items, ...dynamoData.items],
     isPending: sqsData.isPending || dynamoData.isPending,
@@ -134,6 +151,10 @@ const RESOURCE_CONFIG: Record<ArnResourceType, { placeholder: string; emptyMessa
   "dynamodb-stream": {
     placeholder: "arn:aws:dynamodb:us-east-1:000000000000:table/MyTable/stream/...",
     emptyMessage: "No DynamoDB tables with streams found — enable streams on a table first.",
+  },
+  "iam-role": {
+    placeholder: "arn:aws:iam::000000000000:role/my-role",
+    emptyMessage: "No IAM roles found — create one first.",
   },
   "esm-source": {
     placeholder: "arn:aws:sqs:us-east-1:000000000000:my-queue",

@@ -113,7 +113,7 @@ Whenever a form field expects an AWS resource ARN, use `ResourceArnCombobox` ins
 import { ResourceArnCombobox } from "@/components/ui/resource-arn-combobox"
 
 <ResourceArnCombobox
-  resourceType="sqs"       // "sqs" | "lambda" | "dynamodb-stream" | "esm-source"
+  resourceType="sqs"       // "sqs" | "lambda" | "dynamodb-stream" | "esm-source" | "iam-role"
   value={arn}
   onChange={setArn}
 />
@@ -125,6 +125,7 @@ import { ResourceArnCombobox } from "@/components/ui/resource-arn-combobox"
 | `"lambda"`          | Lambda functions (placeholder only — no list yet)                     |
 | `"dynamodb-stream"` | DynamoDB tables with streams enabled; value = stream ARN              |
 | `"esm-source"`      | SQS queues + DynamoDB streams combined (for Lambda ESM trigger forms) |
+| `"iam-role"`        | IAM roles; value = role ARN (execution roles)                         |
 
 Adding a new resource type: add a hook, a `RESOURCE_CONFIG` entry, and update `useResourceItems` and the `ArnResourceType` union — all in `web/src/components/ui/resource-arn-combobox.tsx`.
 

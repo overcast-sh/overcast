@@ -7,18 +7,23 @@ interface SwitchProps {
   disabled?: boolean
   className?: string
   id?: string
+  "aria-label"?: string
   /** `sm` fits a dense strip such as an explorer header; the default suits a form row. */
   size?: "sm" | "md"
 }
 
 const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
-  ({ checked, onCheckedChange, disabled, className, id, size = "md" }, ref) => {
+  (
+    { checked, onCheckedChange, disabled, className, id, size = "md", "aria-label": ariaLabel },
+    ref,
+  ) => {
     const small = size === "sm"
     return (
       <button
         ref={ref}
         id={id}
         role="switch"
+        aria-label={ariaLabel}
         type="button"
         aria-checked={checked}
         disabled={disabled}
