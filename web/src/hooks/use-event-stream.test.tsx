@@ -17,6 +17,7 @@ import type { StreamEvent } from "@/types"
 import { athenaKeys } from "@/features/athena/data"
 import { glueKeys } from "@/features/glue/data"
 import { s3tablesKeys } from "@/features/s3tables/data"
+import { lambdaWebKeys } from "@/features/lambda-web/data"
 import { topologyKey } from "@/features/map/use-topology"
 
 const listeners: ((msg: WorkerMessage) => void)[] = []
@@ -264,6 +265,39 @@ describe("useEventStreamSubscription > data-lake events", () => {
 
     emit(init([]))
     emit({ type: "events", events: [ev(1, type, source)] })
+
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(keys)
+  })
+})
+
+describe("useEventStreamSubscription > Lambda Web Functions events", () => {
+  beforeEach(() => {
+    listeners.length = 0
+  })
+
+  // #2302: a function's node lists its endpoints and revisions, so each event
+  // re-reads the map too; a revision can also re-route an endpoint.
+  it.each([
+    ["lambda-web:FunctionCreated", [lambdaWebKeys.functions(), topologyKey]],
+    ["lambda-web:FunctionDeleted", [lambdaWebKeys.all(), topologyKey]],
+    [
+      "lambda-web:RevisionCreated",
+      [lambdaWebKeys.revisions(), lambdaWebKeys.endpoints(), topologyKey],
+    ],
+    [
+      "lambda-web:RevisionDeleted",
+      [lambdaWebKeys.revisions(), lambdaWebKeys.endpoints(), topologyKey],
+    ],
+    ["lambda-web:EndpointCreated", [lambdaWebKeys.endpoints(), topologyKey]],
+    ["lambda-web:EndpointUpdated", [lambdaWebKeys.endpoints(), topologyKey]],
+    ["lambda-web:EndpointDeleted", [lambdaWebKeys.endpoints(), topologyKey]],
+  ])("invalidates what %s makes stale", (type, keys) => {
+    const client = makeClient()
+    const invalidate = vi.spyOn(client, "invalidateQueries")
+    renderHook(() => useEventStreamSubscription(), { wrapper: wrapperFor(client) })
+
+    emit(init([]))
+    emit({ type: "events", events: [ev(1, type, "lambdaweb")] })
 
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(keys)
   })

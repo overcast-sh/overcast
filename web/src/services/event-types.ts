@@ -316,6 +316,17 @@ export const EventType = {
     TableRenamed: "s3tables:TableRenamed",
     TableCommitted: "s3tables:TableCommitted",
   },
+
+  // ── Lambda Web Functions ─────────────────────────────────────────────────
+  lambdaWeb: {
+    FunctionCreated: "lambda-web:FunctionCreated",
+    FunctionDeleted: "lambda-web:FunctionDeleted",
+    RevisionCreated: "lambda-web:RevisionCreated",
+    RevisionDeleted: "lambda-web:RevisionDeleted",
+    EndpointCreated: "lambda-web:EndpointCreated",
+    EndpointUpdated: "lambda-web:EndpointUpdated",
+    EndpointDeleted: "lambda-web:EndpointDeleted",
+  },
 } as const
 
 /**

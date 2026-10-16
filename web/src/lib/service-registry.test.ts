@@ -21,6 +21,17 @@ describe("SERVICES", () => {
     expect(unknown).toEqual([])
   })
 
+  // #2302: the docs live at docs/services/lambda-web.md, the registry key is the backend's.
+  it("registers Lambda Web Functions in compute, under its own route and docs", () => {
+    const entry: ServiceEntry | undefined = (SERVICES as Record<string, ServiceEntry>).lambdaweb
+    expect(entry).toMatchObject({
+      label: "Lambda Web Functions",
+      to: "/lambda-web",
+      category: "compute",
+      docKey: "lambda-web",
+    })
+  })
+
   // #2085: the data-lake services, registered before their console pages.
   it.each(["athena", "glue", "s3tables"])(
     "registers %s in the analytics category with its docs",

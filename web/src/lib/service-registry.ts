@@ -17,6 +17,7 @@
  */
 
 import {
+  AppWindow,
   Archive,
   MessagesSquare,
   Database,
@@ -361,6 +362,21 @@ export const SERVICES = {
       { to: "/lambda", label: "Functions" },
       { to: "/lambda/layers", label: "Layers" },
     ],
+  },
+  lambdaweb: {
+    label: "Lambda Web Functions",
+    icon: AppWindow,
+    color: "text-cat-9",
+    bg: "bg-cat-9/10",
+    border: "border-cat-9/30",
+    css: "var(--cat-9)",
+    letter: "λW",
+    to: "/lambda-web",
+    category: "compute",
+    description: "HTTP servers with revisions and endpoints",
+    dashboardDescription:
+      "Web functions — revisions, endpoints and traffic splits. The control plane only: nothing serves requests yet.",
+    docKey: "lambda-web",
   },
   ec2: {
     label: "EC2",
