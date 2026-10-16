@@ -42,7 +42,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 | Area | Behaviour |
 | --- | --- |
 | View types | `KEYS_ONLY`, `NEW_IMAGE`, `OLD_IMAGE` and `NEW_AND_OLD_IMAGES` all produce the images AWS documents |
-| Iterators | `TRIM_HORIZON`, `LATEST`, `AT_SEQUENCE_NUMBER` and `AFTER_SEQUENCE_NUMBER` |
+| Iterators | `TRIM_HORIZON`, `LATEST`, `AT_SEQUENCE_NUMBER`, `AFTER_SEQUENCE_NUMBER` and `AT_TIMESTAMP` |
 | Consumers | Lambda event source mappings and EventBridge Pipes poll table streams |
 | Regions | A stream belongs to its table's region, and every record carries `awsRegion` |
 | Protocols | AWS JSON 1.0 on the shared root endpoint, and Smithy RPC v2 CBOR |

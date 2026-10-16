@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 
@@ -387,6 +388,59 @@ func TestStream_GetShardIterator(t *testing.T) {
 	if _, err := base64.StdEncoding.DecodeString(result.ShardIterator); err != nil {
 		t.Errorf("ShardIterator is not base64: %v", err)
 	}
+}
+
+// TestStream_GetShardIterator_atTimestamp pins AT_TIMESTAMP: the iterator
+// starts at the first record created at or after the timestamp, an ancient
+// timestamp reads from the trim horizon, a missing timestamp is refused, and a
+// future one is a ValidationException.
+func TestStream_GetShardIterator_atTimestamp(t *testing.T) {
+	srv := helpers.NewTestServer(t)
+	streamArn := createStreamTable(t, srv, "items", "NEW_IMAGE")
+	shardId := describeStreamShardId(t, srv, streamArn)
+
+	putItem(t, srv, "items", map[string]any{"id": map[string]string{"S": "a"}})
+	time.Sleep(20 * time.Millisecond)
+	cut := float64(time.Now().UnixMilli()) / 1000.0
+	time.Sleep(20 * time.Millisecond)
+	putItem(t, srv, "items", map[string]any{"id": map[string]string{"S": "b"}})
+
+	iterAt := func(ts any) *http.Response {
+		body := map[string]any{"StreamArn": streamArn, "ShardId": shardId, "ShardIteratorType": "AT_TIMESTAMP"}
+		if ts != nil {
+			body["Timestamp"] = ts
+		}
+		return streamsCall(t, srv, "GetShardIterator", body)
+	}
+	recordCount := func(resp *http.Response) int {
+		defer resp.Body.Close()
+		helpers.AssertStatus(t, resp, http.StatusOK)
+		var it struct{ ShardIterator string }
+		helpers.DecodeJSON(t, resp, &it)
+		rr := streamsCall(t, srv, "GetRecords", map[string]any{"ShardIterator": it.ShardIterator})
+		defer rr.Body.Close()
+		helpers.AssertStatus(t, rr, http.StatusOK)
+		var out struct{ Records []map[string]any }
+		helpers.DecodeJSON(t, rr, &out)
+		return len(out.Records)
+	}
+
+	if n := recordCount(iterAt(cut)); n != 1 {
+		t.Errorf("timestamp between writes: got %d records, want 1", n)
+	}
+	if n := recordCount(iterAt(1.0)); n != 2 {
+		t.Errorf("ancient timestamp: got %d records, want 2", n)
+	}
+
+	resp := iterAt(nil)
+	defer resp.Body.Close()
+	helpers.AssertStatus(t, resp, http.StatusBadRequest)
+	helpers.AssertJSONError(t, resp, "ValidationException")
+
+	future := iterAt(float64(time.Now().Add(time.Hour).UnixMilli()) / 1000.0)
+	defer future.Body.Close()
+	helpers.AssertStatus(t, future, http.StatusBadRequest)
+	helpers.AssertJSONError(t, future, "ValidationException")
 }
 
 func TestStream_GetRecords_AfterPut(t *testing.T) {
