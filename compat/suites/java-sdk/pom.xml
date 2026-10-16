@@ -12,12 +12,15 @@
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <!-- The floor is the pinned shape snapshot: models/aws/shapes/batch.json
-         carries DescribeQuotaShare and ListQuotaShares, and the first BOM to
-         declare either is 2.43.0 (2.42.0 does not). An operation the pinned SDK
-         does not have is a `mvn package` failure naming the class rather than a
-         generation-time refusal - see cmd/compatgen/emit_java.go's header. -->
-    <aws.sdk.version>2.43.0</aws.sdk.version>
+    <!-- The floor is the pinned shape snapshot (models/aws/VERSION, model-date
+         2026-10-14): the BOM must be at least as new as that date, or an
+         operation the snapshot covers does not exist in the SDK (AppConfig
+         ListExperimentDefinitions / ListExperimentRuns / ListExperimentRunEvents
+         first appear in 2.46.18). 2.56.0 (2026-10-14) is the first release on or
+         after the snapshot date. An operation the pinned SDK does not have is a
+         `mvn package` failure naming the class rather than a generation-time
+         refusal - see cmd/compatgen/emit_java.go's header. -->
+    <aws.sdk.version>2.56.0</aws.sdk.version>
     <jackson.version>2.17.2</jackson.version>
     <junit.version>5.11.3</junit.version>
   </properties>
@@ -80,7 +83,7 @@
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>servicediscovery</artifactId></dependency>
     <!-- G6 wave 3 (#1116): the authored appconfig-* shadows are the first thing
          this suite runs against AppConfig. Versioned by the BOM like every
-         client above; 2.43.0 declares every operation those groups call. -->
+         client above; 2.56.0 declares every operation those groups call. -->
     <dependency><groupId>software.amazon.awssdk</groupId><artifactId>appconfig</artifactId></dependency>
     <!-- G6 wave 3 (#1116): the authored ecr-* scenarios are the first thing
          this suite runs against ECR, whose hand-written groups exist only in
