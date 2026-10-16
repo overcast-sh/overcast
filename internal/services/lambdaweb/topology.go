@@ -48,7 +48,7 @@ func (s *Service) ContributeTopology(ctx context.Context, g *topology.Graph) err
 		}
 		k := key{region, fn.Name}
 		fnRevs, fnEps := revsOf[k], epsOf[k]
-		sort.Slice(fnRevs, func(i, j int) bool { return fnRevs[i].CreatedAt.Before(fnRevs[j].CreatedAt) })
+		sort.Slice(fnRevs, func(i, j int) bool { return fnRevs[i].Seq < fnRevs[j].Seq })
 		sort.Slice(fnEps, func(i, j int) bool { return fnEps[i].Name < fnEps[j].Name })
 
 		count := len(fnRevs)

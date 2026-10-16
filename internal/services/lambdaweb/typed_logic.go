@@ -429,7 +429,7 @@ type createWebFunctionResponse struct {
 // newRevision validates and builds a revision. The defaults the model says the
 // response returns (timeoutSeconds 30, maxConcurrencyPerEnvironment 64) are
 // stored with it, so a read and the create response agree.
-func (s *Service) newRevision(fn *webFunction, in *revisionConfigIn) (*revision, *protocol.AWSError) {
+func (s *Service) newRevision(fn *webFunction, in *revisionConfigIn, seq int) (*revision, *protocol.AWSError) {
 	if in == nil || in.BuildConfig == nil || in.Service == nil {
 		return nil, validationError("buildConfig and serviceConfig are required.")
 	}
@@ -448,7 +448,7 @@ func (s *Service) newRevision(fn *webFunction, in *revisionConfigIn) (*revision,
 	id := newRevisionID()
 	return &revision{
 		Function: fn.Name, Region: fn.Region, ID: id, ARN: s.revisionARN(fn.Region, fn.Name, id),
-		Description: in.Description, KMSKeyARN: in.KMSKeyARN, BuildConfig: *in.BuildConfig, Service: sc, CreatedAt: s.now(),
+		Description: in.Description, KMSKeyARN: in.KMSKeyARN, BuildConfig: *in.BuildConfig, Service: sc, CreatedAt: s.now(), Seq: seq,
 	}, nil
 }
 
@@ -526,7 +526,7 @@ func (s *Service) createWebFunctionTyped(ctx context.Context, in *createWebFunct
 	var rev *revision
 	if in.RevisionConfig != nil {
 		var aerr *protocol.AWSError
-		if rev, aerr = s.newRevision(fn, in.RevisionConfig); aerr != nil {
+		if rev, aerr = s.newRevision(fn, in.RevisionConfig, 1); aerr != nil {
 			return nil, aerr
 		}
 	}
@@ -675,7 +675,15 @@ func (s *Service) createWebFunctionRevisionTyped(ctx context.Context, in *create
 	if aerr != nil {
 		return nil, aerr
 	}
-	rev, aerr := s.newRevision(fn, &in.revisionConfigIn)
+	existing, aerr := s.listRevisions(ctx, fn.Region, fn.Name)
+	if aerr != nil {
+		return nil, aerr
+	}
+	seq := 1
+	if n := len(existing); n > 0 {
+		seq = existing[n-1].Seq + 1
+	}
+	rev, aerr := s.newRevision(fn, &in.revisionConfigIn, seq)
 	if aerr != nil {
 		return nil, aerr
 	}

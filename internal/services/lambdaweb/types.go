@@ -52,6 +52,10 @@ type revision struct {
 	BuildConfig buildConfig   `json:"buildConfig"`
 	Service     serviceConfig `json:"serviceConfig"`
 	CreatedAt   time.Time     `json:"createdAt"`
+	// Seq orders a function's revisions: 1 for its first. Timestamps tie when
+	// two revisions are created within a clock tick, so they cannot say which
+	// is newer.
+	Seq int `json:"seq"`
 }
 
 // endpoint routes HTTP traffic to one or two revisions.

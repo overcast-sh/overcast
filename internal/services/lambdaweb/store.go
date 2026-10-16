@@ -114,7 +114,12 @@ func (s *Service) listRevisions(ctx context.Context, region, function string) ([
 	if aerr != nil {
 		return nil, aerr
 	}
-	sort.SliceStable(revs, func(i, j int) bool { return revs[i].CreatedAt.Before(revs[j].CreatedAt) })
+	sort.SliceStable(revs, func(i, j int) bool {
+		if revs[i].Seq != revs[j].Seq {
+			return revs[i].Seq < revs[j].Seq
+		}
+		return revs[i].CreatedAt.Before(revs[j].CreatedAt)
+	})
 	return revs, nil
 }
 
