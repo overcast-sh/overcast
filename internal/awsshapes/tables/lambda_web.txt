@@ -1,0 +1,386 @@
+service RESTJSON version=2025-03-07
+AccessDeniedException structure error=client code=403
+.message ~String
+AccountQuotas structure
+.maxEndpointsPerFunction ~Integer
+.maxRevisionsPerFunction ~Integer
+.maxTotalArmVCpus ~Integer
+.maxTotalRateLimit ~Integer
+AccountUsage structure
+.functionCount ~Integer
+ApplicationLogLevel enum
+AuthType enum
+AutoDeploymentMode enum
+BuildConfig structure
+.codeConfig CodeConfig
+.runtimeConfig RuntimeConfig
+CodeConfig structure
+.s3Object S3Object
+ConflictException structure error=client code=409
+.message ~String
+.resourceId ~String
+.resourceType ~String
+CreateWebFunction operation in=CreateWebFunctionRequest out=CreateWebFunctionResponse err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=PUT uri=/2025-03-07/web-functions code=202
+CreateWebFunctionEndpoint operation in=CreateWebFunctionEndpointRequest out=CreateWebFunctionEndpointResponse err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=PUT uri=/2025-03-07/web-functions/{functionName}/endpoints code=202
+CreateWebFunctionEndpointRequest structure
+.authType AuthType
+.autoDeploymentMode AutoDeploymentMode
+.description Description
+.endpointName EndpointName
+.endpointType EndpointType
+.functionName FunctionName label
+.regions RegionList
+.revisionWeights RevisionWeightList
+.scalingConfig ScalingConfig
+.throttleConfig ThrottleConfig
+CreateWebFunctionEndpointResponse structure
+.authType AuthType
+.autoDeploymentMode AutoDeploymentMode
+.createdAt DateTime
+.description Description
+.domainName DomainName
+.endpointArn EndpointArn
+.endpointName EndpointName
+.endpointType EndpointType
+.functionArn FunctionArn
+.regionalEndpoints RegionalEndpoints
+.regions RegionList
+.revisionWeights RevisionWeightList
+.scalingConfig ScalingConfig
+.state EndpointState
+.stateReason ~String
+.throttleConfig ThrottleConfig
+.updateStatus EndpointUpdateStatus
+.updateStatusReason ~String
+.updatedAt DateTime
+CreateWebFunctionRequest structure
+.endpointConfig EndpointConfig
+.functionName FunctionName
+.revisionConfig RevisionConfig
+.tags Tags
+CreateWebFunctionResponse structure
+.createdAt DateTime
+.endpoint FunctionEndpointSummary
+.functionArn FunctionArn
+.functionName FunctionName
+.revision FunctionRevisionSummary
+.state FunctionState
+.stateReason ~String
+.tags Tags
+.updatedAt DateTime
+CreateWebFunctionRevision operation in=CreateWebFunctionRevisionRequest out=CreateWebFunctionRevisionResponse err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=POST uri=/2025-03-07/web-functions/{functionName}/revisions code=202
+CreateWebFunctionRevisionRequest structure
+.buildConfig BuildConfig
+.description Description
+.functionName FunctionName label
+.kmsKeyArn KmsKeyArn
+.serviceConfig ServiceConfig
+CreateWebFunctionRevisionResponse structure
+.buildConfig BuildConfig
+.createdAt DateTime
+.description Description
+.errors RevisionErrors
+.functionArn FunctionArn
+.kmsKeyArn KmsKeyArn
+.revisionArn RevisionArn
+.revisionId RevisionId
+.serviceConfig ServiceConfig
+.state RevisionState
+.stateReason ~String
+DateTime timestamp ts=date-time
+DeleteResourcePolicy operation in=DeleteResourcePolicyRequest out=~Unit err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=DELETE uri=/2025-03-07/resource-policy/{resourceArn} code=204
+DeleteResourcePolicyRequest structure
+.resourceArn ResourceArn label
+.revisionId PolicyRevisionId query=RevisionId
+DeleteWebFunction operation in=DeleteWebFunctionRequest out=~Unit err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=DELETE uri=/2025-03-07/web-functions/{functionName} code=204
+DeleteWebFunctionEndpoint operation in=DeleteWebFunctionEndpointRequest out=~Unit err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=DELETE uri=/2025-03-07/web-functions/{functionName}/endpoints/{endpointName} code=204
+DeleteWebFunctionEndpointRequest structure
+.endpointName EndpointName label
+.functionName FunctionName label
+DeleteWebFunctionRequest structure
+.functionName FunctionName label
+DeleteWebFunctionRevision operation in=DeleteWebFunctionRevisionRequest out=~Unit err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=DELETE uri=/2025-03-07/web-functions/{functionName}/revisions/{revisionId} code=204
+DeleteWebFunctionRevisionRequest structure
+.functionName FunctionName label
+.revisionId RevisionId label
+Description string
+DomainName string
+EndpointArn string
+EndpointConfig structure
+.authType AuthType
+.autoDeploymentMode AutoDeploymentMode
+.description Description
+.endpointName EndpointName
+.endpointType EndpointType
+.regions RegionList
+.scalingConfig ScalingConfig
+.throttleConfig ThrottleConfig
+EndpointName string
+EndpointState enum
+EndpointType enum
+EndpointUpdateStatus enum
+EnvironmentVariables map k=~String v=~String
+Filter structure
+.name ~String
+.values FilterValueList
+FilterList list m=Filter
+FilterValueList list m=~String
+FunctionArn string
+FunctionEndpointSummary structure
+.authType AuthType
+.autoDeploymentMode AutoDeploymentMode
+.createdAt DateTime
+.description Description
+.domainName DomainName
+.endpointArn EndpointArn
+.endpointName EndpointName
+.endpointType EndpointType
+.regions RegionList
+.revisionWeights RevisionWeightList
+.scalingConfig ScalingConfig
+.state EndpointState
+.stateReason ~String
+.throttleConfig ThrottleConfig
+.updateStatus EndpointUpdateStatus
+.updateStatusReason ~String
+.updatedAt DateTime
+FunctionEndpointSummaryList list m=FunctionEndpointSummary
+FunctionName string
+FunctionRevisionSummary structure
+.createdAt DateTime
+.description Description
+.revisionArn RevisionArn
+.revisionId RevisionId
+.state RevisionState
+.stateReason ~String
+FunctionRevisionSummaryList list m=FunctionRevisionSummary
+FunctionState enum
+FunctionSummary structure
+.createdAt DateTime
+.functionArn FunctionArn
+.functionName FunctionName
+.state FunctionState
+.stateReason ~String
+.updatedAt DateTime
+FunctionSummaryList list m=FunctionSummary
+GetResourcePolicy operation in=GetResourcePolicyRequest out=GetResourcePolicyResponse err=AccessDeniedException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=GET uri=/2025-03-07/resource-policy/{resourceArn}
+GetResourcePolicyRequest structure
+.resourceArn ResourceArn label
+GetResourcePolicyResponse structure
+.policy ResourcePolicy json=Policy
+.revisionId PolicyRevisionId json=RevisionId
+GetWebAccountSettings operation in=GetWebAccountSettingsRequest out=GetWebAccountSettingsResponse err=AccessDeniedException,InternalServerException,ThrottlingException method=GET uri=/2025-03-07/web-account-settings
+GetWebAccountSettingsRequest structure
+GetWebAccountSettingsResponse structure
+.accountQuotas AccountQuotas
+.accountUsage AccountUsage
+GetWebFunction operation in=GetWebFunctionRequest out=GetWebFunctionResponse err=AccessDeniedException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=GET uri=/2025-03-07/web-functions/{functionName}
+GetWebFunctionEndpoint operation in=GetWebFunctionEndpointRequest out=GetWebFunctionEndpointResponse err=AccessDeniedException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=GET uri=/2025-03-07/web-functions/{functionName}/endpoints/{endpointName}
+GetWebFunctionEndpointRequest structure
+.endpointName EndpointName label
+.functionName FunctionName label
+GetWebFunctionEndpointResponse structure
+.authType AuthType
+.autoDeploymentMode AutoDeploymentMode
+.createdAt DateTime
+.description Description
+.domainName DomainName
+.endpointArn EndpointArn
+.endpointName EndpointName
+.endpointType EndpointType
+.functionArn FunctionArn
+.regionalEndpoints RegionalEndpoints
+.regions RegionList
+.revisionWeights RevisionWeightList
+.scalingConfig ScalingConfig
+.state EndpointState
+.stateReason ~String
+.throttleConfig ThrottleConfig
+.updateStatus EndpointUpdateStatus
+.updateStatusReason ~String
+.updatedAt DateTime
+GetWebFunctionRequest structure
+.functionName FunctionName label
+GetWebFunctionResponse structure
+.createdAt DateTime
+.functionArn FunctionArn
+.functionName FunctionName
+.state FunctionState
+.stateReason ~String
+.updatedAt DateTime
+GetWebFunctionRevision operation in=GetWebFunctionRevisionRequest out=GetWebFunctionRevisionResponse err=AccessDeniedException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=GET uri=/2025-03-07/web-functions/{functionName}/revisions/{revisionId}
+GetWebFunctionRevisionRequest structure
+.functionName FunctionName label
+.revisionId RevisionId label
+GetWebFunctionRevisionResponse structure
+.buildConfig BuildConfig
+.createdAt DateTime
+.description Description
+.errors RevisionErrors
+.functionArn FunctionArn
+.kmsKeyArn KmsKeyArn
+.revisionArn RevisionArn
+.revisionId RevisionId
+.serviceConfig ServiceConfig
+.state RevisionState
+.stateReason ~String
+InternalServerException structure error=server code=500
+.message ~String
+KmsKeyArn string
+ListTags operation in=ListTagsRequest out=ListTagsResponse err=AccessDeniedException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=GET uri=/2025-03-07/tags/{resource}
+ListTagsRequest structure
+.resource ResourceArn label
+ListTagsResponse structure
+.tags Tags json=Tags
+ListWebFunctionEndpoints operation in=ListWebFunctionEndpointsRequest out=ListWebFunctionEndpointsResponse err=AccessDeniedException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=POST uri=/2025-03-07/web-functions/{functionName}/list-endpoints
+ListWebFunctionEndpointsRequest structure
+.filters FilterList
+.functionName FunctionName label
+.maxResults MaxResults
+.nextToken NextToken
+ListWebFunctionEndpointsResponse structure
+.endpoints FunctionEndpointSummaryList
+.nextToken NextToken
+ListWebFunctionRevisions operation in=ListWebFunctionRevisionsRequest out=ListWebFunctionRevisionsResponse err=AccessDeniedException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=POST uri=/2025-03-07/web-functions/{functionName}/list-revisions
+ListWebFunctionRevisionsRequest structure
+.filters FilterList
+.functionName FunctionName label
+.maxResults MaxResults
+.nextToken NextToken
+ListWebFunctionRevisionsResponse structure
+.nextToken NextToken
+.revisions FunctionRevisionSummaryList
+ListWebFunctions operation in=ListWebFunctionsRequest out=ListWebFunctionsResponse err=AccessDeniedException,InternalServerException,ThrottlingException,ValidationException method=POST uri=/2025-03-07/web-functions
+ListWebFunctionsRequest structure
+.filters FilterList
+.maxResults MaxResults
+.nextToken NextToken
+ListWebFunctionsResponse structure
+.functions FunctionSummaryList
+.nextToken NextToken
+LoggingConfig structure
+.applicationLogLevel ApplicationLogLevel
+.logGroup ~String
+.systemLogLevel SystemLogLevel
+MaxResults integer
+NextToken string
+PolicyRevisionId string
+PutResourcePolicy operation in=PutResourcePolicyRequest out=PutResourcePolicyResponse err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=PUT uri=/2025-03-07/resource-policy/{resourceArn}
+PutResourcePolicyRequest structure
+.policy ResourcePolicy json=Policy
+.resourceArn ResourceArn label
+.revisionId PolicyRevisionId json=RevisionId
+PutResourcePolicyResponse structure
+.policy ResourcePolicy json=Policy
+.revisionId PolicyRevisionId json=RevisionId
+Region string
+RegionList list m=Region
+RegionalEndpoint structure
+.authType AuthType
+.domainName DomainName
+.revisionWeights RevisionWeightList
+.scalingConfig ScalingConfig
+.state EndpointState
+.stateReason ~String
+.throttleConfig ThrottleConfig
+.updateStatus EndpointUpdateStatus
+.updateStatusReason ~String
+RegionalEndpoints map k=Region v=RegionalEndpoint
+ResourceArn string
+ResourceNotFoundException structure error=client code=404
+.message ~String
+.resourceId ~String
+.resourceType ~String
+ResourcePolicy string
+RevisionArn string
+RevisionConfig structure
+.buildConfig BuildConfig
+.description Description
+.kmsKeyArn KmsKeyArn
+.serviceConfig ServiceConfig
+RevisionError structure
+.attribute ~String
+.errorCode ~String
+.errorMessage ~String
+RevisionErrors list m=RevisionError
+RevisionId string
+RevisionState enum
+RevisionWeight structure
+.revisionId RevisionId
+.weight ~Integer
+RevisionWeightList list m=RevisionWeight
+RoleArn string
+RuntimeConfig structure
+.runtime ~String
+S3Object structure
+.bucket ~String
+.key ~String
+.versionId ~String
+ScalingConfig structure
+.maxEnvironments ~Integer
+ServiceConfig structure
+.egressNetworkConnectorArn ~String
+.environmentVariables EnvironmentVariables
+.executionRoleArn RoleArn
+.maxConcurrencyPerEnvironment ~Integer
+.telemetryConfig TelemetryConfig
+.timeoutSeconds ~Integer
+ServiceQuotaExceededException structure error=client code=402
+.message ~String
+.quotaCode ~String
+.resourceId ~String
+.resourceType ~String
+.serviceCode ~String
+SystemLogLevel enum
+TagKey string
+TagKeyList list m=TagKey
+TagResource operation in=TagResourceRequest out=~Unit err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=POST uri=/2025-03-07/tags/{resource} code=204
+TagResourceRequest structure
+.resource ResourceArn label
+.tags Tags json=Tags
+Tags map k=TagKey v=~String
+TelemetryConfig structure
+.loggingConfig LoggingConfig
+ThrottleConfig structure
+.rateLimit ~Integer
+ThrottlingException structure error=client code=429
+.message ~String
+.quotaCode ~String
+.retryAfterSeconds ~Integer header=Retry-After
+.serviceCode ~String
+UntagResource operation in=UntagResourceRequest out=~Unit err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=DELETE uri=/2025-03-07/tags/{resource} code=204
+UntagResourceRequest structure
+.resource ResourceArn label
+.tagKeys TagKeyList query=tagKeys
+UpdateWebFunctionEndpoint operation in=UpdateWebFunctionEndpointRequest out=UpdateWebFunctionEndpointResponse err=AccessDeniedException,ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=PATCH uri=/2025-03-07/web-functions/{functionName}/endpoints/{endpointName} code=202
+UpdateWebFunctionEndpointRequest structure
+.authType AuthType
+.autoDeploymentMode AutoDeploymentMode
+.description Description
+.endpointName EndpointName label
+.functionName FunctionName label
+.revisionWeights RevisionWeightList
+.scalingConfig ScalingConfig
+.throttleConfig ThrottleConfig
+UpdateWebFunctionEndpointResponse structure
+.authType AuthType
+.autoDeploymentMode AutoDeploymentMode
+.createdAt DateTime
+.description Description
+.domainName DomainName
+.endpointArn EndpointArn
+.endpointName EndpointName
+.endpointType EndpointType
+.functionArn FunctionArn
+.regionalEndpoints RegionalEndpoints
+.regions RegionList
+.revisionWeights RevisionWeightList
+.scalingConfig ScalingConfig
+.state EndpointState
+.stateReason ~String
+.throttleConfig ThrottleConfig
+.updateStatus EndpointUpdateStatus
+.updateStatusReason ~String
+.updatedAt DateTime
+ValidationException structure error=client code=400
+.message ~String

@@ -60,6 +60,7 @@ import { wafKeys } from "@/features/waf/data"
 import { athenaKeys } from "@/features/athena/data"
 import { glueKeys } from "@/features/glue/data"
 import { s3tablesKeys } from "@/features/s3tables/data"
+import { lambdaWebKeys } from "@/features/lambda-web/data"
 import { topologyKey } from "@/features/map/use-topology"
 import { lambdaInstanceKeys } from "@/hooks/use-lambda-instances"
 import { appendEvents } from "@/workers/event-buffer"
@@ -567,6 +568,26 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
       topologyKey,
     ],
     [EventType.s3tables.TableCommitted]: [s3tablesKeys.tables(), topologyKey],
+    // ── Lambda Web Functions ───────────────────────────────────────────
+    // A function's node lists its endpoints, what each serves, and how many
+    // revisions it holds (lambdaweb/topology.go). A new revision can move an
+    // endpoint's weights (LatestRevision), so a revision event also re-reads
+    // the endpoints.
+    [EventType.lambdaWeb.FunctionCreated]: [lambdaWebKeys.functions(), topologyKey],
+    [EventType.lambdaWeb.FunctionDeleted]: [lambdaWebKeys.all(), topologyKey],
+    [EventType.lambdaWeb.RevisionCreated]: [
+      lambdaWebKeys.revisions(),
+      lambdaWebKeys.endpoints(),
+      topologyKey,
+    ],
+    [EventType.lambdaWeb.RevisionDeleted]: [
+      lambdaWebKeys.revisions(),
+      lambdaWebKeys.endpoints(),
+      topologyKey,
+    ],
+    [EventType.lambdaWeb.EndpointCreated]: [lambdaWebKeys.endpoints(), topologyKey],
+    [EventType.lambdaWeb.EndpointUpdated]: [lambdaWebKeys.endpoints(), topologyKey],
+    [EventType.lambdaWeb.EndpointDeleted]: [lambdaWebKeys.endpoints(), topologyKey],
   }
 }
 

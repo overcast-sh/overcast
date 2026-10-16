@@ -179,7 +179,7 @@ BasicCatalogTarget structure
 .Name NodeName
 .PartitionKeys GlueStudioPathList
 .Table EnclosedInStringProperty
-BatchCreatePartition operation in=BatchCreatePartitionRequest out=BatchCreatePartitionResponse err=AlreadyExistsException,EntityNotFoundException,GlueEncryptionException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
+BatchCreatePartition operation in=BatchCreatePartitionRequest out=BatchCreatePartitionResponse err=AlreadyExistsException,ConcurrentModificationException,EntityNotFoundException,GlueEncryptionException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
 BatchCreatePartitionRequest structure
 .CatalogId CatalogIdString
 .DatabaseName NameString
@@ -194,7 +194,7 @@ BatchDeleteConnectionRequest structure
 BatchDeleteConnectionResponse structure
 .Errors ErrorByName
 .Succeeded NameStringList
-BatchDeletePartition operation in=BatchDeletePartitionRequest out=BatchDeletePartitionResponse err=EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
+BatchDeletePartition operation in=BatchDeletePartitionRequest out=BatchDeletePartitionResponse err=ConcurrentModificationException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
 BatchDeletePartitionRequest structure
 .CatalogId CatalogIdString
 .DatabaseName NameString
@@ -203,7 +203,7 @@ BatchDeletePartitionRequest structure
 BatchDeletePartitionResponse structure
 .Errors PartitionErrors
 BatchDeletePartitionValueList list m=PartitionValueList
-BatchDeleteTable operation in=BatchDeleteTableRequest out=BatchDeleteTableResponse err=EntityNotFoundException,GlueEncryptionException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNotReadyException
+BatchDeleteTable operation in=BatchDeleteTableRequest out=BatchDeleteTableResponse err=ConcurrentModificationException,EntityNotFoundException,GlueEncryptionException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNotReadyException
 BatchDeleteTableNameList list m=NameString
 BatchDeleteTableRequest structure
 .CatalogId CatalogIdString
@@ -248,6 +248,12 @@ BatchGetDataQualityResultRequest structure
 BatchGetDataQualityResultResponse structure
 .Results DataQualityResultsList
 .ResultsNotFound DataQualityResultIds
+BatchGetDataQualityResultV2 operation in=BatchGetDataQualityResultV2Request out=BatchGetDataQualityResultV2Response err=InternalServiceException,InvalidInputException,OperationTimeoutException
+BatchGetDataQualityResultV2Request structure
+.ResultIds DataQualityResultV2IdList
+BatchGetDataQualityResultV2Response structure
+.Results DataQualityResultV2List
+.ResultsNotFound DataQualityResultV2IdList
 BatchGetDataQualityRulesetEvaluationRun operation in=BatchGetDataQualityRulesetEvaluationRunRequest out=BatchGetDataQualityRulesetEvaluationRunResponse err=InternalServiceException,InvalidInputException,OperationTimeoutException
 BatchGetDataQualityRulesetEvaluationRunRequest structure
 .RunIds DataQualityRulesetEvaluationRunIdList
@@ -348,7 +354,7 @@ BatchTableOptimizer structure
 .tableName tableNameString
 .tableOptimizer TableOptimizer
 BatchTableOptimizers list m=BatchTableOptimizer
-BatchUpdatePartition operation in=BatchUpdatePartitionRequest out=BatchUpdatePartitionResponse err=EntityNotFoundException,GlueEncryptionException,InternalServiceException,InvalidInputException,OperationTimeoutException
+BatchUpdatePartition operation in=BatchUpdatePartitionRequest out=BatchUpdatePartitionResponse err=ConcurrentModificationException,EntityNotFoundException,GlueEncryptionException,InternalServiceException,InvalidInputException,OperationTimeoutException
 BatchUpdatePartitionFailureEntry structure
 .ErrorDetail ErrorDetail
 .PartitionValueList BoundedPartitionValueList
@@ -574,6 +580,7 @@ ClientCredentialsProperties structure
 .Scope ConnectorProperty
 .TokenUrl ConnectorProperty
 .TokenUrlParameters ConnectorPropertyList
+ClientTokenString string
 CloudWatchEncryption structure
 .CloudWatchEncryptionMode CloudWatchEncryptionMode
 .KmsKeyArn KmsKeyArn
@@ -950,6 +957,7 @@ CrawlId string
 CrawlList list m=Crawl
 CrawlState enum
 Crawler structure
+.CatalogId CatalogIdString
 .Classifiers ClassifierNameList
 .Configuration CrawlerConfiguration
 .CrawlElapsedTime MillisecondsCount
@@ -1044,7 +1052,7 @@ CreateClassifierRequest structure
 CreateClassifierResponse structure
 CreateColumnStatisticsTaskSettings operation in=CreateColumnStatisticsTaskSettingsRequest out=CreateColumnStatisticsTaskSettingsResponse err=AccessDeniedException,AlreadyExistsException,ColumnStatisticsTaskRunningException,EntityNotFoundException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
 CreateColumnStatisticsTaskSettingsRequest structure
-.CatalogID NameString
+.CatalogID CatalogIdString
 .ColumnNameList ColumnNameList
 .DatabaseName NameString
 .Role NameString
@@ -1063,6 +1071,7 @@ CreateConnectionResponse structure
 .CreateConnectionStatus ConnectionStatus
 CreateCrawler operation in=CreateCrawlerRequest out=CreateCrawlerResponse err=AlreadyExistsException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
 CreateCrawlerRequest structure
+.CatalogId CatalogIdString
 .Classifiers ClassifierNameList
 .Configuration CrawlerConfiguration
 .CrawlerSecurityConfiguration CrawlerSecurityConfiguration
@@ -1534,10 +1543,14 @@ DataQualityAnalyzerResult structure
 .EvaluationMessage DataQualityRuleResultDescription
 .Name NameString
 DataQualityAnalyzerResults list m=DataQualityAnalyzerResult
+DataQualityConfigurationV2 structure
+.ObservationMode ObservationMode
+.ObservationsEnabled ObservationConfiguration
 DataQualityEncryption structure
 .DataQualityEncryptionMode DataQualityEncryptionMode
 .KmsKeyArn KmsKeyArn
 DataQualityEncryptionMode enum
+DataQualityEngine enum
 DataQualityEvaluationRunAdditionalRunOptions structure
 .CloudWatchMetricsEnabled NullableBoolean
 .CompositeRuleEvaluationMethod DQCompositeRuleEvaluationMethod
@@ -1549,6 +1562,7 @@ DataQualityEvaluationRunAdditionalRunOptions structure
 .ProfilingResults ProfilingResultsOptions
 .ResultsS3Prefix UriString
 .RowLevelResults RowLevelResultsOptions
+DataQualityFlagsEnabled map k=NameString v=NameString
 DataQualityGlueTable structure
 .AdditionalOptions GlueTableAdditionalOptions
 .CatalogId NameString
@@ -1598,7 +1612,39 @@ DataQualityResultFilterCriteria structure
 .StartedBefore Timestamp
 DataQualityResultIdList list m=HashString
 DataQualityResultIds list m=HashString
+DataQualityResultV2IdList list m=HashString
+DataQualityResultV2Item structure
+.AggregatedMetrics DataQualityAggregatedMetrics
+.AnalyzerResults DataQualityAnalyzerResults
+.DataSource DataSource
+.Descriptors PublishDataQualityResultDescriptors
+.Dimensions PublishDataQualityResultDimensions
+.EvaluationContext NameString
+.ExecutionCompletedOn Timestamp
+.ExecutionStartedOn Timestamp
+.Observations DataQualityObservations
+.ResultId HashString
+.ResultPublishedOn Timestamp
+.RuleResults DataQualityRuleResults
+.RulesetName NameString
+.Score GenericBoundedDouble
+.Tags PublishDataQualityResultTags
+DataQualityResultV2List list m=DataQualityResultV2Item
 DataQualityResultsList list m=DataQualityResult
+DataQualityResultsV2Description structure
+.DataSource DataSource
+.Descriptors PublishDataQualityResultDescriptors
+.Dimensions PublishDataQualityResultDimensions
+.EvaluationContext NameString
+.ResultId HashString
+.ResultPublishedOn Timestamp
+DataQualityResultsV2DescriptionList list m=DataQualityResultsV2Description
+DataQualityResultsV2FilterCriteria structure
+.DataSource DataSource
+.Dimensions PublishDataQualityResultDimensions
+.EvaluationContext NameString
+.PublishedAfter Timestamp
+.PublishedBefore Timestamp
 DataQualityRuleRecommendationRunAdditionalRunOptions structure
 .CustomLogGroupPrefix GenericString
 DataQualityRuleRecommendationRunDescription structure
@@ -1679,6 +1725,13 @@ DataQualityTargetTable structure
 .CatalogId NameString
 .DatabaseName NameString
 .TableName NameString
+DataQualityTelemetry structure
+.Engine DataQualityEngine
+.FlagsEnabled DataQualityFlagsEnabled
+.HostRuntimeVersion NameString
+.LibraryVersion NameString
+.SparkVersion NameString
+.VcpuHours NullableDouble
 DataSource structure
 .DataQualityGlueTable DataQualityGlueTable
 .GlueTable GlueTable
@@ -1782,6 +1835,7 @@ DeleteColumnStatisticsForTableRequest structure
 DeleteColumnStatisticsForTableResponse structure
 DeleteColumnStatisticsTaskSettings operation in=DeleteColumnStatisticsTaskSettingsRequest out=DeleteColumnStatisticsTaskSettingsResponse err=EntityNotFoundException,InvalidInputException,OperationTimeoutException
 DeleteColumnStatisticsTaskSettingsRequest structure
+.CatalogID CatalogIdString
 .DatabaseName NameString
 .TableName NameString
 DeleteColumnStatisticsTaskSettingsResponse structure
@@ -2467,6 +2521,7 @@ GetColumnStatisticsTaskRunResponse structure
 .ColumnStatisticsTaskRun ColumnStatisticsTaskRun
 GetColumnStatisticsTaskRuns operation in=GetColumnStatisticsTaskRunsRequest out=GetColumnStatisticsTaskRunsResponse err=OperationTimeoutException
 GetColumnStatisticsTaskRunsRequest structure
+.CatalogID CatalogIdString
 .DatabaseName DatabaseName
 .MaxResults PageSize
 .NextToken Token
@@ -2476,6 +2531,7 @@ GetColumnStatisticsTaskRunsResponse structure
 .NextToken Token
 GetColumnStatisticsTaskSettings operation in=GetColumnStatisticsTaskSettingsRequest out=GetColumnStatisticsTaskSettingsResponse err=EntityNotFoundException,InvalidInputException,OperationTimeoutException
 GetColumnStatisticsTaskSettingsRequest structure
+.CatalogID CatalogIdString
 .DatabaseName NameString
 .TableName NameString
 GetColumnStatisticsTaskSettingsResponse structure
@@ -2585,6 +2641,26 @@ GetDataQualityResultResponse structure
 .RulesetName NameString
 .Score GenericBoundedDouble
 .StartedOn Timestamp
+GetDataQualityResultV2 operation in=GetDataQualityResultV2Request out=GetDataQualityResultV2Response err=EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
+GetDataQualityResultV2Request structure
+.ResultId HashString
+GetDataQualityResultV2Response structure
+.AggregatedMetrics DataQualityAggregatedMetrics
+.AnalyzerResults DataQualityAnalyzerResults
+.DataSource DataSource
+.Descriptors PublishDataQualityResultDescriptors
+.Dimensions PublishDataQualityResultDimensions
+.EvaluationContext NameString
+.ExecutionCompletedOn Timestamp
+.ExecutionStartedOn Timestamp
+.Observations DataQualityObservations
+.ProfileId HashString
+.ResultId HashString
+.ResultPublishedOn Timestamp
+.RuleResults DataQualityRuleResults
+.RulesetName NameString
+.Score GenericBoundedDouble
+.Tags PublishDataQualityResultTags
 GetDataQualityRuleRecommendationRun operation in=GetDataQualityRuleRecommendationRunRequest out=GetDataQualityRuleRecommendationRunResponse err=EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
 GetDataQualityRuleRecommendationRunRequest structure
 .RunId HashString
@@ -2831,7 +2907,7 @@ GetMappingResponse structure
 .Mapping MappingList
 GetMaterializedViewRefreshTaskRun operation in=GetMaterializedViewRefreshTaskRunRequest out=GetMaterializedViewRefreshTaskRunResponse err=AccessDeniedException,EntityNotFoundException,InvalidInputException,OperationTimeoutException
 GetMaterializedViewRefreshTaskRunRequest structure
-.CatalogId NameString
+.CatalogId CatalogIdString
 .MaterializedViewRefreshTaskRunId UUIDv4
 GetMaterializedViewRefreshTaskRunResponse structure
 .MaterializedViewRefreshTaskRun MaterializedViewRefreshTaskRun
@@ -2984,6 +3060,17 @@ GetStatementRequest structure
 .SessionId NameString
 GetStatementResponse structure
 .Statement Statement
+GetSystemLogsForJobRun operation in=GetSystemLogsForJobRunRequest out=GetSystemLogsForJobRunResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
+GetSystemLogsForJobRunRequest structure
+.JobName NameString
+.RunId IdString
+GetSystemLogsForJobRunResponse structure
+.SystemLogsUrl Url
+GetSystemLogsForSession operation in=GetSystemLogsForSessionRequest out=GetSystemLogsForSessionResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException
+GetSystemLogsForSessionRequest structure
+.Id NameString
+GetSystemLogsForSessionResponse structure
+.SystemLogsUrl Url
 GetTable operation in=GetTableRequest out=GetTableResponse err=EntityNotFoundException,FederationSourceException,FederationSourceRetryableException,GlueEncryptionException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNotReadyException
 GetTableOptimizer operation in=GetTableOptimizerRequest out=GetTableOptimizerResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,ThrottlingException
 GetTableOptimizerRequest structure
@@ -3432,6 +3519,7 @@ IntegrationConfig structure
 .ContinuousSync ContinuousSync
 .RefreshInterval String128
 .SourceProperties IntegrationSourcePropertiesMap
+.TargetNamespace TargetNamespace
 IntegrationConflictOperationFault structure error=client code=409
 .Message IntegrationErrorMessage
 IntegrationDescription string
@@ -3843,6 +3931,14 @@ ListDataQualityResultsRequest structure
 ListDataQualityResultsResponse structure
 .NextToken PaginationToken
 .Results DataQualityResultDescriptionList
+ListDataQualityResultsV2 operation in=ListDataQualityResultsV2Request out=ListDataQualityResultsV2Response err=InternalServiceException,InvalidInputException,OperationTimeoutException
+ListDataQualityResultsV2Request structure
+.Filter DataQualityResultsV2FilterCriteria
+.MaxResults PageSize
+.NextToken PaginationToken
+ListDataQualityResultsV2Response structure
+.NextToken PaginationToken
+.Results DataQualityResultsV2DescriptionList
 ListDataQualityRuleRecommendationRuns operation in=ListDataQualityRuleRecommendationRunsRequest out=ListDataQualityRuleRecommendationRunsResponse err=InternalServiceException,InvalidInputException,OperationTimeoutException
 ListDataQualityRuleRecommendationRunsRequest structure
 .Filter DataQualityRuleRecommendationRunFilter
@@ -3974,7 +4070,7 @@ ListMLTransformsResponse structure
 .TransformIds TransformIdList
 ListMaterializedViewRefreshTaskRuns operation in=ListMaterializedViewRefreshTaskRunsRequest out=ListMaterializedViewRefreshTaskRunsResponse err=AccessDeniedException,InvalidInputException,OperationTimeoutException
 ListMaterializedViewRefreshTaskRunsRequest structure
-.CatalogId NameString
+.CatalogId CatalogIdString
 .DatabaseName NameString
 .MaxResults PageSize
 .NextToken Token
@@ -4485,6 +4581,30 @@ PropertyType enum
 PropertyTypes list m=PropertyType
 PropertyValue string
 PublicKeysList list m=GenericString
+PublishDataQualityResultDescriptors map k=NameString v=NameString
+PublishDataQualityResultDimensions map k=NameString v=NameString
+PublishDataQualityResultTags map k=NameString v=NameString
+PublishDataQualityResultV2 operation in=PublishDataQualityResultV2Request out=PublishDataQualityResultV2Response err=IdempotentParameterMismatchException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
+PublishDataQualityResultV2Request structure
+.AggregatedMetrics DataQualityAggregatedMetrics
+.AnalyzerResults DataQualityAnalyzerResults
+.ClientToken ClientTokenString
+.DataQualitySecurityConfiguration NameString
+.Descriptors PublishDataQualityResultDescriptors
+.Dimensions PublishDataQualityResultDimensions
+.EvaluationContext NameString
+.ExecutionCompletedOn Timestamp
+.ExecutionStartedOn Timestamp
+.Observations DataQualityObservations
+.RuleResults DataQualityRuleResults
+.RulesetName HashString
+.RunConfiguration DataQualityConfigurationV2
+.Score GenericBoundedDouble
+.Statistics StatisticSummaryList
+.Tags PublishDataQualityResultTags
+.Telemetry DataQualityTelemetry
+PublishDataQualityResultV2Response structure
+.ResultId HashString
 PutAsset operation in=PutAssetRequest out=PutAssetResponse err=AccessDeniedException,ConcurrentModificationException,EntityNotFoundException,InternalServiceException,InvalidInputException,ThrottlingException method=PUT uri=/assets code=200
 PutAssetRequest structure
 .AssetTypeId AssetTypeId
@@ -4602,6 +4722,8 @@ QuerySessionContext structure
 .QueryId HashString
 .QueryStartTime Timestamp
 QuoteChar enum
+RLSProperties structure
+.DefaultRLSPolicy NameString
 Recipe structure
 .Inputs OneInput
 .Name NodeName
@@ -5296,7 +5418,7 @@ StartBlueprintRunResponse structure
 .RunId IdString
 StartColumnStatisticsTaskRun operation in=StartColumnStatisticsTaskRunRequest out=StartColumnStatisticsTaskRunResponse err=AccessDeniedException,ColumnStatisticsTaskRunningException,EntityNotFoundException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
 StartColumnStatisticsTaskRunRequest structure
-.CatalogID NameString
+.CatalogID CatalogIdString
 .ColumnNameList ColumnNameList
 .DatabaseName NameString
 .Role NameString
@@ -5307,6 +5429,7 @@ StartColumnStatisticsTaskRunResponse structure
 .ColumnStatisticsTaskRunId HashString
 StartColumnStatisticsTaskRunSchedule operation in=StartColumnStatisticsTaskRunScheduleRequest out=StartColumnStatisticsTaskRunScheduleResponse err=AccessDeniedException,EntityNotFoundException,InvalidInputException,OperationTimeoutException
 StartColumnStatisticsTaskRunScheduleRequest structure
+.CatalogID CatalogIdString
 .DatabaseName NameString
 .TableName NameString
 StartColumnStatisticsTaskRunScheduleResponse structure
@@ -5386,7 +5509,7 @@ StartMLLabelingSetGenerationTaskRunResponse structure
 .TaskRunId HashString
 StartMaterializedViewRefreshTaskRun operation in=StartMaterializedViewRefreshTaskRunRequest out=StartMaterializedViewRefreshTaskRunResponse err=AccessDeniedException,EntityNotFoundException,InvalidInputException,MaterializedViewRefreshTaskRunningException,OperationTimeoutException,ResourceNumberLimitExceededException
 StartMaterializedViewRefreshTaskRunRequest structure
-.CatalogId NameString
+.CatalogId CatalogIdString
 .DatabaseName NameString
 .FullRefresh NullableBoolean
 .TableName NameString
@@ -5461,11 +5584,13 @@ StatusDetails structure
 .ViewValidations ViewValidationList
 StopColumnStatisticsTaskRun operation in=StopColumnStatisticsTaskRunRequest out=StopColumnStatisticsTaskRunResponse err=ColumnStatisticsTaskNotRunningException,ColumnStatisticsTaskStoppingException,EntityNotFoundException,OperationTimeoutException
 StopColumnStatisticsTaskRunRequest structure
+.CatalogID CatalogIdString
 .DatabaseName DatabaseName
 .TableName NameString
 StopColumnStatisticsTaskRunResponse structure
 StopColumnStatisticsTaskRunSchedule operation in=StopColumnStatisticsTaskRunScheduleRequest out=StopColumnStatisticsTaskRunScheduleResponse err=EntityNotFoundException,InvalidInputException,OperationTimeoutException
 StopColumnStatisticsTaskRunScheduleRequest structure
+.CatalogID CatalogIdString
 .DatabaseName NameString
 .TableName NameString
 StopColumnStatisticsTaskRunScheduleResponse structure
@@ -5479,7 +5604,7 @@ StopCrawlerScheduleRequest structure
 StopCrawlerScheduleResponse structure
 StopMaterializedViewRefreshTaskRun operation in=StopMaterializedViewRefreshTaskRunRequest out=StopMaterializedViewRefreshTaskRunResponse err=AccessDeniedException,InvalidInputException,MaterializedViewRefreshTaskNotRunningException,MaterializedViewRefreshTaskStoppingException,OperationTimeoutException
 StopMaterializedViewRefreshTaskRunRequest structure
-.CatalogId NameString
+.CatalogId CatalogIdString
 .DatabaseName NameString
 .TableName NameString
 StopMaterializedViewRefreshTaskRunResponse structure
@@ -5556,6 +5681,7 @@ Table structure
 .Owner NameString
 .Parameters ParametersMap
 .PartitionKeys ColumnList
+.RLSProperties RLSProperties
 .Retention NonNegativeInteger
 .Status TableStatus
 .StorageDescriptor StorageDescriptor
@@ -5659,6 +5785,7 @@ TagValue string
 TagsMap map k=TagKey v=TagValue
 TargetColumn string
 TargetFormat enum
+TargetNamespace string
 TargetProcessingProperties structure
 .ConnectionName String128
 .EventBusArn String2048
@@ -5861,7 +5988,7 @@ UpdateColumnStatisticsForTableResponse structure
 UpdateColumnStatisticsList list m=ColumnStatistics
 UpdateColumnStatisticsTaskSettings operation in=UpdateColumnStatisticsTaskSettingsRequest out=UpdateColumnStatisticsTaskSettingsResponse err=AccessDeniedException,EntityNotFoundException,InvalidInputException,OperationTimeoutException,VersionMismatchException
 UpdateColumnStatisticsTaskSettingsRequest structure
-.CatalogID NameString
+.CatalogID CatalogIdString
 .ColumnNameList ColumnNameList
 .DatabaseName NameString
 .Role NameString
@@ -5878,6 +6005,7 @@ UpdateConnectionRequest structure
 UpdateConnectionResponse structure
 UpdateCrawler operation in=UpdateCrawlerRequest out=UpdateCrawlerResponse err=CrawlerRunningException,EntityNotFoundException,InvalidInputException,OperationTimeoutException,VersionMismatchException
 UpdateCrawlerRequest structure
+.CatalogId CatalogIdString
 .Classifiers ClassifierNameList
 .Configuration CrawlerConfiguration
 .CrawlerSecurityConfiguration CrawlerSecurityConfiguration
@@ -6126,6 +6254,7 @@ UpsertRedshiftTargetOptions structure
 .TableLocation EnclosedInStringProperty
 .UpsertKeys EnclosedInStringPropertiesMinOne
 UriString string
+Url string
 UrlString string
 UsageProfileDefinition structure
 .CreatedOn TimestampValue
@@ -6167,6 +6296,7 @@ VersionString string
 VersionsString string
 ViewDefinition structure
 .Definer ArnString
+.IsManaged NullableBoolean
 .IsProtected NullableBoolean
 .LastRefreshType LastRefreshType
 .RefreshSeconds RefreshSeconds
@@ -6179,6 +6309,7 @@ ViewDefinition structure
 .ViewVersionToken HashString
 ViewDefinitionInput structure
 .Definer ArnString
+.IsManaged NullableBoolean
 .IsProtected NullableBoolean
 .LastRefreshType LastRefreshType
 .RefreshSeconds RefreshSeconds

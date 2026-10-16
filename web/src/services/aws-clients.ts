@@ -17,6 +17,7 @@ import { SNSClient } from "@aws-sdk/client-sns"
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb"
 import { KinesisClient } from "@aws-sdk/client-kinesis"
 import { LambdaClient } from "@aws-sdk/client-lambda"
+import { LambdaWebClient } from "@aws-sdk/client-lambda-web"
 import { PipesClient } from "@aws-sdk/client-pipes"
 import { CloudWatchLogsClient } from "@aws-sdk/client-cloudwatch-logs"
 import { CloudWatchClient } from "@aws-sdk/client-cloudwatch"
@@ -112,4 +113,5 @@ export const awsClients = {
   athena: () => new AthenaClient(baseConfig()),
   glue: () => new GlueClient(baseConfig()),
   s3tables: () => new S3TablesClient(baseConfig()),
+  lambdaWeb: () => new LambdaWebClient(baseConfig()),
 }

@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1615,
+  "total_ops": 1635,
   "services": [
     {
       "service": "s3",
@@ -6686,6 +6686,132 @@
       ]
     },
     {
+      "service": "lambdaweb",
+      "display_name": "Lambda Web Functions",
+      "total_ops": 20,
+      "implemented_ops": 20,
+      "operations": [
+        {
+          "operation": "CreateWebFunction",
+          "category": "Web functions",
+          "status": "✅ Supported",
+          "notes": "Optional first revision and endpoint; tags; the create response reports `Pending`, later reads `Active`"
+        },
+        {
+          "operation": "GetWebFunction",
+          "category": "Web functions",
+          "status": "✅ Supported",
+          "notes": "By name or ARN"
+        },
+        {
+          "operation": "ListWebFunctions",
+          "category": "Web functions",
+          "status": "✅ Supported",
+          "notes": "`state` filter; `maxResults` and `nextToken` pagination"
+        },
+        {
+          "operation": "DeleteWebFunction",
+          "category": "Web functions",
+          "status": "✅ Supported",
+          "notes": "Deletes the function's revisions, endpoints, tags and policy with it"
+        },
+        {
+          "operation": "CreateWebFunctionRevision",
+          "category": "Revisions",
+          "status": "⚠️ Partial",
+          "notes": "Validated and stored; the S3 package is not fetched and no code runs. `LatestRevision` endpoints are pointed at it. Past 50 revisions the oldest unrouted ones are deleted"
+        },
+        {
+          "operation": "GetWebFunctionRevision",
+          "category": "Revisions",
+          "status": "✅ Supported",
+          "notes": "By revision ID or ARN; `timeoutSeconds` and `maxConcurrencyPerEnvironment` defaults are returned"
+        },
+        {
+          "operation": "ListWebFunctionRevisions",
+          "category": "Revisions",
+          "status": "✅ Supported",
+          "notes": "`state` filter; oldest first"
+        },
+        {
+          "operation": "DeleteWebFunctionRevision",
+          "category": "Revisions",
+          "status": "✅ Supported",
+          "notes": "`ConflictException` while an endpoint routes traffic to the revision"
+        },
+        {
+          "operation": "CreateWebFunctionEndpoint",
+          "category": "Endpoints",
+          "status": "⚠️ Partial",
+          "notes": "`HomeRegion`, `MultiRegion` and `PerRegion`; revision weights, `autoDeploymentMode`, scaling and throttle config; at most 10 per function. The domain name is allocated but nothing serves it"
+        },
+        {
+          "operation": "GetWebFunctionEndpoint",
+          "category": "Endpoints",
+          "status": "✅ Supported",
+          "notes": "By name or ARN; `regionalEndpoints` has an entry per Region"
+        },
+        {
+          "operation": "ListWebFunctionEndpoints",
+          "category": "Endpoints",
+          "status": "✅ Supported",
+          "notes": "`authType`, `autoDeploymentMode`, `endpointType`, `state` and `updateStatus` filters"
+        },
+        {
+          "operation": "UpdateWebFunctionEndpoint",
+          "category": "Endpoints",
+          "status": "⚠️ Partial",
+          "notes": "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; takes effect at once, and no traffic flows to observe it"
+        },
+        {
+          "operation": "DeleteWebFunctionEndpoint",
+          "category": "Endpoints",
+          "status": "✅ Supported",
+          "notes": "Removed at once; the `Deleting` state is not observable"
+        },
+        {
+          "operation": "PutResourcePolicy",
+          "category": "Resource policy",
+          "status": "⚠️ Partial",
+          "notes": "Public policies are rejected with `ValidationException`; `RevisionId` is checked. The policy is stored, but no endpoint request is authorised against it"
+        },
+        {
+          "operation": "GetResourcePolicy",
+          "category": "Resource policy",
+          "status": "✅ Supported",
+          "notes": "`ResourceNotFoundException` when none is attached"
+        },
+        {
+          "operation": "DeleteResourcePolicy",
+          "category": "Resource policy",
+          "status": "✅ Supported",
+          "notes": "`RevisionId` is checked when given"
+        },
+        {
+          "operation": "TagResource",
+          "category": "Tags",
+          "status": "✅ Supported",
+          "notes": "The web function's ARN only; a tag that exists is overwritten"
+        },
+        {
+          "operation": "UntagResource",
+          "category": "Tags",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "ListTags",
+          "category": "Tags",
+          "status": "✅ Supported"
+        },
+        {
+          "operation": "GetWebAccountSettings",
+          "category": "Account",
+          "status": "✅ Supported",
+          "notes": "AWS's documented default quotas; `functionCount` is the Region's web functions"
+        }
+      ]
+    },
+    {
       "service": "appconfig",
       "display_name": "AppConfig",
       "total_ops": 20,
@@ -7484,7 +7610,7 @@
           "operation": "V2ListEmailIdentities",
           "category": "SES v2 — Identities",
           "status": "✅ Supported",
-          "notes": "`GET /v2/email/identities`",
+          "notes": "`POST /v2/email/list-identities` (and `GET /v2/email/identities` for older SDKs)",
           "docs_url": "[docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_ListEmailIdentities.html)"
         },
         {

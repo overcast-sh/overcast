@@ -12,6 +12,8 @@
  *   sns          / AWS::SNS::Topic            → /sns/$topic
  *   lambda       / AWS::Lambda::Function      → /lambda/$name
  *   lambda layer / AWS::Lambda::LayerVersion  → /lambda/layers/$layerName
+ *   lambda web function / AWS::Lambda::WebFunction (and its Revision and Endpoint types)
+ *                                             → /lambda-web/$name[?tab=revisions|endpoints]
  *   dynamodb     / AWS::DynamoDB::Table       → /dynamodb/$tableName
  *   s3           / AWS::S3::Bucket            → /s3/$bucket
  *   logs         / AWS::Logs::LogGroup        → /cloudwatch/logs/group?groupName=…

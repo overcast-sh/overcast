@@ -144,6 +144,7 @@ ConnectionArn string
 ContinueUpdateRollback operation in=ContinueUpdateRollbackInput out=ContinueUpdateRollbackOutput err=TokenAlreadyExistsException
 ContinueUpdateRollbackInput structure
 .ClientRequestToken ClientRequestToken
+.ForceRollback ForceRollback
 .ResourcesToSkip ResourcesToSkip
 .RoleARN RoleARN
 .StackName StackNameOrId
@@ -607,6 +608,7 @@ FailedEventsFilter boolean
 FailedStackInstancesCount integer
 FailureToleranceCount integer
 FailureTolerancePercentage integer
+ForceRollback boolean
 GeneratedTemplateDeletionPolicy enum
 GeneratedTemplateId string
 GeneratedTemplateName string

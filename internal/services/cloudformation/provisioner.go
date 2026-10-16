@@ -1203,6 +1203,7 @@ var stackTagPropagationResourceTypes = map[string]bool{
 	// and UntagResource (provisioner_s3tables.go).
 	"AWS::S3Tables::TableBucket":      true,
 	"AWS::S3Tables::Table":            true,
+	"AWS::Lambda::WebFunction":        true,
 	"AWS::Lambda::Function":           true,
 	"AWS::Lambda::EventSourceMapping": true,
 	"AWS::Logs::LogGroup":             true,
@@ -2933,6 +2934,10 @@ var resourceHandlers = map[string]resourceHandler{
 	cfnS3TablesTable:             &s3tablesTableHandler{},
 	cfnS3TablesTableBucketPolicy: &s3tablesTableBucketPolicyHandler{},
 	cfnS3TablesTablePolicy:       &s3tablesTablePolicyHandler{},
+	// Lambda Web Functions (provisioner_lambdaweb.go)
+	cfnLambdaWebFunction: &lambdaWebFunctionHandler{},
+	cfnLambdaWebRevision: &lambdaWebRevisionHandler{},
+	cfnLambdaWebEndpoint: &lambdaWebEndpointHandler{},
 	// Scheduler
 	"AWS::Scheduler::Schedule":      &schedulerScheduleHandler{},
 	"AWS::Scheduler::ScheduleGroup": &schedulerScheduleGroupHandler{},

@@ -126,3 +126,62 @@ describe("useEventAnimations > data-lake overlays", () => {
     expect(rows[rowKey("s3tables::lake", "sales.old")]).toBeUndefined()
   })
 })
+
+describe("useEventAnimations > Lambda Web Functions", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    stream.events = []
+  })
+  afterEach(() => vi.useRealTimers())
+
+  const codeEdge: TopologyEdge = {
+    id: "code::shop",
+    source: "us-east-1::lambdaweb::shop",
+    target: "us-east-1::s3::code-bucket",
+    type: "code",
+  }
+  const revisionCreated = () =>
+    event("lambda-web:RevisionCreated", "lambdaweb", { function: "shop", revision: "rev-1" })
+
+  function push(...events: StreamEvent[]) {
+    stream.events = [...stream.events, ...events]
+  }
+
+  it("flashes the endpoint an update names and leaves the others alone", () => {
+    const { result, rerender } = renderHook(() => useEventAnimations(nodes, []))
+
+    act(() =>
+      push(
+        event("lambda-web:EndpointUpdated", "lambdaweb", { function: "shop", endpoint: "prod" }),
+      ),
+    )
+    rerender()
+
+    const rows = result.current.dataLake.rows
+    expect(rows[rowKey("lambdaweb::shop", "prod")]?.flashes).toBe(1)
+    expect(rows[rowKey("lambdaweb::shop", "dev")]).toBeUndefined()
+  })
+
+  it("glows the code edge when a revision is created", () => {
+    const { result, rerender } = renderHook(() => useEventAnimations(nodes, [codeEdge]))
+
+    act(() => push(revisionCreated()))
+    rerender()
+
+    expect(result.current.glowingEdges.has("code::shop")).toBe(true)
+  })
+
+  it("glows the code edge once the refetch that draws it lands", () => {
+    // The first revision is what gives a function its code edge.
+    let current: TopologyEdge[] = []
+    const { result, rerender } = renderHook(() => useEventAnimations(nodes, current))
+
+    act(() => push(revisionCreated()))
+    rerender()
+    expect(result.current.glowingEdges.size).toBe(0)
+    current = [codeEdge]
+    rerender()
+
+    expect(result.current.glowingEdges.has("code::shop")).toBe(true)
+  })
+})

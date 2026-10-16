@@ -40,6 +40,7 @@ var tables = [...]table{
 	{service: "kinesis", file: "kinesis.txt"},
 	{service: "kms", file: "kms.txt"},
 	{service: "lambda", file: "lambda.txt"},
+	{service: "lambda-web", file: "lambda_web.txt"},
 	{service: "opensearch", file: "opensearch.txt"},
 	{service: "organizations", file: "organizations.txt"},
 	{service: "pipes", file: "pipes.txt"},

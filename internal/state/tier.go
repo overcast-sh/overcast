@@ -82,6 +82,13 @@ var namespaceTiers = map[string]Tier{
 	"s3tables:namespaces": TierHot,
 	"s3tables:tables":     TierHot,
 
+	// ── Lambda Web Functions ────────────────────────────────────────────
+	"lambda-web:functions": TierHot,
+	"lambda-web:revisions": TierHot,
+	"lambda-web:endpoints": TierHot,
+	"lambda-web:policies":  TierHot,
+	"lambda-web:tags":      TierHot,
+
 	// ── SQS ─────────────────────────────────────────────────────────────
 	"sqs:queues":           TierHot,
 	"sqs:purge":            TierHot,

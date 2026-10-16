@@ -47,6 +47,7 @@ export const EDGE_THEME: Record<
   "table-location": { color: "var(--cat-9)", dash: false, label: "Glue table data" },
   federation: { color: "var(--cat-9)", dash: true, label: "Glue federation" },
   "query-results": { color: "var(--cat-8)", dash: false, label: "Athena results" },
+  code: { color: "var(--cat-9)", dash: false, label: "Web function code" },
   // Drawn from recent executions, not configuration: dashed, and "recent" in the legend.
   queries: { color: "var(--cat-8)", dash: true, label: "Athena queries (recent)" },
 }

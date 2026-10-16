@@ -8,7 +8,7 @@
 
 ## Service coverage
 
-51 AWS services are registered. Coverage varies from comprehensive to stub.
+52 AWS services are registered. Coverage varies from comprehensive to stub.
 
 ### Comprehensive — core + advanced features
 
@@ -90,6 +90,7 @@
 | ElastiCache     | 24  |
 | EFS             | 31  |
 | S3 Tables       | 49  |
+| Lambda Web Functions | 20  |
 | AppConfig       | 20  |
 | AppConfigData   | 2   |
 | Secrets Manager | 22  |

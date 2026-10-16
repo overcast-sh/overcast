@@ -198,6 +198,11 @@ func TestRequestIAMActionUsesTheAWSActionPrefix(t *testing.T) {
 		// distinct signing name and a distinct Overcast service key.
 		{"appconfig", http.MethodPost, "/configurationsessions", "appconfigdata:StartConfigurationSession", "appconfig:StartConfigurationSession"},
 
+		// Lambda Web Functions are their own service ("lambdaweb") but
+		// authorize under Lambda's prefix: lambda:CreateWebFunction.
+		{"lambda", http.MethodPut, "/2025-03-07/web-functions", "lambdaweb:CreateWebFunction", "lambda:CreateWebFunction"},
+		{"lambda", http.MethodPatch, "/2025-03-07/web-functions/f/endpoints/e", "lambdaweb:UpdateWebFunctionEndpoint", "lambda:UpdateWebFunctionEndpoint"},
+
 		// Controls: services whose key already is their AWS prefix.
 		{"lambda", http.MethodGet, "/2015-03-31/functions", "lambda:ListFunctions", "lambda:ListFunctions"},
 		{"apigateway", http.MethodGet, "/restapis", "apigateway:GetRestApis", "apigateway:GetRestApis"},

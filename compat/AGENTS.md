@@ -1550,7 +1550,7 @@ the same SDK a month later; the only variable is the emulator.
 | Suite        | File                      | Pinned version                                        |
 | ------------ | ------------------------- | ----------------------------------------------------- |
 | node-js-sdk  | `package.json`            | `@aws-sdk/client-*` `^3.1020.0`                       |
-| python-sdk   | `requirements.txt`        | `boto3>=1.34.0`, `botocore>=1.34.0`                   |
+| python-sdk   | `requirements.txt`        | `boto3>=1.43.107`, `botocore>=1.43.107`               |
 | go-sdk       | `go.mod`                  | `github.com/aws/aws-sdk-go-v2 v1.41.5` (+ `config/*`, `service/*`) |
 | dotnet-sdk   | `OvercastCompat.csproj`   | `AWSSDK.*` `4.0.0`, except `AWSSDK.Core` `4.0.102.3` and `AWSSDK.Organizations` `4.0.101.4` (added) |
 | java-sdk     | `pom.xml`                 | `software.amazon.awssdk` (BOM-managed)                 |

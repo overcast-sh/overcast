@@ -90,6 +90,7 @@ var resourceServiceTiers = map[string]string{
 	"cloudtrail":  "inert",
 	"backup":      "inert",
 	"transfer":    "inert",
+	"lambdaweb":   "inert",
 }
 
 // cfnResourceService returns the router/capabilities service name a
@@ -104,6 +105,11 @@ func cfnResourceService(resType string) (string, bool) {
 		return "", false
 	}
 	segment := parts[1]
+	// Lambda Web Functions are their own service, at their own tier, although
+	// their types sit in the AWS::Lambda:: namespace.
+	if segment == "Lambda" && len(parts) == 3 && strings.HasPrefix(parts[2], "WebFunction") {
+		return "lambdaweb", true
+	}
 	if svc, ok := cfnTypeServiceAliases[segment]; ok {
 		return svc, true
 	}

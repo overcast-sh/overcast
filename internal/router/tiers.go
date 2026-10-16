@@ -113,6 +113,9 @@ var ServiceTiers = map[string]EmulationTier{
 	// s3tables: the whole control plane plus the Iceberg REST catalog that
 	// engines commit through; maintenance and replication are never run.
 	"s3tables": TierPartial,
+	// lambdaweb: the whole control plane (web functions, revisions, endpoints,
+	// policies, tags). Nothing serves an endpoint yet.
+	"lambdaweb": TierInert,
 }
 
 // ServiceGoalTiers maps each service to its aspirational emulation tier — the

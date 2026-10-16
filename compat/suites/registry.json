@@ -5584,6 +5584,157 @@
           ]
         }
       ]
+    },
+    {
+      "service": "lambdaweb",
+      "name": "lambda-web-functions",
+      "tests": [
+        {
+          "name": "CreateWebFunction"
+        },
+        {
+          "name": "GetWebFunction",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        },
+        {
+          "name": "ListWebFunctions",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        },
+        {
+          "name": "GetWebFunctionRevision",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        },
+        {
+          "name": "CreateWebFunctionRevision",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        },
+        {
+          "name": "GetWebFunctionEndpointLatestRevision",
+          "op": "GetWebFunctionEndpoint",
+          "depends": [
+            "CreateWebFunctionRevision"
+          ]
+        },
+        {
+          "name": "ListWebFunctionRevisions",
+          "depends": [
+            "CreateWebFunctionRevision"
+          ]
+        },
+        {
+          "name": "CreateWebFunctionEndpoint",
+          "depends": [
+            "CreateWebFunctionRevision"
+          ]
+        },
+        {
+          "name": "GetWebFunctionEndpoint",
+          "depends": [
+            "CreateWebFunctionEndpoint"
+          ]
+        },
+        {
+          "name": "ListWebFunctionEndpoints",
+          "depends": [
+            "CreateWebFunctionEndpoint"
+          ]
+        },
+        {
+          "name": "UpdateWebFunctionEndpoint",
+          "depends": [
+            "CreateWebFunctionEndpoint"
+          ]
+        },
+        {
+          "name": "UpdateWebFunctionEndpointClearThrottle",
+          "op": "UpdateWebFunctionEndpoint",
+          "depends": [
+            "UpdateWebFunctionEndpoint"
+          ]
+        },
+        {
+          "name": "DeleteWebFunctionRevisionServingTraffic",
+          "op": "DeleteWebFunctionRevision",
+          "depends": [
+            "CreateWebFunctionEndpoint"
+          ]
+        },
+        {
+          "name": "TagResource",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        },
+        {
+          "name": "ListTags",
+          "depends": [
+            "TagResource"
+          ]
+        },
+        {
+          "name": "UntagResource",
+          "depends": [
+            "TagResource"
+          ]
+        },
+        {
+          "name": "PutResourcePolicy",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        },
+        {
+          "name": "GetResourcePolicy",
+          "depends": [
+            "PutResourcePolicy"
+          ]
+        },
+        {
+          "name": "PutResourcePolicyPublicPrincipal",
+          "op": "PutResourcePolicy",
+          "depends": [
+            "PutResourcePolicy"
+          ]
+        },
+        {
+          "name": "DeleteResourcePolicy",
+          "depends": [
+            "PutResourcePolicy"
+          ]
+        },
+        {
+          "name": "GetWebAccountSettings",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        },
+        {
+          "name": "DeleteWebFunctionEndpoint",
+          "depends": [
+            "CreateWebFunctionEndpoint"
+          ]
+        },
+        {
+          "name": "DeleteWebFunctionRevision",
+          "depends": [
+            "DeleteWebFunctionEndpoint"
+          ]
+        },
+        {
+          "name": "DeleteWebFunction",
+          "depends": [
+            "CreateWebFunction"
+          ]
+        }
+      ]
     }
   ]
 }

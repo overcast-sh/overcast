@@ -63,6 +63,17 @@ export function resolveArn(arn: string): ResolvedRoute | null {
       break
     }
     case "lambda": {
+      // A web function's ARN has no second colon: web-function/<name>, and its
+      // endpoints and revisions are .../endpoint/<name> and .../revision/<id>.
+      const web = /^web-function\/([^/]+)(?:\/(endpoint|revision)\/[^/]+)?$/.exec(parts[5] ?? "")
+      if (web) {
+        return {
+          kind: "params",
+          to: "/lambda-web/$name",
+          params: { name: web[1] },
+          ...(web[2] ? { search: { tab: `${web[2]}s` } } : {}),
+        }
+      }
       const resourceType = parts[5]
       if (resourceType === "function") {
         const name = parts[6]
@@ -309,6 +320,10 @@ const CFN_TYPE_TO_SERVICE: Record<string, string> = {
   // Both answer Ref with their ARN.
   "AWS::S3Tables::TableBucket": "s3tables",
   "AWS::S3Tables::Table": "s3tables",
+  // All three answer Ref with their ARN.
+  "AWS::Lambda::WebFunction": "lambda:web",
+  "AWS::Lambda::WebFunctionRevision": "lambda:web",
+  "AWS::Lambda::WebFunctionEndpoint": "lambda:web",
 }
 
 /**
@@ -374,6 +389,7 @@ export function resolveService(service: string, resourceId: string): ResolvedRou
     case "glue:database":
       return { kind: "params", to: "/glue/$database", params: { database: resourceId } }
     case "s3tables":
+    case "lambda:web":
       return resolveArn(resourceId)
   }
   return null

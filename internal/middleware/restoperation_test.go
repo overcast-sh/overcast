@@ -349,6 +349,17 @@ func TestDetectOperationOtherRESTServices(t *testing.T) {
 
 		{"ses v2 send", http.MethodPost, "/v2/email/outbound-emails", "", "ses", "SendEmail"},
 		{"ses v2 identities", http.MethodGet, "/v2/email/identities", "", "ses", "ListEmailIdentities"},
+		{"ses v2 list identities", http.MethodPost, "/v2/email/list-identities", "", "ses", "ListEmailIdentities"},
+
+		// Lambda Web Functions sign as "lambda" but live on their own API
+		// version, so the path alone names the service.
+		{"lambda web create function", http.MethodPut, "/2025-03-07/web-functions", "lambda", "lambdaweb", "CreateWebFunction"},
+		{"lambda web list functions", http.MethodPost, "/2025-03-07/web-functions", "", "lambdaweb", "ListWebFunctions"},
+		{"lambda web get endpoint", http.MethodGet, "/2025-03-07/web-functions/f1/endpoints/prod", "lambda", "lambdaweb", "GetWebFunctionEndpoint"},
+		{"lambda web update endpoint", http.MethodPatch, "/2025-03-07/web-functions/f1/endpoints/prod", "lambda", "lambdaweb", "UpdateWebFunctionEndpoint"},
+		{"lambda web list revisions", http.MethodPost, "/2025-03-07/web-functions/f1/list-revisions", "lambda", "lambdaweb", "ListWebFunctionRevisions"},
+		{"lambda web list tags", http.MethodGet, "/2025-03-07/tags/arn%3Aaws%3Alambda%3Aus-east-1%3A000000000000%3Aweb-function%2Ff1", "lambda", "lambdaweb", "ListTags"},
+		{"lambda web account settings", http.MethodGet, "/2025-03-07/web-account-settings", "lambda", "lambdaweb", "GetWebAccountSettings"},
 
 		// /v2/apis is shared: the SigV4 scope decides the service, and the
 		// models name the operation differently for each, so the label must

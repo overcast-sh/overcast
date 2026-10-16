@@ -259,6 +259,7 @@ CreateBlueGreenDeploymentRequest structure
 .TargetDBParameterGroupName TargetDBParameterGroupName
 .TargetEngineVersion TargetEngineVersion
 .TargetIops IntegerOptional
+.TargetResourceConfigurations TargetResourceConfigurationList
 .TargetStorageThroughput IntegerOptional
 .TargetStorageType TargetStorageType
 .UpgradeTargetStorageConfig BooleanOptional
@@ -629,6 +630,7 @@ CustomDBEngineVersionQuotaExceededFault structure qerr=CustomDBEngineVersionQuot
 CustomEngineName string
 CustomEngineVersion string
 CustomEngineVersionStatus enum
+DBAndClusterArn string
 DBCluster structure
 .ActivityStreamKinesisStreamName String
 .ActivityStreamKmsKeyId String
@@ -3415,6 +3417,10 @@ TargetHealth structure
 .State TargetState
 TargetHealthReason enum
 TargetList list m=DBProxyTarget
+TargetResourceConfiguration structure
+.SourceArn DBAndClusterArn
+.TargetKmsKeyId KmsKeyIdOrArn
+TargetResourceConfigurationList list m=TargetResourceConfiguration mxml=TargetResourceConfiguration
 TargetRole enum
 TargetState enum
 TargetStorageType string

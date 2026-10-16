@@ -100,6 +100,21 @@ describe("ArnLink", () => {
       "arn:aws:s3tables:us-east-1:000000000000:bucket/lake/table/0f3c-9a",
       "/s3tables/lake/0f3c-9a",
     ],
+    [
+      "a web function",
+      "arn:aws:lambda:us-east-1:000000000000:web-function/shop",
+      "/lambda-web/shop",
+    ],
+    [
+      "a web function's endpoint",
+      "arn:aws:lambda:us-east-1:000000000000:web-function/shop/endpoint/prod",
+      "/lambda-web/shop?tab=endpoints",
+    ],
+    [
+      "a web function's revision",
+      "arn:aws:lambda:us-east-1:000000000000:web-function/shop/revision/rev-ab12c",
+      "/lambda-web/shop?tab=revisions",
+    ],
   ])("links %s ARN to its page", async (_, arn, href) => {
     const { container } = await renderRouted(() => <ArnLink arn={arn} />, "/")
     expect(container.querySelector("a")?.getAttribute("href")).toContain(href)
@@ -130,6 +145,21 @@ describe("ResourceLink", () => {
       "AWS::S3Tables::TableBucket",
       "arn:aws:s3tables:us-east-1:000000000000:bucket/lake",
       "/s3tables/lake",
+    ],
+    [
+      "AWS::Lambda::WebFunction",
+      "arn:aws:lambda:us-east-1:000000000000:web-function/shop",
+      "/lambda-web/shop",
+    ],
+    [
+      "AWS::Lambda::WebFunctionEndpoint",
+      "arn:aws:lambda:us-east-1:000000000000:web-function/shop/endpoint/prod",
+      "/lambda-web/shop?tab=endpoints",
+    ],
+    [
+      "AWS::Lambda::WebFunctionRevision",
+      "arn:aws:lambda:us-east-1:000000000000:web-function/shop/revision/rev-ab12c",
+      "/lambda-web/shop?tab=revisions",
     ],
   ])("links a %s to its page", async (service, resourceId, href) => {
     const { container } = await renderRouted(

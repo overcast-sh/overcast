@@ -49,6 +49,7 @@ kafka
 kinesis
 kms
 lambda
+lambda-web
 opensearch
 organizations
 pipes

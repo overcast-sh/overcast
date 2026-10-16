@@ -12,6 +12,8 @@ import {
   RUN_SETTLE,
   runDisplay,
   runEdgeEffects,
+  WEB_NODE_ROW,
+  WEB_REVISIONS_ROW,
   type DataLakeOverlay,
 } from "./data-lake-overlay"
 
@@ -75,6 +77,42 @@ describe("applyLakeEvent", () => {
 
   it("leaves the overlay alone for an event it has nothing to say about", () => {
     expect(apply(EMPTY_OVERLAY, "sqs:MessageSent", { queueName: "q" })).toBe(EMPTY_OVERLAY)
+  })
+})
+
+describe("applyLakeEvent > Lambda Web Functions", () => {
+  const node = "lambdaweb::shop"
+
+  it("flashes the node when the function is created", () => {
+    const o = apply(EMPTY_OVERLAY, "lambda-web:FunctionCreated", { function: "shop" })
+    expect(o.rows[rowKey(node, WEB_NODE_ROW)]?.flashes).toBe(1)
+  })
+
+  it("flashes the endpoint a create or update names", () => {
+    let o = apply(EMPTY_OVERLAY, "lambda-web:EndpointCreated", {
+      function: "shop",
+      endpoint: "prod",
+    })
+    o = apply(o, "lambda-web:EndpointUpdated", { function: "shop", endpoint: "prod" })
+    o = apply(o, "lambda-web:EndpointUpdated", { function: "shop", endpoint: "dev" })
+    expect(o.rows[rowKey(node, "prod")]?.flashes).toBe(2)
+    expect(o.rows[rowKey(node, "dev")]?.flashes).toBe(1)
+  })
+
+  it("ticks the revision count, and flashes the node, when a revision arrives or goes", () => {
+    let o = apply(EMPTY_OVERLAY, "lambda-web:RevisionCreated", { function: "shop", revision: "r1" })
+    o = apply(o, "lambda-web:RevisionDeleted", { function: "shop", revision: "r0" })
+    expect(o.rows[rowKey(node, WEB_REVISIONS_ROW)]?.ticks).toBe(2)
+    expect(o.rows[rowKey(node, WEB_NODE_ROW)]?.flashes).toBe(2)
+  })
+
+  it("leaves a deleted endpoint as a ghost on its function's node until its time is up", () => {
+    const o = apply(EMPTY_OVERLAY, "lambda-web:EndpointDeleted", {
+      function: "shop",
+      endpoint: "old",
+    })
+    expect(o.ghosts[node]).toEqual([{ name: "old", deletedAt: T0 }])
+    expect(expireOverlay(o, T0 + ROW_GHOST_TTL).ghosts[node]).toBeUndefined()
   })
 })
 

@@ -71,5 +71,6 @@ func handWritten(c *clients.Clients) []ServiceGroup {
 		AthenaS3Tables(c).named("athena_s3tables"),
 		ElastiCache(c).named("elasticache"),
 		EFS(c).named("efs"),
+		LambdaWeb(c).named("lambdaweb"),
 	}
 }

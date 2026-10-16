@@ -40,6 +40,7 @@ GetShardIteratorInput structure
 .ShardId ShardId
 .ShardIteratorType ShardIteratorType
 .StreamArn StreamArn
+.Timestamp Timestamp
 GetShardIteratorOutput structure
 .ShardIterator ShardIterator
 Identity structure
@@ -128,5 +129,6 @@ String string
 StringAttributeValue string
 StringSetAttributeValue list m=StringAttributeValue
 TableName string
+Timestamp timestamp
 TrimmedDataAccessException structure error=client
 .message ErrorMessage

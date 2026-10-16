@@ -96,12 +96,12 @@ tags:
 
 ### SES v2 — Identities
 
-| Operation             | Status       | Notes                                                                         | AWS Docs                                                                                    |
-| --------------------- | ------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `CreateEmailIdentity` | ✅ Supported | `POST /v2/email/identities`; auto-verified; inline `Tags` applied at creation | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_CreateEmailIdentity.html) |
-| `ListEmailIdentities` | ✅ Supported | `GET /v2/email/identities`                                                    | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_ListEmailIdentities.html) |
-| `GetEmailIdentity`    | ✅ Supported | `GET /v2/email/identities/{EmailIdentity}`; reports the identity's `Tags`     | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_GetEmailIdentity.html)    |
-| `DeleteEmailIdentity` | ✅ Supported | `DELETE /v2/email/identities/{EmailIdentity}`                                 | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_DeleteEmailIdentity.html) |
+| Operation             | Status       | Notes                                                                            | AWS Docs                                                                                    |
+| --------------------- | ------------ | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `CreateEmailIdentity` | ✅ Supported | `POST /v2/email/identities`; auto-verified; inline `Tags` applied at creation    | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_CreateEmailIdentity.html) |
+| `ListEmailIdentities` | ✅ Supported | `POST /v2/email/list-identities` (and `GET /v2/email/identities` for older SDKs) | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_ListEmailIdentities.html) |
+| `GetEmailIdentity`    | ✅ Supported | `GET /v2/email/identities/{EmailIdentity}`; reports the identity's `Tags`        | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_GetEmailIdentity.html)    |
+| `DeleteEmailIdentity` | ✅ Supported | `DELETE /v2/email/identities/{EmailIdentity}`                                    | [docs](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_DeleteEmailIdentity.html) |
 
 ### SES v2 — Tags
 
