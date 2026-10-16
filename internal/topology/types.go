@@ -72,8 +72,8 @@ type Node struct {
 	GlueResourceType GlueResourceType `json:"glueResourceType,omitempty"` // Glue only — whether this node is a database or a federated catalog
 	Tables           []DataTable      `json:"tables,omitempty"`           // Glue database and S3 Tables bucket only — the tables it holds
 
-	WebEndpoints     []WebEndpoint    `json:"webEndpoints,omitempty"`     // Lambda Web Functions only — the endpoints, and the revisions each serves
-	WebRevisions     *int             `json:"webRevisions,omitempty"`     // Lambda Web Functions only — how many revisions the function holds
+	WebEndpoints []WebEndpoint `json:"webEndpoints,omitempty"` // Lambda Web Functions only — the endpoints, and the revisions each serves
+	WebRevisions *int          `json:"webRevisions,omitempty"` // Lambda Web Functions only — how many revisions the function holds
 }
 
 // GlueResourceType says which kind of Data Catalog resource a Glue node is:
