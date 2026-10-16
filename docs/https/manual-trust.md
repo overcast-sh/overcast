@@ -93,6 +93,13 @@ full chain in the cert file if a private CA issued it — the web console's back
 verifies against that file plus the system roots. `OVERCAST_TLS=auto` and
 `OVERCAST_TLS_CERT`/`KEY` are mutually exclusive.
 
+One thing you give up: auto mode mints a leaf per name during the handshake, so
+host-routed URLs (`{id}.execute-api.{region}.…`, Lambda function URLs, AppSync)
+are covered without being enumerable. Overcast cannot do that with a certificate
+it did not issue, so your own pair needs SANs for whichever of those names you
+use — see
+[Which names the certificate covers](./how-it-works.md#which-names-the-certificate-covers).
+
 ## Verify
 
 ```bash
