@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -68,6 +70,9 @@ type getShardIteratorRequest struct {
 	ShardId           string `json:"ShardId"`
 	ShardIteratorType string `json:"ShardIteratorType"`
 	SequenceNumber    string `json:"SequenceNumber,omitempty"`
+	// Timestamp is Unix epoch seconds (fractional, like every AWS JSON
+	// timestamp); required when ShardIteratorType is AT_TIMESTAMP.
+	Timestamp *float64 `json:"Timestamp,omitempty"`
 }
 
 type getShardIteratorResponse struct {
@@ -324,6 +329,32 @@ func (h *handler) getShardIteratorTyped(ctx context.Context, req *getShardIterat
 		}
 		if _, err := fmt.Sscanf(req.SequenceNumber, "%d", &afterSeq); err != nil {
 			afterSeq = 0
+		}
+	case "AT_TIMESTAMP":
+		if req.Timestamp == nil {
+			return nil, validationError("Timestamp is required for AT_TIMESTAMP")
+		}
+		tsMillis := int64(math.Round(*req.Timestamp * 1000))
+		if tsMillis > time.Now().UnixMilli() {
+			return nil, validationError("Timestamp must not be in the future")
+		}
+		// Point at the first record created at or after the timestamp. A
+		// timestamp older than every retained record resolves to the first
+		// record (TRIM_HORIZON); one newer than every record resolves to the
+		// end, so only later writes are returned.
+		recs, latest, sErr := h.ddb.GetStreamRecordsSince(streamCtx, t.TableName, 0, 0)
+		if sErr != nil {
+			return nil, protocol.Wrap(protocol.ErrInternalError, sErr)
+		}
+		afterSeq = latest
+		for _, rec := range recs {
+			if rec.CreatedAt >= tsMillis {
+				afterSeq = rec.SequenceNumber - 1
+				if afterSeq < 0 {
+					afterSeq = 0
+				}
+				break
+			}
 		}
 	default:
 		return nil, &protocol.AWSError{

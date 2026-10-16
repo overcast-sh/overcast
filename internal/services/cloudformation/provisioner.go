@@ -4858,6 +4858,15 @@ func (h *lambdaFunctionHandler) Create(ctx context.Context, router http.Handler,
 	if err != nil {
 		return "", nil, fmt.Errorf("lambda CreateFunction: %w", err)
 	}
+	if loop, ok := props["RecursiveLoop"]; ok && loop != nil {
+		if err := putLambdaRecursiveLoop(ctx, router, rCtx.Region, funcName, loop); err != nil {
+			_, cleanupErr := internalRequest(ctx, router, rCtx.Region, http.MethodDelete, "/2015-03-31/functions/"+url.PathEscape(funcName), "", nil)
+			if cleanupErr != nil {
+				return funcName, nil, errors.Join(err, fmt.Errorf("lambda cleanup DeleteFunction: %w", cleanupErr))
+			}
+			return "", nil, err
+		}
+	}
 	if reserved, ok := props["ReservedConcurrentExecutions"]; ok {
 		if err := putLambdaReservedConcurrency(ctx, router, rCtx.Region, funcName, reserved); err != nil {
 			_, cleanupErr := internalRequest(ctx, router, rCtx.Region, http.MethodDelete, "/2015-03-31/functions/"+url.PathEscape(funcName), "", nil)
@@ -5052,6 +5061,7 @@ type lambdaUpdateProgress struct {
 	configuration bool
 	code          bool
 	codeSigning   bool
+	recursion     bool
 }
 
 // applyUpdate tracks tags first, then follows AWS's documented
@@ -5077,6 +5087,10 @@ func (h *lambdaFunctionHandler) applyUpdate(ctx context.Context, router http.Han
 		return "", completed, err
 	}
 	completed.codeSigning = applied
+	if applied, err = h.updateRecursiveLoop(ctx, router, name, props, prior, rCtx); err != nil {
+		return "", completed, err
+	}
+	completed.recursion = applied
 	if err = h.updateConcurrency(ctx, router, name, props, prior, rCtx); err != nil {
 		return "", completed, err
 	}
@@ -5085,6 +5099,11 @@ func (h *lambdaFunctionHandler) applyUpdate(ctx context.Context, router http.Han
 
 func (h *lambdaFunctionHandler) compensateUpdate(ctx context.Context, router http.Handler, name string, props, prior map[string]any, completed lambdaUpdateProgress, rCtx *resolveContext) error {
 	var compensationErr error
+	if completed.recursion {
+		if _, err := h.updateRecursiveLoop(ctx, router, name, props, prior, rCtx); err != nil {
+			compensationErr = errors.Join(compensationErr, err)
+		}
+	}
 	if completed.codeSigning {
 		if _, err := h.updateCodeSigningConfig(ctx, router, name, props, prior, rCtx); err != nil {
 			compensationErr = errors.Join(compensationErr, err)
@@ -5246,7 +5265,7 @@ func (h *lambdaFunctionHandler) updateCodeSigningConfig(ctx context.Context, rou
 }
 
 func checkLambdaFunctionAuxiliaryPropertySupport(props, prior map[string]any) error {
-	for _, property := range []string{"RuntimeManagementConfig", "RecursiveLoop", "FunctionScalingConfig"} {
+	for _, property := range []string{"RuntimeManagementConfig", "FunctionScalingConfig"} {
 		if reflect.DeepEqual(props[property], prior[property]) {
 			continue
 		}
@@ -5313,6 +5332,37 @@ func updateLambdaTags(ctx context.Context, router http.Handler, region, resource
 		applied = true
 	}
 	return applied, nil
+}
+
+// updateRecursiveLoop routes the template's RecursiveLoop through Lambda's
+// PutFunctionRecursionConfig. A property removed from the template reverts to
+// AWS's default, Terminate. It reports whether it called the API.
+func (h *lambdaFunctionHandler) updateRecursiveLoop(ctx context.Context, router http.Handler, name string, props, prior map[string]any, rCtx *resolveContext) (bool, error) {
+	if reflect.DeepEqual(props["RecursiveLoop"], prior["RecursiveLoop"]) {
+		return false, nil
+	}
+	value, ok := props["RecursiveLoop"]
+	if !ok || value == nil {
+		value = "Terminate"
+	}
+	if err := putLambdaRecursiveLoop(ctx, router, rCtx.Region, name, value); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// putLambdaRecursiveLoop dispatches CloudFormation's function property through
+// Lambda's separate recursion-config API.
+func putLambdaRecursiveLoop(ctx context.Context, router http.Handler, region, functionName string, value any) error {
+	body, err := json.Marshal(map[string]any{"RecursiveLoop": value})
+	if err != nil {
+		return fmt.Errorf("lambda PutFunctionRecursionConfig: marshal request: %w", err)
+	}
+	path := "/2024-08-31/functions/" + url.PathEscape(functionName) + "/recursion-config"
+	if _, err := internalRequest(ctx, router, region, http.MethodPut, path, "application/json", body); err != nil {
+		return fmt.Errorf("lambda PutFunctionRecursionConfig: %w", err)
+	}
+	return nil
 }
 
 func (h *lambdaFunctionHandler) updateConcurrency(ctx context.Context, router http.Handler, name string, props, prior map[string]any, rCtx *resolveContext) error {

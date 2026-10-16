@@ -272,6 +272,11 @@ type Function struct {
 	// ReservedConcurrency is the reserved concurrency limit. nil = unreserved,
 	// 0 = throttled (no executions).
 	ReservedConcurrency *int `json:"reserved_concurrency,omitempty"`
+	// RecursiveLoop is the recursive-loop detection setting ("Allow" or
+	// "Terminate"), or "" for a function that never set one, which reads as
+	// AWS's default of Terminate. Overcast runs no loop detection, so the value
+	// is recorded and echoed and changes nothing about execution.
+	RecursiveLoop string `json:"recursive_loop,omitempty"`
 	// TracingMode is the X-Ray tracing mode ("Active" or "PassThrough"), or ""
 	// for a function that never set one. There is no X-Ray service in Overcast,
 	// so the mode is recorded and echoed and changes nothing about execution —
@@ -1568,6 +1573,10 @@ func (s *Service) RegisterRoutes(r chi.Router) {
 	r.Put(reservedConcurrencyBase+"/functions/{name}/concurrency", s.handler.PutFunctionConcurrency)
 	r.Delete(reservedConcurrencyBase+"/functions/{name}/concurrency", s.handler.DeleteFunctionConcurrency)
 	r.Get(provisionedConcurrencyBase+"/functions/{name}/concurrency", s.handler.GetFunctionConcurrency)
+	// Recursive-loop detection setting, on its own API version.
+	const recursionConfigBase = "/2024-08-31"
+	r.Put(recursionConfigBase+"/functions/{name}/recursion-config", s.handler.PutFunctionRecursionConfig)
+	r.Get(recursionConfigBase+"/functions/{name}/recursion-config", s.handler.GetFunctionRecursionConfig)
 	// Provisioned concurrency lives under the 2019-09-30 API version, not the
 	// 2015-03-31 base the rest of Lambda uses — that is the path the AWS SDKs
 	// call. GET is overloaded: ?List=ALL lists, otherwise it gets one config.

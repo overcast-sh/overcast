@@ -670,3 +670,32 @@ func TestLambdaProvisionerPackagesInlineCode(t *testing.T) {
 		assertReadableArchive(t, codeZipFrom(t, router.carryingCode(t)), "index.js", source)
 	})
 }
+
+func TestLambdaProvisionerUpdateRecursiveLoop(t *testing.T) {
+	h := &lambdaFunctionHandler{}
+	rCtx := &resolveContext{Region: "us-east-1"}
+	const path = "/2024-08-31/functions/loop-fn/recursion-config"
+
+	router := &captureRouter{}
+	applied, err := h.updateRecursiveLoop(context.Background(), router, "loop-fn", map[string]any{"RecursiveLoop": "Allow"}, map[string]any{}, rCtx)
+	if err != nil || !applied {
+		t.Fatalf("set: applied=%v err=%v", applied, err)
+	}
+	if len(router.requests) != 1 || router.requests[0].method != http.MethodPut || router.requests[0].path != path || router.requests[0].body["RecursiveLoop"] != "Allow" {
+		t.Fatalf("set requests = %#v", router.requests)
+	}
+
+	// Removing the property reverts to AWS's default.
+	router = &captureRouter{}
+	applied, err = h.updateRecursiveLoop(context.Background(), router, "loop-fn", map[string]any{}, map[string]any{"RecursiveLoop": "Allow"}, rCtx)
+	if err != nil || !applied || len(router.requests) != 1 || router.requests[0].body["RecursiveLoop"] != "Terminate" {
+		t.Fatalf("remove: applied=%v err=%v requests=%#v", applied, err, router.requests)
+	}
+
+	// Unchanged: no call.
+	router = &captureRouter{}
+	applied, err = h.updateRecursiveLoop(context.Background(), router, "loop-fn", map[string]any{"RecursiveLoop": "Allow"}, map[string]any{"RecursiveLoop": "Allow"}, rCtx)
+	if err != nil || applied || len(router.requests) != 0 {
+		t.Fatalf("unchanged: applied=%v err=%v requests=%#v", applied, err, router.requests)
+	}
+}

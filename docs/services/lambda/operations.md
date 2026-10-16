@@ -1,6 +1,6 @@
 ---
 title: "Lambda operations"
-description: "Every Lambda operation Overcast declares — 61 of 62 implemented — with status, behaviour notes and a link to the AWS API reference for each."
+description: "Every Lambda operation Overcast declares — 63 of 64 implemented — with status, behaviour notes and a link to the AWS API reference for each."
 section: "Service Reference"
 tags:
   - docs
@@ -13,7 +13,7 @@ tags:
 
 # Lambda operations
 
-61 of 62 listed operations are implemented. Back to [Lambda](../lambda.md).
+63 of 64 listed operations are implemented. Back to [Lambda](../lambda.md).
 
 ## Summary
 
@@ -28,7 +28,7 @@ tags:
 | Event source mappings       | 5            |            |                |
 | Layers                      | 5            |            |                |
 | Asynchronous invocation     | 5            |            |                |
-| Concurrency & configuration | 7            |            |                |
+| Concurrency & configuration | 9            |            |                |
 | Tags                        | 3            |            |                |
 
 ---
@@ -139,6 +139,8 @@ tags:
 | `PutFunctionConcurrency`             | ✅ Supported | Enforced: over-limit invokes get 429 TooManyRequestsException; 0 throttles the function entirely                                                                                                                                           | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_PutFunctionConcurrency.html)             |
 | `GetFunctionConcurrency`             | ✅ Supported | A function with no reservation answers 200 with an empty body, as on AWS; a reservation of 0 is reported rather than omitted, since 0 is the documented way to switch a function off. ResourceNotFoundException is for the function itself | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_GetFunctionConcurrency.html)             |
 | `DeleteFunctionConcurrency`          | ✅ Supported | Clears reserved concurrency limit; returns 204                                                                                                                                                                                             | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_DeleteFunctionConcurrency.html)          |
+| `PutFunctionRecursionConfig`         | ✅ Supported | Stored and echoed; RecursiveLoop is validated against Allow/Terminate. Overcast runs no recursive-loop detection, so the setting changes nothing about execution                                                                           | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_PutFunctionRecursionConfig.html)         |
+| `GetFunctionRecursionConfig`         | ✅ Supported | Reports the stored setting, or AWS's default of Terminate when none was set                                                                                                                                                                | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_GetFunctionRecursionConfig.html)         |
 | `PutProvisionedConcurrencyConfig`    | ✅ Supported | Pre-warms the requested execution environments in the background (IN_PROGRESS then READY); FAILED when Docker is unavailable                                                                                                               | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_PutProvisionedConcurrencyConfig.html)    |
 | `GetProvisionedConcurrencyConfig`    | ✅ Supported | Reports live Allocated/Available; ProvisionedConcurrencyConfigNotFoundException if not set                                                                                                                                                 | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_GetProvisionedConcurrencyConfig.html)    |
 | `DeleteProvisionedConcurrencyConfig` | ✅ Supported | Releases the reservation; the environments age out on the idle TTL rather than being killed                                                                                                                                                | [docs](https://docs.aws.amazon.com/lambda/latest/dg/API_DeleteProvisionedConcurrencyConfig.html) |

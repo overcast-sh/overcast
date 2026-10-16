@@ -130,7 +130,7 @@ new SQSClient({ endpoint: process.env.AWS_ENDPOINT_URL });
 
 ## Operations
 
-61 of 62 listed operations are implemented.
+63 of 64 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Lambda operations](lambda/operations.md).
 
 <!-- END overcast:capabilities -->
