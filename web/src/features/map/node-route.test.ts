@@ -34,6 +34,13 @@ describe("nodeRoute for data-lake nodes", () => {
     })
   })
 
+  it("opens a web function's page", () => {
+    expect(nodeRoute({ service: "lambdaweb", label: "shop" })).toEqual({
+      to: "/lambda-web/$name",
+      params: { name: "shop" },
+    })
+  })
+
   it("links a table and an execution to their own pages", () => {
     expect(routeHref(glueTableRoute("sales", "order items"))).toBe("/glue/sales/order%20items")
     expect(routeHref(s3TablesTableRoute("lake", "t-1"))).toBe("/s3tables/lake/t-1")

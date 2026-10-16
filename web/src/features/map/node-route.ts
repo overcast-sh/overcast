@@ -135,6 +135,8 @@ export function nodeRoute({
         : { to: "/glue/$database", params: { database: label } }
     case "s3tables":
       return { to: "/s3tables/$bucket", params: { bucket: label } }
+    case "lambdaweb":
+      return { to: "/lambda-web/$name", params: { name: label } }
     default:
       return null
   }

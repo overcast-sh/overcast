@@ -72,6 +72,8 @@ import { DataLakeOverlayContext, DataLakePeekContext, type DataLakePeek } from "
 import { DataLakePeeks } from "./data-lake-peeks"
 import { tableList, tableListHeight, workgroupHeight } from "./data-lake-layout"
 import { nodeSuffix, type DataLakeOverlay } from "./data-lake-overlay"
+import { WebFunctionNode } from "./web-function-node"
+import { endpointList, webFunctionHeight } from "./web-function-layout"
 
 const NODE_TYPES = {
   serviceNode: ServiceNode,
@@ -84,6 +86,7 @@ const NODE_TYPES = {
   igwNode: IgwNode,
   athenaWorkgroup: AthenaWorkgroupNode,
   dataCatalog: DataCatalogNode,
+  webFunction: WebFunctionNode,
 }
 
 /** Node types that draw their own handles from `hasTarget` / `hasSource`. */
@@ -93,10 +96,11 @@ const HANDLED_TYPES = new Set([
   "igwNode",
   "athenaWorkgroup",
   "dataCatalog",
+  "webFunction",
 ])
 
 /** Node types that render the live topology node rather than the layout's copy of it. */
-const DATA_LAKE_TYPES = new Set(["athenaWorkgroup", "dataCatalog"])
+const DATA_LAKE_TYPES = new Set(["athenaWorkgroup", "dataCatalog", "webFunction"])
 const EDGE_TYPES = { topologyEdge: TopologyEdge }
 
 /** Group containers: never dimmed, never a hover target. */
@@ -280,6 +284,11 @@ function computeSizeOverrides(
     if (n.service === "glue" || n.service === "s3tables") {
       const list = tableList(n.tables ?? [], lakeGhosts[nodeSuffix(n.id)])
       overrides[n.id] = { width: NODE_WIDTH, height: tableListHeight(list) }
+      continue
+    }
+    if (n.service === "lambdaweb") {
+      const list = endpointList(n.webEndpoints ?? [], lakeGhosts[nodeSuffix(n.id)])
+      overrides[n.id] = { width: NODE_WIDTH, height: webFunctionHeight(list) }
       continue
     }
     if (n.service === "lambda") {

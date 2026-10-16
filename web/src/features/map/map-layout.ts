@@ -135,6 +135,8 @@ function nodeType(service: string): string {
     case "glue":
     case "s3tables":
       return "dataCatalog"
+    case "lambdaweb":
+      return "webFunction"
     default:
       return "serviceNode"
   }

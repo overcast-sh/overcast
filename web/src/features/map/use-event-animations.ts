@@ -53,7 +53,7 @@ export interface AnimationState {
    * volumes on storage nodes even when writes happen faster than the eye can follow.
    */
   nodeWriteBurstCounts: Record<string, number>
-  /** Athena, Glue and S3 Tables row overlays: see data-lake-overlay.ts. */
+  /** Athena, Glue, S3 Tables and Lambda Web Function row overlays: see data-lake-overlay.ts. */
   dataLake: DataLakeOverlay
 }
 
@@ -233,6 +233,20 @@ const EVENT_REGISTRY: Record<string, EventDescriptor | undefined> = {
   [EventType.ecr.RepositoryCreated]: { sourceNode: fieldSourceNode("ecr", "name") },
   [EventType.ecr.RepositoryDeleted]: { sourceNode: fieldSourceNode("ecr", "name") },
   [EventType.ecr.ImagePushed]: { sourceNode: fieldSourceNode("ecr", "name"), isWrite: true },
+  // A new revision's package is read from the bucket its function's `code` edge
+  // leads to. The edge appears with the function's first revision, after the
+  // event, so it is retried once the topology catches up.
+  [EventType.lambdaWeb.RevisionCreated]: {
+    sourceNode: fieldSourceNode("lambdaweb", "function"),
+    matchEdges: (p, edges) => {
+      const fn = getString(p, "function")
+      if (!fn) return []
+      const suffix = `::lambdaweb::${fn}`
+      return edges.filter((e) => e.type === "code" && e.source.endsWith(suffix)).map((e) => e.id)
+    },
+    isWrite: true,
+    edgeDependent: true,
+  },
 }
 
 /** Look up edge IDs that should animate for a given SSE event. */
@@ -478,7 +492,7 @@ export function useEventAnimations(nodes: TopologyNode[], edges: TopologyEdge[])
 /** How often expired ghosts, bursts and finished queries are swept (ms). */
 const LAKE_SWEEP_INTERVAL = 1_000
 
-const LAKE_SOURCES = ["athena", "glue", "s3tables"]
+const LAKE_SOURCES = ["athena", "glue", "s3tables", "lambdaweb"]
 
 type LakeAction =
   { type: "events"; events: StreamEvent[]; now: number } | { type: "expire"; now: number }

@@ -1,15 +1,19 @@
 /**
- * data-lake-overlay — the live overlay on Athena, Glue and S3 Tables nodes,
- * as one pure model: what an event does to the rows it names, and what the
- * rows then show.
+ * data-lake-overlay — the live overlay on Athena, Glue, S3 Tables and Lambda
+ * Web Function nodes, as one pure model: what an event does to the rows it
+ * names, and what the rows then show.
  *
- * One visual-state model for every data-lake row (CONTRIBUTING § Topology map
- * methodology):
+ * One visual-state model for every row of these nodes (CONTRIBUTING § Topology
+ * map methodology):
  *
  *   - a *write flash* when a table is written — created, committed to, or
  *     updated in the catalog — with a burst of the records a commit appended;
  *   - a *tick* on a Glue table's partition count when its partitions change;
- *   - a *ghost* row, struck through and fading, for a table that was dropped;
+ *   - a *ghost* row, struck through and fading, for a table that was dropped
+ *     or a web function's endpoint that was deleted;
+ *   - on a web function, a write flash on the endpoint a create or update
+ *     names (including one `LatestRevision` re-routes when a revision
+ *     arrives), a tick on its revision count, and a flash across the node;
  *   - a query's states, each on screen for at least `RUN_DWELL` — a dwell only
  *     for a transition too fast to see; a query that runs for longer shows
  *     each state for as long as it really lasted.
@@ -55,6 +59,10 @@ export function rowKey(node: NodeSuffix, row: string): RowKey {
 export function tableRowName(table: { name: string; namespace?: string }): string {
   return table.namespace ? `${table.namespace}.${table.name}` : table.name
 }
+
+/** A web function node's own flash lives under this row name, its revision count's tick under the next. */
+export const WEB_NODE_ROW = ""
+export const WEB_REVISIONS_ROW = "#revisions"
 
 /** A node's suffix from its full ID, `us-east-1::glue::sales` → `glue::sales`. */
 export function nodeSuffix(nodeId: string): NodeSuffix {
@@ -166,6 +174,24 @@ export function applyLakeEvent(o: DataLakeOverlay, ev: LakeEvent, now: number): 
         recordsUntil: now + RECORD_BURST_TTL,
       }))
     }
+    case EventType.lambdaWeb.FunctionCreated:
+      return flash(o, rowKey(webFunctionNode(p), WEB_NODE_ROW))
+    case EventType.lambdaWeb.RevisionCreated:
+    case EventType.lambdaWeb.RevisionDeleted: {
+      const node = webFunctionNode(p)
+      return updateRow(
+        flash(o, rowKey(node, WEB_NODE_ROW)),
+        rowKey(node, WEB_REVISIONS_ROW),
+        (r) => ({
+          ticks: r.ticks + 1,
+        }),
+      )
+    }
+    case EventType.lambdaWeb.EndpointCreated:
+    case EventType.lambdaWeb.EndpointUpdated:
+      return flash(o, rowKey(webFunctionNode(p), text(p, "endpoint")))
+    case EventType.lambdaWeb.EndpointDeleted:
+      return ghost(o, webFunctionNode(p), { name: text(p, "endpoint"), deletedAt: now })
     case EventType.athena.QueryStateChanged: {
       const id = text(p, "queryExecutionId")
       return id ? addStep(o, id, text(p, "state"), now) : o
@@ -173,6 +199,10 @@ export function applyLakeEvent(o: DataLakeOverlay, ev: LakeEvent, now: number): 
     default:
       return o
   }
+}
+
+function webFunctionNode(p: Payload): NodeSuffix {
+  return `lambdaweb::${text(p, "function")}`
 }
 
 function s3TablesRow(p: Payload): RowKey {
