@@ -182,3 +182,32 @@ func TestEnsureNetwork_refusedCreateReportGoesWithTheVPC(t *testing.T) {
 		t.Fatalf("unbacked problems = %v after the VPC was deleted, want none", got)
 	}
 }
+
+func TestVPCNetworkStatus_unbackedVPCIsRetriedBeforeALaunchIsRefused(t *testing.T) {
+	daemon := newRefusingDaemon(t)
+	h := refusingHandler(t, daemon)
+	svc := &Service{handler: h}
+	ctx := context.Background()
+	h.reconciledAll.Store(true) // a full pass has already run: only a retry can heal
+
+	// Given: a VPC whose network the daemon refused at CreateVpc.
+	vpc := &VPC{VpcID: "vpc-retry", CidrBlock: "10.44.0.0/16", State: "available"}
+	if aerr := h.vpcStrategy.EnsureNetwork(ctx, vpc); aerr != nil {
+		t.Fatalf("EnsureNetwork: %v", aerr.Message)
+	}
+	if aerr := h.store.putVPC(ctx, vpc); aerr != nil {
+		t.Fatalf("putVPC: %v", aerr.Message)
+	}
+
+	// When: the pool is freed and a launch asks whether the VPC is launchable.
+	daemon.allowCreates()
+	got := svc.VPCNetworkStatus(ctx, vpc.VpcID)
+
+	// Then: the VPC was backed on the spot instead of refusing the launch.
+	if got != vpcNetworkStatusOK {
+		t.Fatalf("VPCNetworkStatus = %q, want %q after the daemon accepts the create", got, vpcNetworkStatusOK)
+	}
+	if p := unbackedProblems(h); len(p) != 0 {
+		t.Fatalf("unbacked problems = %v after the retry backed the VPC, want none", p)
+	}
+}

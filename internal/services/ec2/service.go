@@ -130,6 +130,12 @@ func (s *Service) VPCNetworkStatus(ctx context.Context, vpcID string) string {
 	if vpc.NetworkStatus == "" {
 		return vpcNetworkStatusOK
 	}
+	// A VPC whose network create was refused earlier is retried here, where
+	// the answer is about to refuse a launch, rather than staying unbacked
+	// until Docker next reappears.
+	if vpc.NetworkStatus == vpcNetworkStatusUnbacked {
+		return s.handler.healUnbackedVPC(ctx, vpcID)
+	}
 	return vpc.NetworkStatus
 }
 

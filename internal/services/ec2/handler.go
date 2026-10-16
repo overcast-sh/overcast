@@ -84,6 +84,8 @@ type Handler struct {
 	// use, so a VPC the startup pass could not see is still backed before
 	// anything is placed in it.
 	reconciledRegions sync.Map // region → regionReconcile
+	// unbackedRetries holds, per VPC, when healUnbackedVPC last retried it.
+	unbackedRetries sync.Map // vpcID → time.Time
 
 	// defaultVPCLocks serialises default-VPC seeding per region, so two
 	// concurrent describes cannot both find none and both seed one.
