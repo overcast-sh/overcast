@@ -460,6 +460,7 @@ ExportDescription structure
 .ExportType ExportType
 .FailureCode FailureCode
 .FailureMessage FailureMessage
+.FilterSpecification FilterSpecification
 .IncrementalExportSpecification IncrementalExportSpecification
 .ItemCount ItemCount
 .S3Bucket S3Bucket
@@ -490,6 +491,7 @@ ExportTableToPointInTimeInput structure
 .ExportFormat ExportFormat
 .ExportTime ExportTime
 .ExportType ExportType
+.FilterSpecification FilterSpecification
 .IncrementalExportSpecification IncrementalExportSpecification
 .S3Bucket S3Bucket
 .S3BucketOwner S3BucketOwner
@@ -513,6 +515,12 @@ FailureException structure
 .ExceptionName ExceptionName
 FailureMessage string
 FilterConditionMap map k=AttributeName v=Condition
+FilterSpecification structure
+.ExpressionAttributeNames ExpressionAttributeNameMap
+.ExpressionAttributeValues ExpressionAttributeValueMap
+.FilterExpression ConditionExpression
+.KeyConditionExpression KeyExpression
+.ProjectionExpression ProjectionExpression
 Get structure
 .ExpressionAttributeNames ExpressionAttributeNameMap
 .Key Key

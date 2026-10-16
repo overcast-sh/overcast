@@ -23,6 +23,14 @@ AccessScope structure
 .namespaces StringList
 .type AccessScopeType
 AccessScopeType enum
+AckConfigRequest structure
+.disabledServices AckDisabledServicesList
+.enableCrossNamespace BoxedBoolean
+AckConfigResponse structure
+.disabledServices AckDisabledServicesList
+.enableCrossNamespace BoxedBoolean
+AckDisabledServicesList list m=AckServiceName
+AckServiceName string
 ActivateCertificateAuthority operation in=ActivateCertificateAuthorityRequest out=ActivateCertificateAuthorityResponse err=InvalidParameterException,ResourceNotFoundException,ServerException,ServiceUnavailableException method=POST uri=/clusters/{clusterName}/certificate-authorities/{certificateAuthorityId}/activate code=200
 ActivateCertificateAuthorityRequest structure
 .certificateAuthorityId String label
@@ -106,15 +114,18 @@ ArgoCdAwsIdcConfigResponse structure
 .idcRegion String
 ArgoCdConfigRequest structure
 .awsIdc ArgoCdAwsIdcConfigRequest
+.endpointPrefix ArgoCdEndpointPrefix
 .namespace String
 .networkAccess ArgoCdNetworkAccessConfigRequest
 .rbacRoleMappings ArgoCdRoleMappingList
 ArgoCdConfigResponse structure
 .awsIdc ArgoCdAwsIdcConfigResponse
+.endpointPrefix ArgoCdEndpointPrefix
 .namespace String
 .networkAccess ArgoCdNetworkAccessConfigResponse
 .rbacRoleMappings ArgoCdRoleMappingList
 .serverUrl String
+ArgoCdEndpointPrefix string
 ArgoCdNetworkAccessConfigRequest structure
 .vpceIds StringList
 ArgoCdNetworkAccessConfigResponse structure
@@ -193,8 +204,10 @@ Capability structure
 .type CapabilityType
 .version String
 CapabilityConfigurationRequest structure
+.ack AckConfigRequest
 .argoCd ArgoCdConfigRequest
 CapabilityConfigurationResponse structure
+.ack AckConfigResponse
 .argoCd ArgoCdConfigResponse
 CapabilityDeletePropagationPolicy enum
 CapabilityHealth structure
@@ -1323,6 +1336,9 @@ UpdateAccessEntryRequest structure
 .username String
 UpdateAccessEntryResponse structure
 .accessEntry AccessEntry
+UpdateAckConfig structure
+.disabledServices AckDisabledServicesList
+.enableCrossNamespace BoxedBoolean
 UpdateAddon operation in=UpdateAddonRequest out=UpdateAddonResponse err=ClientException,InvalidParameterException,InvalidRequestException,ResourceInUseException,ResourceNotFoundException,ServerException method=POST uri=/clusters/{clusterName}/addons/{addonName}/update code=200
 UpdateAddonRequest structure
 .addonName String label
@@ -1340,6 +1356,7 @@ UpdateArgoCdConfig structure
 .rbacRoleMappings UpdateRoleMappings
 UpdateCapability operation in=UpdateCapabilityRequest out=UpdateCapabilityResponse err=AccessDeniedException,InvalidParameterException,ResourceInUseException,ResourceNotFoundException,ServerException method=POST uri=/clusters/{clusterName}/capabilities/{capabilityName} code=200
 UpdateCapabilityConfiguration structure
+.ack UpdateAckConfig
 .argoCd UpdateArgoCdConfig
 UpdateCapabilityRequest structure
 .capabilityName String label

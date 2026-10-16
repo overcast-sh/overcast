@@ -112,6 +112,9 @@ ConcurrentModificationException structure error=server code=500
 .message ErrorMessage
 ConfigurationOverrides structure
 .Tracking TrackingConfigurationOverrides
+ConfigurationSetFilter map k=ConfigurationSetFilterKey v=ConfigurationSetFilterValue
+ConfigurationSetFilterKey enum
+ConfigurationSetFilterValue string
 ConfigurationSetName string
 ConfigurationSetNameList list m=ConfigurationSetName
 ConflictException structure error=client code=409
@@ -751,6 +754,9 @@ IdentityCertificate structure
 .Status IdentityCertificateStatus
 IdentityCertificateList list m=IdentityCertificate
 IdentityCertificateStatus enum
+IdentityFilter map k=IdentityFilterKey v=IdentityFilterValue
+IdentityFilterKey enum
+IdentityFilterValue string
 IdentityInfo structure
 .IdentityName Identity
 .IdentityType IdentityType
@@ -807,10 +813,11 @@ LastEngagementEventList list m=EngagementEventType
 LastFreshStart timestamp
 LimitExceededException structure error=client code=400
 .message ErrorMessage
-ListConfigurationSets operation in=ListConfigurationSetsRequest out=ListConfigurationSetsResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/configuration-sets code=200
+ListConfigurationSets operation in=ListConfigurationSetsRequest out=ListConfigurationSetsResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/list-configuration-sets code=200
 ListConfigurationSetsRequest structure
-.NextToken NextToken query=NextToken
-.PageSize MaxItems query=PageSize
+.Filter ConfigurationSetFilter
+.NextToken NextToken
+.PageSize MaxItems
 ListConfigurationSetsResponse structure
 .ConfigurationSets ConfigurationSetNameList
 .NextToken NextToken
@@ -864,10 +871,11 @@ ListDomainDeliverabilityCampaignsRequest structure
 ListDomainDeliverabilityCampaignsResponse structure
 .DomainDeliverabilityCampaigns DomainDeliverabilityCampaignList
 .NextToken NextToken
-ListEmailIdentities operation in=ListEmailIdentitiesRequest out=ListEmailIdentitiesResponse err=BadRequestException,TooManyRequestsException method=GET uri=/v2/email/identities code=200
+ListEmailIdentities operation in=ListEmailIdentitiesRequest out=ListEmailIdentitiesResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/list-identities code=200
 ListEmailIdentitiesRequest structure
-.NextToken NextToken query=NextToken
-.PageSize MaxItems query=PageSize
+.Filter IdentityFilter
+.NextToken NextToken
+.PageSize MaxItems
 ListEmailIdentitiesResponse structure
 .EmailIdentities IdentityInfoList
 .NextToken NextToken
@@ -972,7 +980,11 @@ ListTenantResourcesResponse structure
 .NextToken NextToken
 .TenantResources TenantResourceList
 ListTenants operation in=ListTenantsRequest out=ListTenantsResponse err=BadRequestException,TooManyRequestsException method=POST uri=/v2/email/tenants/list code=200
+ListTenantsFilter map k=ListTenantsFilterKey v=ListTenantsFilterValue
+ListTenantsFilterKey enum
+ListTenantsFilterValue string
 ListTenantsRequest structure
+.Filter ListTenantsFilter
 .NextToken NextToken
 .PageSize MaxItems
 ListTenantsResponse structure
@@ -1433,6 +1445,7 @@ Tenant structure
 TenantId string
 TenantInfo structure
 .CreatedTimestamp Timestamp
+.SendingStatus SendingStatus
 .TenantArn AmazonResourceName
 .TenantId TenantId
 .TenantName TenantName

@@ -24,6 +24,7 @@ AcceptInboundConnectionRequest structure
 .ConnectionId ConnectionId label
 AcceptInboundConnectionResponse structure
 .Connection InboundConnection
+AcceptedWarningsList list m=String
 AccessDeniedException structure error=client code=403
 .message ErrorMessage
 AccessPoliciesStatus structure
@@ -252,6 +253,7 @@ ChangeProgressStageList list m=ChangeProgressStage
 ChangeProgressStageName string
 ChangeProgressStageStatus string
 ChangeProgressStatusDetails structure
+.AcceptedWarnings AcceptedWarningsList
 .ChangeId GUID
 .ChangeProgressStages ChangeProgressStageList
 .CompletedProperties StringList
@@ -262,6 +264,7 @@ ChangeProgressStatusDetails structure
 .StartTime UpdateTimestamp
 .Status OverallChangeStatus
 .TotalNumberOfStages TotalNumberOfStages
+.ValidationFailures ValidationFailures
 ClientToken string
 CloudWatchDirectQueryDataSource structure
 .RoleArn DirectQueryDataSourceRoleArn
@@ -788,6 +791,7 @@ Double double
 DryRun boolean
 DryRunMode enum
 DryRunProgressStatus structure
+.AcceptedWarnings AcceptedWarningsList
 .CreationDate String
 .DryRunId GUID
 .DryRunStatus String
@@ -811,10 +815,12 @@ EBSOptionsStatus structure
 .Status OptionStatus
 EncryptionAtRestOptions structure
 .Enabled Boolean
+.EncryptionMode EncryptionMode
 .KmsKeyId KmsKeyId
 EncryptionAtRestOptionsStatus structure
 .Options EncryptionAtRestOptions
 .Status OptionStatus
+EncryptionMode enum
 Endpoint string
 EndpointsMap map k=String v=ServiceUrl
 EngineMode enum
@@ -1698,6 +1704,7 @@ UpdateDirectQueryDataSourceResponse structure
 UpdateDomainConfig operation in=UpdateDomainConfigRequest out=UpdateDomainConfigResponse err=BaseException,InternalException,InvalidTypeException,LimitExceededException,ResourceNotFoundException,ValidationException method=POST uri=/2021-01-01/opensearch/domain/{DomainName}/config code=200
 UpdateDomainConfigRequest structure
 .AIMLOptions AIMLOptionsInput
+.AcceptedWarnings AcceptedWarningsList
 .AccessPolicies PolicyDocument
 .AdvancedOptions AdvancedOptions
 .AdvancedSecurityOptions AdvancedSecurityOptionsInput
@@ -1819,6 +1826,8 @@ ValidationException structure error=client code=400
 ValidationFailure structure
 .Code String
 .Message String
+.Severity ValidationFailureSeverity
+ValidationFailureSeverity enum
 ValidationFailures list m=ValidationFailure
 ValueStringList list m=NonEmptyString
 VersionList list m=VersionString

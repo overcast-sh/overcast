@@ -344,6 +344,7 @@ DeliveryDestination structure
 .deliveryDestinationType DeliveryDestinationType
 .name DeliveryDestinationName
 .outputFormat OutputFormat
+.roleArn Arn
 .tags Tags
 DeliveryDestinationConfiguration structure
 .destinationResourceArn Arn
@@ -1376,6 +1377,7 @@ PutDeliveryDestinationRequest structure
 .deliveryDestinationType DeliveryDestinationType
 .name DeliveryDestinationName
 .outputFormat OutputFormat
+.roleArn Arn
 .tags Tags
 PutDeliveryDestinationResponse structure
 .deliveryDestination DeliveryDestination

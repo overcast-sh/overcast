@@ -37,6 +37,7 @@ CertificateIds list m=CertificateId
 CertificateStatusType enum
 CertificateType enum
 CertificateUsageType enum
+CommunicationMode enum
 CompressionEnum enum
 ConflictException structure error=client code=409
 .Message Message
@@ -118,6 +119,7 @@ CreateServerRequest structure
 .EndpointDetails EndpointDetails
 .EndpointType EndpointType
 .HostKey HostKey
+.HostKeyStorageType HostKeyStorageType
 .IdentityProviderDetails IdentityProviderDetails
 .IdentityProviderType IdentityProviderType
 .IpAddressType IpAddressType
@@ -163,6 +165,7 @@ CreateWorkflowRequest structure
 .Description WorkflowDescription
 .OnExceptionSteps WorkflowSteps
 .Steps WorkflowSteps
+.StructuredLogDestinations StructuredLogDestinations
 .Tags Tags
 CreateWorkflowResponse structure
 .WorkflowId WorkflowId
@@ -385,6 +388,8 @@ DescribedHostKey structure
 .Description HostKeyDescription
 .HostKeyFingerprint HostKeyFingerprint
 .HostKeyId HostKeyId
+.SecretId SecretId
+.StorageType HostKeyStorageType
 .Tags Tags
 .Type HostKeyType
 DescribedIdentityCenterConfig structure
@@ -473,6 +478,7 @@ DescribedWorkflow structure
 .Description WorkflowDescription
 .OnExceptionSteps WorkflowSteps
 .Steps WorkflowSteps
+.StructuredLogDestinations StructuredLogDestinations
 .Tags Tags
 .WorkflowId WorkflowId
 Description string
@@ -529,6 +535,7 @@ HostKey string
 HostKeyDescription string
 HostKeyFingerprint string
 HostKeyId string
+HostKeyStorageType enum
 HostKeyType string
 IdentityCenterApplicationArn string
 IdentityCenterConfig structure
@@ -558,7 +565,9 @@ ImportHostKey operation in=ImportHostKeyRequest out=ImportHostKeyResponse err=In
 ImportHostKeyRequest structure
 .Description HostKeyDescription
 .HostKeyBody HostKey
+.KmsKey KmsKey
 .ServerId ServerId
+.StorageType HostKeyStorageType
 .Tags Tags
 ImportHostKeyResponse structure
 .HostKeyId HostKeyId
@@ -582,6 +591,7 @@ InvalidNextTokenException structure error=client code=400
 InvalidRequestException structure error=client code=400
 .Message Message
 IpAddressType enum
+KmsKey string
 ListAccesses operation in=ListAccessesRequest out=ListAccessesResponse err=InternalServiceError,InvalidNextTokenException,InvalidRequestException,ResourceNotFoundException,ServiceUnavailableException
 ListAccessesRequest structure
 .MaxResults MaxResults
@@ -736,6 +746,8 @@ ListedHostKey structure
 .Description HostKeyDescription
 .Fingerprint HostKeyFingerprint
 .HostKeyId HostKeyId
+.SecretId SecretId
+.StorageType HostKeyStorageType
 .Type HostKeyType
 ListedHostKeys list m=ListedHostKey
 ListedProfile structure
@@ -816,6 +828,7 @@ ProtocolDetails structure
 .PassiveIp PassiveIp
 .ProxyConfig ProxyConfig
 .SetStatOption SetStatOption
+.SftpPorts SftpPorts
 .TlsSessionResumptionMode TlsSessionResumptionMode
 Protocols list m=Protocol
 ProxyConfig structure
@@ -896,6 +909,10 @@ SftpConnectorHostKey string
 SftpConnectorTrustedHostKey string
 SftpConnectorTrustedHostKeyList list m=SftpConnectorTrustedHostKey
 SftpPort integer
+SftpPortWithOptions structure
+.CommunicationMode CommunicationMode
+.SftpPort SftpPort
+SftpPorts list m=SftpPortWithOptions
 SigningAlg enum
 SourceFileLocation string
 SourceIp string
@@ -1054,7 +1071,9 @@ UpdateHostKey operation in=UpdateHostKeyRequest out=UpdateHostKeyResponse err=In
 UpdateHostKeyRequest structure
 .Description HostKeyDescription
 .HostKeyId HostKeyId
+.KmsKey KmsKey
 .ServerId ServerId
+.StorageType HostKeyStorageType
 UpdateHostKeyResponse structure
 .HostKeyId HostKeyId
 .ServerId ServerId

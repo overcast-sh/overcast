@@ -1563,6 +1563,7 @@ RepositoryCredentials structure
 RequiresAttributes list m=Attribute
 ResolvedConfiguration structure
 .loadBalancers ServiceRevisionLoadBalancers
+.vpcLatticeConfigurations ServiceRevisionVpcLatticeConfigurations
 Resource structure
 .doubleValue Double
 .integerValue Integer
@@ -1827,6 +1828,10 @@ ServiceRevisionSummary structure
 .requestedTaskCount Integer
 .requestedTestTrafficWeight Double
 .runningTaskCount Integer
+ServiceRevisionVpcLatticeConfiguration structure
+.productionListenerRule String
+.targetGroupArn String
+ServiceRevisionVpcLatticeConfigurations list m=ServiceRevisionVpcLatticeConfiguration
 ServiceRevisions list m=ServiceRevision
 ServiceRevisionsSummaryList list m=ServiceRevisionSummary
 ServiceVolumeConfiguration structure
@@ -2264,7 +2269,12 @@ VolumeFrom structure
 .sourceContainer String
 VolumeFromList list m=VolumeFrom
 VolumeList list m=Volume
+VpcLatticeAdvancedConfiguration structure
+.alternateTargetGroupArn String
+.productionListenerRule String
+.testListenerRule String
 VpcLatticeConfiguration structure
+.advancedConfiguration VpcLatticeAdvancedConfiguration
 .portName String
 .roleArn IAMRoleArn
 .targetGroupArn String

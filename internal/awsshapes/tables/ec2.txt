@@ -1180,6 +1180,7 @@ CapacityReservation structure
 .Interruptible BoxedBoolean ec2=Interruptible xml=interruptible
 .InterruptibleCapacityAllocation InterruptibleCapacityAllocation ec2=InterruptibleCapacityAllocation xml=interruptibleCapacityAllocation
 .InterruptionInfo InterruptionInfo ec2=InterruptionInfo xml=interruptionInfo
+.LaunchStatus CapacityReservationLaunchStatus ec2=LaunchStatus xml=launchStatus
 .OriginalStartDate MillisecondDateTime ec2=OriginalStartDate xml=originalStartDate
 .OutpostArn OutpostArn ec2=OutpostArn xml=outpostArn
 .OwnerId String ec2=OwnerId xml=ownerId
@@ -1265,6 +1266,7 @@ CapacityReservationInfo structure
 .InstanceType String ec2=InstanceType xml=instanceType
 .Tenancy CapacityReservationTenancy ec2=Tenancy xml=tenancy
 CapacityReservationInstancePlatform enum
+CapacityReservationLaunchStatus enum
 CapacityReservationModificationQuote structure
 .CapacityReservationId CapacityReservationId ec2=CapacityReservationId xml=capacityReservationId
 .CapacityReservationModificationQuoteId CapacityReservationModificationQuoteId ec2=CapacityReservationModificationQuoteId xml=capacityReservationModificationQuoteId
@@ -1396,6 +1398,8 @@ ClientVpnAuthenticationRequest structure
 .Type ClientVpnAuthenticationType
 ClientVpnAuthenticationRequestList list m=ClientVpnAuthenticationRequest
 ClientVpnAuthenticationType enum
+ClientVpnAuthorizationPolicyShadowMode enum
+ClientVpnAuthorizationPolicyStatus enum
 ClientVpnAuthorizationRuleStatus structure
 .Code ClientVpnAuthorizationRuleStatusCode ec2=Code xml=code
 .Message String ec2=Message xml=message
@@ -1403,6 +1407,7 @@ ClientVpnAuthorizationRuleStatusCode enum
 ClientVpnAvailabilityZoneIdSet list m=AvailabilityZoneId mxml=item
 ClientVpnAvailabilityZoneSet list m=AvailabilityZoneName mxml=item
 ClientVpnConnection structure
+.AuthorizationPolicyLastEvaluatedTime String ec2=AuthorizationPolicyLastEvaluatedTime xml=authorizationPolicyLastEvaluatedTime
 .ClientIp String ec2=ClientIp xml=clientIp
 .ClientIpv6Address String ec2=ClientIpv6Address xml=clientIpv6Address
 .ClientVpnEndpointId String ec2=ClientVpnEndpointId xml=clientVpnEndpointId
@@ -1423,6 +1428,7 @@ ClientVpnConnectionStatus structure
 .Code ClientVpnConnectionStatusCode ec2=Code xml=code
 .Message String ec2=Message xml=message
 ClientVpnConnectionStatusCode enum
+ClientVpnDeviceTrustProviderType enum
 ClientVpnEndpoint structure
 .AssociatedTargetNetworks AssociatedTargetNetworkSet ec2=AssociatedTargetNetwork xml=associatedTargetNetwork
 .AuthenticationOptions ClientVpnAuthenticationList ec2=AuthenticationOptions xml=authenticationOptions
@@ -1435,6 +1441,7 @@ ClientVpnEndpoint structure
 .CreationTime String ec2=CreationTime xml=creationTime
 .DeletionTime String ec2=DeletionTime xml=deletionTime
 .Description String ec2=Description xml=description
+.DevicePostureOptions DevicePostureResponseOptions ec2=DevicePostureOptions xml=devicePostureOptions
 .DisconnectOnSessionTimeout Boolean ec2=DisconnectOnSessionTimeout xml=disconnectOnSessionTimeout
 .DnsName String ec2=DnsName xml=dnsName
 .DnsServers ValueStringList ec2=DnsServer xml=dnsServer
@@ -1477,6 +1484,16 @@ ClientVpnRouteStatus structure
 .Message String ec2=Message xml=message
 ClientVpnRouteStatusCode enum
 ClientVpnSecurityGroupIdSet list m=SecurityGroupId mxml=item
+ClientVpnTrustProvider structure
+.PublicSigningKeyUrl String ec2=PublicSigningKeyUrl xml=publicSigningKeyUrl
+.TenantId String ec2=TenantId xml=tenantId
+.TrustProviderType ClientVpnDeviceTrustProviderType ec2=TrustProviderType xml=trustProviderType
+ClientVpnTrustProviderRequest structure
+.PublicSigningKeyUrl String
+.TenantId String
+.TrustProviderType ClientVpnDeviceTrustProviderType
+ClientVpnTrustProviderRequestList list m=ClientVpnTrustProviderRequest mxml=item
+ClientVpnTrustProviderSet list m=ClientVpnTrustProvider mxml=item
 CloudWatchLogGroupArn string
 CloudWatchLogOptions structure
 .BgpLogEnabled Boolean ec2=BgpLogEnabled xml=bgpLogEnabled
@@ -1529,10 +1546,12 @@ ConnectionLogOptions structure
 .CloudwatchLogGroup String
 .CloudwatchLogStream String
 .Enabled Boolean
+.IncludeAuthorizationPolicyContext Boolean
 ConnectionLogResponseOptions structure
 .CloudwatchLogGroup String
 .CloudwatchLogStream String
 .Enabled Boolean
+.IncludeAuthorizationPolicyContext Boolean
 ConnectionNotification structure
 .ConnectionEvents ValueStringList ec2=ConnectionEvents xml=connectionEvents
 .ConnectionNotificationArn String ec2=ConnectionNotificationArn xml=connectionNotificationArn
@@ -1785,6 +1804,7 @@ CreateClientVpnEndpointRequest structure
 .ClientToken String
 .ConnectionLogOptions ConnectionLogOptions
 .Description String
+.DevicePostureOptions DevicePostureOptions
 .DisconnectOnSessionTimeout Boolean
 .DnsServers ValueStringList
 .DryRun Boolean
@@ -3108,6 +3128,12 @@ DeleteCarrierGatewayRequest structure
 DeleteCarrierGatewayResult structure
 .CarrierGateway CarrierGateway ec2=CarrierGateway xml=carrierGateway
 DeleteClientVpnEndpoint operation in=DeleteClientVpnEndpointRequest out=DeleteClientVpnEndpointResult
+DeleteClientVpnEndpointAuthorizationPolicy operation in=DeleteClientVpnEndpointAuthorizationPolicyRequest out=DeleteClientVpnEndpointAuthorizationPolicyResult
+DeleteClientVpnEndpointAuthorizationPolicyRequest structure
+.ClientVpnEndpointId ClientVpnEndpointId
+.DryRun Boolean
+DeleteClientVpnEndpointAuthorizationPolicyResult structure
+.Status ClientVpnAuthorizationPolicyStatus ec2=Status xml=status
 DeleteClientVpnEndpointRequest structure
 .ClientVpnEndpointId ClientVpnEndpointId
 .DryRun Boolean
@@ -5856,6 +5882,11 @@ DetachVpnGatewayRequest structure
 DeviceOptions structure
 .PublicSigningKeyUrl String ec2=PublicSigningKeyUrl xml=publicSigningKeyUrl
 .TenantId String ec2=TenantId xml=tenantId
+DevicePostureOptions structure
+.Enabled Boolean
+.TrustProviders ClientVpnTrustProviderRequestList xml=TrustProvider
+DevicePostureResponseOptions structure
+.TrustProviders ClientVpnTrustProviderSet ec2=TrustProviderSet xml=trustProviderSet
 DeviceTrustProviderType enum
 DeviceTrustProviderTypeList list m=DeviceTrustProviderType mxml=item
 DeviceType enum
@@ -7151,6 +7182,16 @@ GetCapacityReservationUsageResult structure
 .NextToken String ec2=NextToken xml=nextToken
 .State CapacityReservationState ec2=State xml=state
 .TotalInstanceCount Integer ec2=TotalInstanceCount xml=totalInstanceCount
+GetClientVpnEndpointAuthorizationPolicy operation in=GetClientVpnEndpointAuthorizationPolicyRequest out=GetClientVpnEndpointAuthorizationPolicyResult
+GetClientVpnEndpointAuthorizationPolicyRequest structure
+.ClientVpnEndpointId ClientVpnEndpointId
+.DryRun Boolean
+GetClientVpnEndpointAuthorizationPolicyResult structure
+.ClientVpnEndpointId String ec2=ClientVpnEndpointId xml=clientVpnEndpointId
+.Description String ec2=Description xml=description
+.PolicyDocument String ec2=PolicyDocument xml=policyDocument
+.ShadowMode ClientVpnAuthorizationPolicyShadowMode ec2=ShadowMode xml=shadowMode
+.Status ClientVpnAuthorizationPolicyStatus ec2=Status xml=status
 GetCoipPoolUsage operation in=GetCoipPoolUsageRequest out=GetCoipPoolUsageResult
 GetCoipPoolUsageRequest structure
 .DryRun Boolean
@@ -10201,6 +10242,16 @@ ModifyCapacityReservationResult structure
 .AdjustmentStatus CapacityReservationAdjustmentStatus ec2=AdjustmentStatus xml=adjustmentStatus
 .Return Boolean ec2=Return xml=return
 ModifyClientVpnEndpoint operation in=ModifyClientVpnEndpointRequest out=ModifyClientVpnEndpointResult
+ModifyClientVpnEndpointAuthorizationPolicy operation in=ModifyClientVpnEndpointAuthorizationPolicyRequest out=ModifyClientVpnEndpointAuthorizationPolicyResult
+ModifyClientVpnEndpointAuthorizationPolicyRequest structure
+.ClientToken String
+.ClientVpnEndpointId ClientVpnEndpointId
+.Description String
+.DryRun Boolean
+.PolicyDocument String
+.ShadowMode ClientVpnAuthorizationPolicyShadowMode
+ModifyClientVpnEndpointAuthorizationPolicyResult structure
+.Status ClientVpnAuthorizationPolicyStatus ec2=Status xml=status
 ModifyClientVpnEndpointRequest structure
 .ClientConnectOptions ClientConnectOptions
 .ClientLoginBannerOptions ClientLoginBannerOptions
@@ -10208,6 +10259,7 @@ ModifyClientVpnEndpointRequest structure
 .ClientVpnEndpointId ClientVpnEndpointId
 .ConnectionLogOptions ConnectionLogOptions
 .Description String
+.DevicePostureOptions DevicePostureOptions
 .DisconnectOnSessionTimeout Boolean
 .DnsServers DnsServersOptionsModifyStructure
 .DryRun Boolean
