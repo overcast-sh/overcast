@@ -81,6 +81,7 @@ var registeredRouteClassification = map[string]string{
 	"/2021-01-01": "opensearch",
 	"/2021-10-31": "lambda",
 	"/2021-11-15": "lambda",
+	"/2024-08-31": "lambda",
 	"/2026-07-09": "lambda",
 
 	// Emulator-internal paths. S3 bucket names cannot begin with "_", so these
