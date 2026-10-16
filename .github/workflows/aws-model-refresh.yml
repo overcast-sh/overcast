@@ -4,6 +4,14 @@ on:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
+  # `/refresh-models` on the open refresh PR regenerates it now, against the
+  # newest upstream revision and current main, instead of waiting up to six
+  # days for the weekly run. Only the repository owner, an organisation member
+  # or a collaborator can ask (author_association comes from GitHub, not from
+  # anything the commenter controls), and the run is the default branch's copy
+  # of this workflow, so the PR's own code is never executed.
+  issue_comment:
+    types: [created]
   # Keeps an *open* refresh PR current when main moves under it. The PR is one
   # generated commit, and a change to what it is generated from or written
   # over (#1955 added a line to models/aws/VERSION) makes it conflict or go
@@ -38,6 +46,12 @@ env:
 jobs:
   refresh:
     name: Refresh pinned models
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request &&
+       github.event.issue.state == 'open' &&
+       startsWith(github.event.comment.body, '/refresh-models') &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -100,8 +114,23 @@ jobs:
       - name: Compare the pinned and upstream revisions
         id: upstream
         shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_PR: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
+          if [[ "$EVENT_NAME" == "issue_comment" ]]; then
+            gh api --silent -X POST "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" -f content=eyes || true
+            comment_head="$(gh pr view "$COMMENT_PR" --json headRefName --jq .headRefName)"
+            if [[ "$comment_head" != "$UPDATE_BRANCH" ]]; then
+              # A command on some other PR is not for this workflow.
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "/refresh-models only applies to the $UPDATE_BRANCH PR; #$COMMENT_PR is on $comment_head." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
           source_url="$(sed -n 's/^source=//p' models/aws/VERSION)"
           pinned_revision="$(sed -n 's/^revision=//p' models/aws/VERSION)"
           if [[ "$source_url" != "https://github.com/aws/api-models-aws" ]]; then
@@ -461,3 +490,33 @@ jobs:
             gh pr comment "$pr_number" --body \
               "/no-changelog awsmodelgen diffed this revision against the previous corpus and found no operation added or removed, no protocol-trait or HTTP/target-binding change, and no collision change — the categories that move a request between the S3 fallback, a protocol-correct 501 and a scoped-credential error. Nothing a caller can observe moved, so there is no entry to write. A refresh that does move one of those carries a generated fragment in the commit instead."
           fi
+
+      # Says what the command did on the PR, so the commenter is not left
+      # reading the run log. Only a comment-triggered run speaks; the weekly
+      # and push runs stay silent on the PR as before.
+      - name: Report the result on the pull request
+        if: always() && github.event_name == 'issue_comment' && steps.upstream.outputs.latest_revision != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          COMMENT_PR: ${{ github.event.issue.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+          CHANGED: ${{ steps.upstream.outputs.changed }}
+          REFRESH_NEEDED: ${{ steps.branch.outputs.refresh_needed }}
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          LATEST_REVISION: ${{ steps.upstream.outputs.latest_revision }}
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" != "success" ]]; then
+            msg="The model refresh failed before it could update this PR. See [the run]($RUN_URL)."
+          elif [[ "$CHANGED" != "true" ]]; then
+            msg="Nothing to refresh: the pinned models already match upstream. See [the run]($RUN_URL)."
+          elif [[ "$REFRESH_NEEDED" != "true" ]]; then
+            msg="Already current: this PR holds \`${LATEST_REVISION:0:12}\` on top of current main."
+          elif [[ "$VALIDATE_OUTCOME" == "failure" ]]; then
+            msg="Regenerated at \`${LATEST_REVISION:0:12}\` on current main, but \`make aws-models-check\` failed; the PR body has the gate output. See [the run]($RUN_URL)."
+          else
+            msg="Regenerated at \`${LATEST_REVISION:0:12}\` on current main; \`make aws-models-check\` passed. See [the run]($RUN_URL)."
+          fi
+          gh pr comment "$COMMENT_PR" --body "$msg"
