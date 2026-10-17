@@ -48,7 +48,7 @@ A violation is reported by name; the score of an invalid layout is `Infinity`.
 | H3 | No edge polyline (source right handle → waypoints → target left handle) enters a card it is not attached to, where "enters" means crossing the card's rectangle inflated by `EDGE_CLEARANCE = 8px`. |
 | H4 | Every edge's target handle is at least `MIN_FORWARD = 24px` to the right of its source handle, **or** the edge is a designated back edge (see S4) routed as an explicit loop above or below both cards. |
 | H5 | The same input yields byte-identical output. Any randomness comes from a seeded generator whose seed is a function of the input. |
-| H6 | Time budget, measured in Node on the CI runner with `performance.now()`, single call, warm module: ≤ 30ms for 50 nodes / 60 edges; ≤ 120ms for 150 / 200; ≤ 400ms for 300 / 400; ≤ 900ms for 600 / 800; ≤ 1800ms for 1000 / 1400. Quality must degrade smoothly with size, never step down at a node-count threshold. |
+| H6 | Time budget, measured in Node on the CI runner with `performance.now()`, single call, warm module — the fastest of up to five such calls, because a pause the runner imposes only ever adds to a sample: ≤ 30ms for 50 nodes / 60 edges; ≤ 120ms for 150 / 200; ≤ 400ms for 300 / 400; ≤ 900ms for 600 / 800; ≤ 1800ms for 1000 / 1400. Quality must degrade smoothly with size, never step down at a node-count threshold. |
 
 ## 3. Soft rules and their scores
 
