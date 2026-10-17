@@ -2,6 +2,13 @@
   "version": 1,
   "gaps": [
     {
+      "service": "appconfig",
+      "operation": "CreateExtension",
+      "group": "appconfig-extensions-shadow",
+      "reason": "rust-emit-unsupported:Actions",
+      "detail": "CreateExtension.Actions cannot be spelled as Rust: no Rust literal for a list member"
+    },
+    {
       "service": "batch",
       "operation": "CancelJob",
       "group": "batch-gen-probe",

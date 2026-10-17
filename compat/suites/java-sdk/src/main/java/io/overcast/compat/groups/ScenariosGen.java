@@ -22,8 +22,10 @@ public final class ScenariosGen {
         return List.of(
                 new ScenariosAuthoredAppconfigApplicationsGen(clients),
                 new ScenariosAuthoredAppconfigConfigurationProfilesGen(clients),
+                new ScenariosAuthoredAppconfigDeploymentStrategiesGen(clients),
                 new ScenariosAuthoredAppconfigDeploymentsGen(clients),
                 new ScenariosAuthoredAppconfigEnvironmentsGen(clients),
+                new ScenariosAuthoredAppconfigExtensionsGen(clients),
                 new ScenariosAuthoredAppconfigTagsGen(clients),
                 new ScenariosAuthoredBackupTagsGen(clients),
                 new ScenariosAuthoredCognitoUserpoolsGen(clients),

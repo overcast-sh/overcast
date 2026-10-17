@@ -4709,16 +4709,28 @@
           "name": "CreateDeploymentStrategy"
         },
         {
-          "name": "GetDeploymentStrategy"
+          "name": "GetDeploymentStrategy",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
         },
         {
-          "name": "ListDeploymentStrategies"
+          "name": "ListDeploymentStrategies",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
         },
         {
-          "name": "UpdateDeploymentStrategy"
+          "name": "UpdateDeploymentStrategy",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
         },
         {
-          "name": "DeleteDeploymentStrategy"
+          "name": "DeleteDeploymentStrategy",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
         }
       ]
     },
@@ -4749,31 +4761,55 @@
           "name": "CreateExtension"
         },
         {
-          "name": "GetExtension"
+          "name": "GetExtension",
+          "depends": [
+            "CreateExtension"
+          ]
         },
         {
-          "name": "ListExtensions"
+          "name": "ListExtensions",
+          "depends": [
+            "CreateExtension"
+          ]
         },
         {
-          "name": "UpdateExtension"
+          "name": "UpdateExtension",
+          "depends": [
+            "CreateExtension"
+          ]
         },
         {
-          "name": "DeleteExtension"
+          "name": "CreateExtensionAssociation",
+          "depends": [
+            "CreateExtension"
+          ]
         },
         {
-          "name": "CreateExtensionAssociation"
-        },
-        {
-          "name": "GetExtensionAssociation"
+          "name": "GetExtensionAssociation",
+          "depends": [
+            "CreateExtensionAssociation"
+          ]
         },
         {
           "name": "ListExtensionAssociations"
         },
         {
-          "name": "UpdateExtensionAssociation"
+          "name": "UpdateExtensionAssociation",
+          "depends": [
+            "CreateExtensionAssociation"
+          ]
         },
         {
-          "name": "DeleteExtensionAssociation"
+          "name": "DeleteExtensionAssociation",
+          "depends": [
+            "CreateExtensionAssociation"
+          ]
+        },
+        {
+          "name": "DeleteExtension",
+          "depends": [
+            "CreateExtension"
+          ]
         }
       ]
     },

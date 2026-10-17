@@ -195,28 +195,28 @@
       "service": "appconfig",
       "group": "appconfig-deployment-strategies",
       "test": "DeleteDeploymentStrategy",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-deployment-strategies",
       "test": "GetDeploymentStrategy",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-deployment-strategies",
       "test": "ListDeploymentStrategies",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-deployment-strategies",
       "test": "UpdateDeploymentStrategy",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
@@ -328,35 +328,35 @@
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "CreateExtensionAssociation",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "DeleteExtension",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "DeleteExtensionAssociation",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "GetExtension",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "GetExtensionAssociation",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
@@ -370,21 +370,21 @@
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "ListExtensions",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "UpdateExtension",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "UpdateExtensionAssociation",
-      "status": "unimplemented"
+      "status": "skip"
     },
     {
       "suite": "cli",

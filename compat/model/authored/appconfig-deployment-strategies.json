@@ -1,0 +1,164 @@
+{
+  "$comment": "Authored shadow port of the hand-written registry group appconfig-deployment-strategies (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group has one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 5 rows each, which the flip will close. Overcast does not implement the strategy operations, so CreateDeploymentStrategy answers 501 and is `unimplemented` in the native and the shadow alike. The registry gives GetDeploymentStrategy, ListDeploymentStrategies, UpdateDeploymentStrategy and DeleteDeploymentStrategy a `depends` on it (#2243), so while Create is unimplemented those four report `skip` (`dependency failed: CreateDeploymentStrategy`) in every backend, the native included, and the day Create works they run against the id it returned. Before #2243 the native fell back to an invented id and reported `unimplemented`, which no scenario can say: a `$ref` to an export that was never written fails the step. With one native the union is that native's assertions, plus read-backs of documented effects where it asserted only success, each stated in its test's $comment. Every scenario backend signs with AppConfig's own credential scope, as the cli native does.",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One strategy, created by CreateDeploymentStrategy and deleted by DeleteDeploymentStrategy, as the native does and as registry.json's depends describe. It is named by $name, so it is {runId}-appconfig-deployment-strategies-shadow-ds and never collides with another group's. There is no setup: a strategy hangs off nothing. Teardown deletes the strategy in case DeleteDeploymentStrategy never ran, as the native's hook does; if CreateDeploymentStrategy never exported an id the call is skipped. No clause is wrapped in `eventually`: the native reads every write back immediately, and AppConfig documents no consistency window for a strategy.",
+      "name": "appconfig-deployment-strategies-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "The native creates a zero-minute, 100% growth strategy that does not replicate, asserts the response carries an Id and that Name is the requested name, then reads it back with GetDeploymentStrategy and asserts the name. Both halves are carried. The Id is exported because every later test addresses the strategy by it. The port also reads the three scalar settings back: they are what the request defined, and a strategy that kept the name but lost them is not the strategy asked for.",
+          "name": "CreateDeploymentStrategy",
+          "op": "CreateDeploymentStrategy",
+          "call": {
+            "op": "CreateDeploymentStrategy",
+            "params": {
+              "Name": { "$name": "ds" },
+              "DeploymentDurationInMinutes": 0,
+              "GrowthFactor": 100,
+              "ReplicateTo": "NONE"
+            },
+            "export": { "ds.id": "$.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "nonEmpty": true },
+                "$.Name": { "equals": { "$name": "ds" } }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetDeploymentStrategy",
+                "params": { "DeploymentStrategyId": { "$ref": "ds.id" } }
+              },
+              "checks": {
+                "$.Name": { "equals": { "$name": "ds" } },
+                "$.DeploymentDurationInMinutes": { "equals": 0 },
+                "$.GrowthFactor": { "equals": 100 },
+                "$.ReplicateTo": { "equals": "NONE" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native asserts the response carries an Id. The port asserts it is the id CreateDeploymentStrategy returned, and that Name is the name it was created with: a Get answering with another strategy is answering the wrong question, and the presence the native checks is implied.",
+          "name": "GetDeploymentStrategy",
+          "op": "GetDeploymentStrategy",
+          "call": {
+            "op": "GetDeploymentStrategy",
+            "params": { "DeploymentStrategyId": { "$ref": "ds.id" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "equals": { "$ref": "ds.id" } },
+                "$.Name": { "equals": { "$name": "ds" } }
+              }
+            }
+          ],
+          "depends": ["CreateDeploymentStrategy"]
+        },
+        {
+          "$comment": "The native lists unfiltered, requires an Items member, and, when CreateDeploymentStrategy exported an id, requires an item with that Id. The registry's depends (#2243) makes the export always present when this test runs, so the conditional is unconditional here: listContains holds when the page is non-empty and holds an item with the strategy's Id. The page is unfiltered (ListDeploymentStrategies takes none), so on an account with more than one page of strategies the first page need not hold it, which the native accepts as well.",
+          "name": "ListDeploymentStrategies",
+          "op": "ListDeploymentStrategies",
+          "call": {
+            "op": "ListDeploymentStrategies",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "ds.id" } }
+            }
+          ],
+          "depends": ["CreateDeploymentStrategy"]
+        },
+        {
+          "$comment": "The native sends only a new Description and asserts the response carries it. The port also reads the strategy back, asserting the Description took and that the Name is unchanged: an omitted member must leave the stored value alone (UpdateDeploymentStrategy's members other than the id are all optional).",
+          "name": "UpdateDeploymentStrategy",
+          "op": "UpdateDeploymentStrategy",
+          "call": {
+            "op": "UpdateDeploymentStrategy",
+            "params": {
+              "DeploymentStrategyId": { "$ref": "ds.id" },
+              "Description": "updated by compat"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Description": { "equals": "updated by compat" } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetDeploymentStrategy",
+                "params": { "DeploymentStrategyId": { "$ref": "ds.id" } }
+              },
+              "checks": {
+                "$.Description": { "equals": "updated by compat" },
+                "$.Name": { "equals": { "$name": "ds" } }
+              }
+            }
+          ],
+          "depends": ["CreateDeploymentStrategy"]
+        },
+        {
+          "$comment": "The native deletes the strategy and asserts GetDeploymentStrategy then raises ResourceNotFoundException (and 404, which the IR cannot state: the model binds the error to exactly that status, and the code is what a caller branches on). That is carried. The port adds the other half of a delete's documented effect, that the strategy is no longer listed, in the same unfiltered page ListDeploymentStrategies reads.",
+          "name": "DeleteDeploymentStrategy",
+          "op": "DeleteDeploymentStrategy",
+          "call": {
+            "op": "DeleteDeploymentStrategy",
+            "params": { "DeploymentStrategyId": { "$ref": "ds.id" } }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetDeploymentStrategy",
+                "params": { "DeploymentStrategyId": { "$ref": "ds.id" } }
+              },
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListDeploymentStrategies",
+                "params": {}
+              },
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "ds.id" } }
+            }
+          ],
+          "depends": ["CreateDeploymentStrategy"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteDeploymentStrategy",
+          "params": { "DeploymentStrategyId": { "$ref": "ds.id" } }
+        }
+      ]
+    }
+  ]
+}

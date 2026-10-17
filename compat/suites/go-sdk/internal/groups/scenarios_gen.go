@@ -11,8 +11,10 @@ func scenarioGroups(c *clients.Clients) []ServiceGroup {
 	return []ServiceGroup{
 		ScenariosAuthoredAppconfigApplications(c),
 		ScenariosAuthoredAppconfigConfigurationProfiles(c),
+		ScenariosAuthoredAppconfigDeploymentStrategies(c),
 		ScenariosAuthoredAppconfigDeployments(c),
 		ScenariosAuthoredAppconfigEnvironments(c),
+		ScenariosAuthoredAppconfigExtensions(c),
 		ScenariosAuthoredAppconfigTags(c),
 		ScenariosAuthoredBackupTags(c),
 		ScenariosAuthoredCognitoUserpools(c),
