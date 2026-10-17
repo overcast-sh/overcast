@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredBackupSelections : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupBackupSelectionsShadow = new("backup-selections-shadow", "compat/model/authored/backup-selections.json");
+    private static readonly ScenarioGroup GroupBackupSelections = new("backup-selections", "compat/model/authored/backup-selections.json");
 
     private readonly Lazy<AmazonBackupClient> _client;
 
@@ -35,26 +35,26 @@ internal sealed class ScenariosAuthoredBackupSelections : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["backup-selections-shadow:CreateBackupSelection"] = TestBackupSelectionsShadowCreateBackupSelection,
-        ["backup-selections-shadow:ListBackupSelections"] = TestBackupSelectionsShadowListBackupSelections,
-        ["backup-selections-shadow:GetBackupSelection"] = TestBackupSelectionsShadowGetBackupSelection,
-        ["backup-selections-shadow:DeleteBackupSelection"] = TestBackupSelectionsShadowDeleteBackupSelection,
+        ["backup-selections:CreateBackupSelection"] = TestBackupSelectionsCreateBackupSelection,
+        ["backup-selections:ListBackupSelections"] = TestBackupSelectionsListBackupSelections,
+        ["backup-selections:GetBackupSelection"] = TestBackupSelectionsGetBackupSelection,
+        ["backup-selections:DeleteBackupSelection"] = TestBackupSelectionsDeleteBackupSelection,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-selections-shadow"] = SetupBackupSelectionsShadow,
+        ["backup-selections"] = SetupBackupSelections,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-selections-shadow"] = TeardownBackupSelectionsShadow,
+        ["backup-selections"] = TeardownBackupSelections,
     };
 
     private AmazonBackupClient Cl() => _client.Value;
 
-    private Task SetupBackupSelectionsShadow(TestContext t) =>
-        GroupBackupSelectionsShadow.RunSetupAsync(t,
+    private Task SetupBackupSelections(TestContext t) =>
+        GroupBackupSelections.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateBackupVault",
@@ -98,8 +98,8 @@ internal sealed class ScenariosAuthoredBackupSelections : IServiceGroup
             }
         );
 
-    private Task TeardownBackupSelectionsShadow(TestContext t) =>
-        GroupBackupSelectionsShadow.RunTeardownAsync(t,
+    private Task TeardownBackupSelections(TestContext t) =>
+        GroupBackupSelections.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteBackupSelection",
@@ -142,7 +142,7 @@ internal sealed class ScenariosAuthoredBackupSelections : IServiceGroup
             }
         );
 
-    private Task TestBackupSelectionsShadowCreateBackupSelection(TestContext t) => GroupBackupSelectionsShadow.RunTestAsync(t, "CreateBackupSelection", new ScenarioTest
+    private Task TestBackupSelectionsCreateBackupSelection(TestContext t) => GroupBackupSelections.RunTestAsync(t, "CreateBackupSelection", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -195,7 +195,7 @@ internal sealed class ScenariosAuthoredBackupSelections : IServiceGroup
         ],
     });
 
-    private Task TestBackupSelectionsShadowListBackupSelections(TestContext t) => GroupBackupSelectionsShadow.RunTestAsync(t, "ListBackupSelections", new ScenarioTest
+    private Task TestBackupSelectionsListBackupSelections(TestContext t) => GroupBackupSelections.RunTestAsync(t, "ListBackupSelections", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -224,7 +224,7 @@ internal sealed class ScenariosAuthoredBackupSelections : IServiceGroup
         ],
     });
 
-    private Task TestBackupSelectionsShadowGetBackupSelection(TestContext t) => GroupBackupSelectionsShadow.RunTestAsync(t, "GetBackupSelection", new ScenarioTest
+    private Task TestBackupSelectionsGetBackupSelection(TestContext t) => GroupBackupSelections.RunTestAsync(t, "GetBackupSelection", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -253,7 +253,7 @@ internal sealed class ScenariosAuthoredBackupSelections : IServiceGroup
         ],
     });
 
-    private Task TestBackupSelectionsShadowDeleteBackupSelection(TestContext t) => GroupBackupSelectionsShadow.RunTestAsync(t, "DeleteBackupSelection", new ScenarioTest
+    private Task TestBackupSelectionsDeleteBackupSelection(TestContext t) => GroupBackupSelections.RunTestAsync(t, "DeleteBackupSelection", new ScenarioTest
     {
         Call = new ScenarioCall
         {

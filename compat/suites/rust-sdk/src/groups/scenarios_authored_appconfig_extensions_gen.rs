@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-extensions.json";
 
-const GROUP_APPCONFIG_EXTENSIONS_SHADOW: Group = Group {
-    name: "appconfig-extensions-shadow",
+const GROUP_APPCONFIG_EXTENSIONS: Group = Group {
+    name: "appconfig-extensions",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:CreateExtension".to_string(),
+                "appconfig-extensions:CreateExtension".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "CreateExtension", test_appconfig_extensions_shadow_create_extension(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "CreateExtension", test_appconfig_extensions_create_extension(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:GetExtension".to_string(),
+                "appconfig-extensions:GetExtension".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "GetExtension", test_appconfig_extensions_shadow_get_extension(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "GetExtension", test_appconfig_extensions_get_extension(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:ListExtensions".to_string(),
+                "appconfig-extensions:ListExtensions".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "ListExtensions", test_appconfig_extensions_shadow_list_extensions(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "ListExtensions", test_appconfig_extensions_list_extensions(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:UpdateExtension".to_string(),
+                "appconfig-extensions:UpdateExtension".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "UpdateExtension", test_appconfig_extensions_shadow_update_extension(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "UpdateExtension", test_appconfig_extensions_update_extension(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:CreateExtensionAssociation".to_string(),
+                "appconfig-extensions:CreateExtensionAssociation".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "CreateExtensionAssociation", test_appconfig_extensions_shadow_create_extension_association(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "CreateExtensionAssociation", test_appconfig_extensions_create_extension_association(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:GetExtensionAssociation".to_string(),
+                "appconfig-extensions:GetExtensionAssociation".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "GetExtensionAssociation", test_appconfig_extensions_shadow_get_extension_association(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "GetExtensionAssociation", test_appconfig_extensions_get_extension_association(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:ListExtensionAssociations".to_string(),
+                "appconfig-extensions:ListExtensionAssociations".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "ListExtensionAssociations", test_appconfig_extensions_shadow_list_extension_associations(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "ListExtensionAssociations", test_appconfig_extensions_list_extension_associations(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:UpdateExtensionAssociation".to_string(),
+                "appconfig-extensions:UpdateExtensionAssociation".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "UpdateExtensionAssociation", test_appconfig_extensions_shadow_update_extension_association(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "UpdateExtensionAssociation", test_appconfig_extensions_update_extension_association(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:DeleteExtensionAssociation".to_string(),
+                "appconfig-extensions:DeleteExtensionAssociation".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "DeleteExtensionAssociation", test_appconfig_extensions_shadow_delete_extension_association(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "DeleteExtensionAssociation", test_appconfig_extensions_delete_extension_association(&client))
                             .await
                     })
                 }),
@@ -177,12 +177,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-extensions-shadow:DeleteExtension".to_string(),
+                "appconfig-extensions:DeleteExtension".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
-                            .run_test(&ctx, "DeleteExtension", test_appconfig_extensions_shadow_delete_extension(&client))
+                        GROUP_APPCONFIG_EXTENSIONS
+                            .run_test(&ctx, "DeleteExtension", test_appconfig_extensions_delete_extension(&client))
                             .await
                     })
                 }),
@@ -196,11 +196,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-extensions-shadow".to_string(),
+                "appconfig-extensions".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW.run_setup(&ctx, setup_appconfig_extensions_shadow(&client)).await
+                        GROUP_APPCONFIG_EXTENSIONS.run_setup(&ctx, setup_appconfig_extensions(&client)).await
                     })
                 }),
             );
@@ -213,11 +213,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-extensions-shadow".to_string(),
+                "appconfig-extensions".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXTENSIONS_SHADOW.run_teardown(&ctx, teardown_appconfig_extensions_shadow(&client)).await
+                        GROUP_APPCONFIG_EXTENSIONS.run_teardown(&ctx, teardown_appconfig_extensions(&client)).await
                     })
                 }),
             );
@@ -226,12 +226,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
     }
 }
 
-fn setup_appconfig_extensions_shadow(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_extensions(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_appconfig_extensions_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_extensions(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteExtensionAssociation",
@@ -280,7 +280,7 @@ fn teardown_appconfig_extensions_shadow(client: &aws_sdk_appconfig::Client) -> V
     ]
 }
 
-fn test_appconfig_extensions_shadow_create_extension(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_create_extension(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "CreateExtension",
@@ -353,7 +353,7 @@ fn test_appconfig_extensions_shadow_create_extension(client: &aws_sdk_appconfig:
     }
 }
 
-fn test_appconfig_extensions_shadow_get_extension(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_get_extension(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetExtension",
@@ -386,7 +386,7 @@ fn test_appconfig_extensions_shadow_get_extension(client: &aws_sdk_appconfig::Cl
     }
 }
 
-fn test_appconfig_extensions_shadow_list_extensions(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_list_extensions(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListExtensions",
@@ -419,7 +419,7 @@ fn test_appconfig_extensions_shadow_list_extensions(client: &aws_sdk_appconfig::
     }
 }
 
-fn test_appconfig_extensions_shadow_update_extension(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_update_extension(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateExtension",
@@ -481,7 +481,7 @@ fn test_appconfig_extensions_shadow_update_extension(client: &aws_sdk_appconfig:
     }
 }
 
-fn test_appconfig_extensions_shadow_create_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_create_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "CreateExtensionAssociation",
@@ -544,7 +544,7 @@ fn test_appconfig_extensions_shadow_create_extension_association(client: &aws_sd
     }
 }
 
-fn test_appconfig_extensions_shadow_get_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_get_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetExtensionAssociation",
@@ -576,7 +576,7 @@ fn test_appconfig_extensions_shadow_get_extension_association(client: &aws_sdk_a
     }
 }
 
-fn test_appconfig_extensions_shadow_list_extension_associations(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_list_extension_associations(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListExtensionAssociations",
@@ -605,7 +605,7 @@ fn test_appconfig_extensions_shadow_list_extension_associations(client: &aws_sdk
     }
 }
 
-fn test_appconfig_extensions_shadow_update_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_update_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateExtensionAssociation",
@@ -667,7 +667,7 @@ fn test_appconfig_extensions_shadow_update_extension_association(client: &aws_sd
     }
 }
 
-fn test_appconfig_extensions_shadow_delete_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_delete_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteExtensionAssociation",
@@ -721,7 +721,7 @@ fn test_appconfig_extensions_shadow_delete_extension_association(client: &aws_sd
     }
 }
 
-fn test_appconfig_extensions_shadow_delete_extension(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_extensions_delete_extension(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteExtension",

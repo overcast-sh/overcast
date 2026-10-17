@@ -4228,6 +4228,7 @@
     {
       "service": "backup",
       "name": "backup-selections",
+      "scenario": "compat/model/authored/backup-selections.json",
       "tests": [
         {
           "name": "CreateBackupSelection"
@@ -4710,6 +4711,7 @@
     {
       "service": "appconfig",
       "name": "appconfig-deployment-strategies",
+      "scenario": "compat/model/authored/appconfig-deployment-strategies.json",
       "tests": [
         {
           "name": "CreateDeploymentStrategy"
@@ -4762,6 +4764,7 @@
     {
       "service": "appconfig",
       "name": "appconfig-extensions",
+      "scenario": "compat/model/authored/appconfig-extensions.json",
       "tests": [
         {
           "name": "CreateExtension"
@@ -4822,6 +4825,7 @@
     {
       "service": "appconfig",
       "name": "appconfig-experiments",
+      "scenario": "compat/model/authored/appconfig-experiments.json",
       "tests": [
         {
           "name": "ListExperimentDefinitions"

@@ -189,7 +189,7 @@
       "service": "appconfig",
       "group": "appconfig-deployment-strategies",
       "test": "CreateDeploymentStrategy",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "python-sdk",
@@ -301,28 +301,28 @@
       "service": "appconfig",
       "group": "appconfig-experiments",
       "test": "ListExperimentDefinitions",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "python-sdk",
       "service": "appconfig",
       "group": "appconfig-experiments",
       "test": "ListExperimentRunEvents",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "python-sdk",
       "service": "appconfig",
       "group": "appconfig-experiments",
       "test": "ListExperimentRuns",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "python-sdk",
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "CreateExtension",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "python-sdk",
@@ -364,7 +364,7 @@
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "ListExtensionAssociations",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "python-sdk",

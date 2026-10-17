@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-experiments.json";
 
-const GROUP_APPCONFIG_EXPERIMENTS_SHADOW: Group = Group {
-    name: "appconfig-experiments-shadow",
+const GROUP_APPCONFIG_EXPERIMENTS: Group = Group {
+    name: "appconfig-experiments",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExperiments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-experiments-shadow:ListExperimentDefinitions".to_string(),
+                "appconfig-experiments:ListExperimentDefinitions".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXPERIMENTS_SHADOW
-                            .run_test(&ctx, "ListExperimentDefinitions", test_appconfig_experiments_shadow_list_experiment_definitions(&client))
+                        GROUP_APPCONFIG_EXPERIMENTS
+                            .run_test(&ctx, "ListExperimentDefinitions", test_appconfig_experiments_list_experiment_definitions(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExperiments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-experiments-shadow:ListExperimentRuns".to_string(),
+                "appconfig-experiments:ListExperimentRuns".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXPERIMENTS_SHADOW
-                            .run_test(&ctx, "ListExperimentRuns", test_appconfig_experiments_shadow_list_experiment_runs(&client))
+                        GROUP_APPCONFIG_EXPERIMENTS
+                            .run_test(&ctx, "ListExperimentRuns", test_appconfig_experiments_list_experiment_runs(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExperiments {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-experiments-shadow:ListExperimentRunEvents".to_string(),
+                "appconfig-experiments:ListExperimentRunEvents".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXPERIMENTS_SHADOW
-                            .run_test(&ctx, "ListExperimentRunEvents", test_appconfig_experiments_shadow_list_experiment_run_events(&client))
+                        GROUP_APPCONFIG_EXPERIMENTS
+                            .run_test(&ctx, "ListExperimentRunEvents", test_appconfig_experiments_list_experiment_run_events(&client))
                             .await
                     })
                 }),
@@ -98,11 +98,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExperiments {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-experiments-shadow".to_string(),
+                "appconfig-experiments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXPERIMENTS_SHADOW.run_setup(&ctx, setup_appconfig_experiments_shadow(&client)).await
+                        GROUP_APPCONFIG_EXPERIMENTS.run_setup(&ctx, setup_appconfig_experiments(&client)).await
                     })
                 }),
             );
@@ -115,11 +115,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExperiments {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-experiments-shadow".to_string(),
+                "appconfig-experiments".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_EXPERIMENTS_SHADOW.run_teardown(&ctx, teardown_appconfig_experiments_shadow(&client)).await
+                        GROUP_APPCONFIG_EXPERIMENTS.run_teardown(&ctx, teardown_appconfig_experiments(&client)).await
                     })
                 }),
             );
@@ -128,17 +128,17 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExperiments {
     }
 }
 
-fn setup_appconfig_experiments_shadow(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_experiments(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_appconfig_experiments_shadow(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_experiments(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn test_appconfig_experiments_shadow_list_experiment_definitions(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_experiments_list_experiment_definitions(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListExperimentDefinitions",
@@ -168,7 +168,7 @@ fn test_appconfig_experiments_shadow_list_experiment_definitions(client: &aws_sd
     }
 }
 
-fn test_appconfig_experiments_shadow_list_experiment_runs(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_experiments_list_experiment_runs(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListExperimentRuns",
@@ -199,7 +199,7 @@ fn test_appconfig_experiments_shadow_list_experiment_runs(client: &aws_sdk_appco
     }
 }
 
-fn test_appconfig_experiments_shadow_list_experiment_run_events(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_experiments_list_experiment_run_events(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListExperimentRunEvents",

@@ -25,8 +25,8 @@ import software.amazon.awssdk.services.appconfig.model.ListExperimentRunsRequest
  */
 public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_EXPERIMENTS_SHADOW =
-            new Group("appconfig-experiments-shadow", "compat/model/authored/appconfig-experiments.json");
+    private static final Group GROUP_APPCONFIG_EXPERIMENTS =
+            new Group("appconfig-experiments", "compat/model/authored/appconfig-experiments.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -43,21 +43,21 @@ public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGr
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-experiments-shadow:ListExperimentDefinitions", this::testAppconfigExperimentsShadowListExperimentDefinitions),
-                Map.entry("appconfig-experiments-shadow:ListExperimentRuns", this::testAppconfigExperimentsShadowListExperimentRuns),
-                Map.entry("appconfig-experiments-shadow:ListExperimentRunEvents", this::testAppconfigExperimentsShadowListExperimentRunEvents));
+                Map.entry("appconfig-experiments:ListExperimentDefinitions", this::testAppconfigExperimentsListExperimentDefinitions),
+                Map.entry("appconfig-experiments:ListExperimentRuns", this::testAppconfigExperimentsListExperimentRuns),
+                Map.entry("appconfig-experiments:ListExperimentRunEvents", this::testAppconfigExperimentsListExperimentRunEvents));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-experiments-shadow", this::setupAppconfigExperimentsShadow));
+                Map.entry("appconfig-experiments", this::setupAppconfigExperiments));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-experiments-shadow", this::teardownAppconfigExperimentsShadow));
+                Map.entry("appconfig-experiments", this::teardownAppconfigExperiments));
     }
 
     /**
@@ -77,18 +77,18 @@ public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGr
         return client;
     }
 
-    private void setupAppconfigExperimentsShadow(TestContext t) {
+    private void setupAppconfigExperiments(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_APPCONFIG_EXPERIMENTS_SHADOW.runSetup(t);
+        GROUP_APPCONFIG_EXPERIMENTS.runSetup(t);
     }
 
-    private void teardownAppconfigExperimentsShadow(TestContext t) {
+    private void teardownAppconfigExperiments(TestContext t) {
         // No teardown steps: an empty phase is a no-op, not a missing one.
-        GROUP_APPCONFIG_EXPERIMENTS_SHADOW.runTeardown(t);
+        GROUP_APPCONFIG_EXPERIMENTS.runTeardown(t);
     }
 
-    private void testAppconfigExperimentsShadowListExperimentDefinitions(TestContext t) {
-        GROUP_APPCONFIG_EXPERIMENTS_SHADOW.runTest(t, "ListExperimentDefinitions",
+    private void testAppconfigExperimentsListExperimentDefinitions(TestContext t) {
+        GROUP_APPCONFIG_EXPERIMENTS.runTest(t, "ListExperimentDefinitions",
                 new Call("ListExperimentDefinitions", "{\"ApplicationIdentifier\":\"zzzzzzz\"}",
                         b -> ListExperimentDefinitionsRequest.builder()
                                 .applicationIdentifier("zzzzzzz")
@@ -101,8 +101,8 @@ public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGr
                 ));
     }
 
-    private void testAppconfigExperimentsShadowListExperimentRuns(TestContext t) {
-        GROUP_APPCONFIG_EXPERIMENTS_SHADOW.runTest(t, "ListExperimentRuns",
+    private void testAppconfigExperimentsListExperimentRuns(TestContext t) {
+        GROUP_APPCONFIG_EXPERIMENTS.runTest(t, "ListExperimentRuns",
                 new Call("ListExperimentRuns", "{\"ApplicationIdentifier\":\"zzzzzzz\",\"ExperimentDefinitionIdentifier\":\"zzzzzzz\"}",
                         b -> ListExperimentRunsRequest.builder()
                                 .applicationIdentifier("zzzzzzz")
@@ -116,8 +116,8 @@ public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGr
                 ));
     }
 
-    private void testAppconfigExperimentsShadowListExperimentRunEvents(TestContext t) {
-        GROUP_APPCONFIG_EXPERIMENTS_SHADOW.runTest(t, "ListExperimentRunEvents",
+    private void testAppconfigExperimentsListExperimentRunEvents(TestContext t) {
+        GROUP_APPCONFIG_EXPERIMENTS.runTest(t, "ListExperimentRunEvents",
                 new Call("ListExperimentRunEvents", "{\"ApplicationIdentifier\":\"zzzzzzz\",\"ExperimentDefinitionIdentifier\":\"zzzzzzz\",\"Run\":1}",
                         b -> ListExperimentRunEventsRequest.builder()
                                 .applicationIdentifier("zzzzzzz")

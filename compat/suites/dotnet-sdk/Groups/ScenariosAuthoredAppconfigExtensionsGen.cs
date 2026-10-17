@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupAppconfigExtensionsShadow = new("appconfig-extensions-shadow", "compat/model/authored/appconfig-extensions.json");
+    private static readonly ScenarioGroup GroupAppconfigExtensions = new("appconfig-extensions", "compat/model/authored/appconfig-extensions.json");
 
     private readonly Lazy<AmazonAppConfigClient> _client;
 
@@ -35,36 +35,36 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["appconfig-extensions-shadow:CreateExtension"] = TestAppconfigExtensionsShadowCreateExtension,
-        ["appconfig-extensions-shadow:GetExtension"] = TestAppconfigExtensionsShadowGetExtension,
-        ["appconfig-extensions-shadow:ListExtensions"] = TestAppconfigExtensionsShadowListExtensions,
-        ["appconfig-extensions-shadow:UpdateExtension"] = TestAppconfigExtensionsShadowUpdateExtension,
-        ["appconfig-extensions-shadow:CreateExtensionAssociation"] = TestAppconfigExtensionsShadowCreateExtensionAssociation,
-        ["appconfig-extensions-shadow:GetExtensionAssociation"] = TestAppconfigExtensionsShadowGetExtensionAssociation,
-        ["appconfig-extensions-shadow:ListExtensionAssociations"] = TestAppconfigExtensionsShadowListExtensionAssociations,
-        ["appconfig-extensions-shadow:UpdateExtensionAssociation"] = TestAppconfigExtensionsShadowUpdateExtensionAssociation,
-        ["appconfig-extensions-shadow:DeleteExtensionAssociation"] = TestAppconfigExtensionsShadowDeleteExtensionAssociation,
-        ["appconfig-extensions-shadow:DeleteExtension"] = TestAppconfigExtensionsShadowDeleteExtension,
+        ["appconfig-extensions:CreateExtension"] = TestAppconfigExtensionsCreateExtension,
+        ["appconfig-extensions:GetExtension"] = TestAppconfigExtensionsGetExtension,
+        ["appconfig-extensions:ListExtensions"] = TestAppconfigExtensionsListExtensions,
+        ["appconfig-extensions:UpdateExtension"] = TestAppconfigExtensionsUpdateExtension,
+        ["appconfig-extensions:CreateExtensionAssociation"] = TestAppconfigExtensionsCreateExtensionAssociation,
+        ["appconfig-extensions:GetExtensionAssociation"] = TestAppconfigExtensionsGetExtensionAssociation,
+        ["appconfig-extensions:ListExtensionAssociations"] = TestAppconfigExtensionsListExtensionAssociations,
+        ["appconfig-extensions:UpdateExtensionAssociation"] = TestAppconfigExtensionsUpdateExtensionAssociation,
+        ["appconfig-extensions:DeleteExtensionAssociation"] = TestAppconfigExtensionsDeleteExtensionAssociation,
+        ["appconfig-extensions:DeleteExtension"] = TestAppconfigExtensionsDeleteExtension,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-extensions-shadow"] = SetupAppconfigExtensionsShadow,
+        ["appconfig-extensions"] = SetupAppconfigExtensions,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-extensions-shadow"] = TeardownAppconfigExtensionsShadow,
+        ["appconfig-extensions"] = TeardownAppconfigExtensions,
     };
 
     private AmazonAppConfigClient Cl() => _client.Value;
 
-    private Task SetupAppconfigExtensionsShadow(TestContext t) =>
+    private Task SetupAppconfigExtensions(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupAppconfigExtensionsShadow.RunSetupAsync(t);
+        GroupAppconfigExtensions.RunSetupAsync(t);
 
-    private Task TeardownAppconfigExtensionsShadow(TestContext t) =>
-        GroupAppconfigExtensionsShadow.RunTeardownAsync(t,
+    private Task TeardownAppconfigExtensions(TestContext t) =>
+        GroupAppconfigExtensions.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteExtensionAssociation",
@@ -93,7 +93,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
             }
         );
 
-    private Task TestAppconfigExtensionsShadowCreateExtension(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "CreateExtension", new ScenarioTest
+    private Task TestAppconfigExtensionsCreateExtension(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "CreateExtension", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -148,7 +148,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowGetExtension(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "GetExtension", new ScenarioTest
+    private Task TestAppconfigExtensionsGetExtension(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "GetExtension", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -172,7 +172,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowListExtensions(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "ListExtensions", new ScenarioTest
+    private Task TestAppconfigExtensionsListExtensions(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "ListExtensions", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -196,7 +196,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowUpdateExtension(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "UpdateExtension", new ScenarioTest
+    private Task TestAppconfigExtensionsUpdateExtension(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "UpdateExtension", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -237,7 +237,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowCreateExtensionAssociation(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "CreateExtensionAssociation", new ScenarioTest
+    private Task TestAppconfigExtensionsCreateExtensionAssociation(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "CreateExtensionAssociation", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -281,7 +281,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowGetExtensionAssociation(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "GetExtensionAssociation", new ScenarioTest
+    private Task TestAppconfigExtensionsGetExtensionAssociation(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "GetExtensionAssociation", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -304,7 +304,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowListExtensionAssociations(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "ListExtensionAssociations", new ScenarioTest
+    private Task TestAppconfigExtensionsListExtensionAssociations(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "ListExtensionAssociations", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -326,7 +326,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowUpdateExtensionAssociation(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "UpdateExtensionAssociation", new ScenarioTest
+    private Task TestAppconfigExtensionsUpdateExtensionAssociation(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "UpdateExtensionAssociation", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -367,7 +367,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowDeleteExtensionAssociation(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "DeleteExtensionAssociation", new ScenarioTest
+    private Task TestAppconfigExtensionsDeleteExtensionAssociation(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "DeleteExtensionAssociation", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -402,7 +402,7 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         ],
     });
 
-    private Task TestAppconfigExtensionsShadowDeleteExtension(TestContext t) => GroupAppconfigExtensionsShadow.RunTestAsync(t, "DeleteExtension", new ScenarioTest
+    private Task TestAppconfigExtensionsDeleteExtension(TestContext t) => GroupAppconfigExtensions.RunTestAsync(t, "DeleteExtension", new ScenarioTest
     {
         Call = new ScenarioCall
         {

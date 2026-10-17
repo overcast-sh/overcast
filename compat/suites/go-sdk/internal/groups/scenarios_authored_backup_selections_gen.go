@@ -24,16 +24,16 @@ func ScenariosAuthoredBackupSelections(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-backup-selections",
 		Impls: map[string]harness.TestFn{
-			"backup-selections-shadow:CreateBackupSelection": g.testBackupSelectionsShadowCreateBackupSelection,
-			"backup-selections-shadow:ListBackupSelections":  g.testBackupSelectionsShadowListBackupSelections,
-			"backup-selections-shadow:GetBackupSelection":    g.testBackupSelectionsShadowGetBackupSelection,
-			"backup-selections-shadow:DeleteBackupSelection": g.testBackupSelectionsShadowDeleteBackupSelection,
+			"backup-selections:CreateBackupSelection": g.testBackupSelectionsCreateBackupSelection,
+			"backup-selections:ListBackupSelections":  g.testBackupSelectionsListBackupSelections,
+			"backup-selections:GetBackupSelection":    g.testBackupSelectionsGetBackupSelection,
+			"backup-selections:DeleteBackupSelection": g.testBackupSelectionsDeleteBackupSelection,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-selections-shadow": g.setupBackupSelectionsShadow,
+			"backup-selections": g.setupBackupSelections,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-selections-shadow": g.teardownBackupSelectionsShadow,
+			"backup-selections": g.teardownBackupSelections,
 		},
 	}
 }
@@ -53,10 +53,10 @@ func (g *authoredBackupSelectionsScenarios) cl() *backup.Client {
 	return g.client
 }
 
-var groupBackupSelectionsShadow = scenario.Group{Name: "backup-selections-shadow", File: "compat/model/authored/backup-selections.json"}
+var groupBackupSelections = scenario.Group{Name: "backup-selections", File: "compat/model/authored/backup-selections.json"}
 
-func (g *authoredBackupSelectionsScenarios) setupBackupSelectionsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupSelectionsShadow.RunSetup(ctx, t,
+func (g *authoredBackupSelectionsScenarios) setupBackupSelections(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupSelections.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault"}}`,
@@ -96,8 +96,8 @@ func (g *authoredBackupSelectionsScenarios) setupBackupSelectionsShadow(ctx cont
 	)
 }
 
-func (g *authoredBackupSelectionsScenarios) teardownBackupSelectionsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupSelectionsShadow.RunTeardown(ctx, t,
+func (g *authoredBackupSelectionsScenarios) teardownBackupSelections(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupSelections.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteBackupSelection",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"},"SelectionId":{"$ref":"selection.id"}}`,
@@ -138,8 +138,8 @@ func (g *authoredBackupSelectionsScenarios) teardownBackupSelectionsShadow(ctx c
 	)
 }
 
-func (g *authoredBackupSelectionsScenarios) testBackupSelectionsShadowCreateBackupSelection(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupSelectionsShadow.RunTest(ctx, t, "CreateBackupSelection", scenario.Test{
+func (g *authoredBackupSelectionsScenarios) testBackupSelectionsCreateBackupSelection(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupSelections.RunTest(ctx, t, "CreateBackupSelection", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateBackupSelection",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"},"BackupSelection":{"IamRoleArn":"arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole","Resources":["*"],"SelectionName":{"$name":"sel"}}}`,
@@ -187,8 +187,8 @@ func (g *authoredBackupSelectionsScenarios) testBackupSelectionsShadowCreateBack
 	})
 }
 
-func (g *authoredBackupSelectionsScenarios) testBackupSelectionsShadowListBackupSelections(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupSelectionsShadow.RunTest(ctx, t, "ListBackupSelections", scenario.Test{
+func (g *authoredBackupSelectionsScenarios) testBackupSelectionsListBackupSelections(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupSelections.RunTest(ctx, t, "ListBackupSelections", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListBackupSelections",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"}}`,
@@ -215,8 +215,8 @@ func (g *authoredBackupSelectionsScenarios) testBackupSelectionsShadowListBackup
 	})
 }
 
-func (g *authoredBackupSelectionsScenarios) testBackupSelectionsShadowGetBackupSelection(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupSelectionsShadow.RunTest(ctx, t, "GetBackupSelection", scenario.Test{
+func (g *authoredBackupSelectionsScenarios) testBackupSelectionsGetBackupSelection(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupSelections.RunTest(ctx, t, "GetBackupSelection", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetBackupSelection",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"},"SelectionId":{"$ref":"selection.id"}}`,
@@ -243,8 +243,8 @@ func (g *authoredBackupSelectionsScenarios) testBackupSelectionsShadowGetBackupS
 	})
 }
 
-func (g *authoredBackupSelectionsScenarios) testBackupSelectionsShadowDeleteBackupSelection(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupSelectionsShadow.RunTest(ctx, t, "DeleteBackupSelection", scenario.Test{
+func (g *authoredBackupSelectionsScenarios) testBackupSelectionsDeleteBackupSelection(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupSelections.RunTest(ctx, t, "DeleteBackupSelection", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteBackupSelection",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"},"SelectionId":{"$ref":"selection.id"}}`,

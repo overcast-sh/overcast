@@ -36,8 +36,8 @@ import software.amazon.awssdk.services.appconfig.model.UpdateExtensionRequest;
  */
 public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_EXTENSIONS_SHADOW =
-            new Group("appconfig-extensions-shadow", "compat/model/authored/appconfig-extensions.json");
+    private static final Group GROUP_APPCONFIG_EXTENSIONS =
+            new Group("appconfig-extensions", "compat/model/authored/appconfig-extensions.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -54,28 +54,28 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-extensions-shadow:CreateExtension", this::testAppconfigExtensionsShadowCreateExtension),
-                Map.entry("appconfig-extensions-shadow:GetExtension", this::testAppconfigExtensionsShadowGetExtension),
-                Map.entry("appconfig-extensions-shadow:ListExtensions", this::testAppconfigExtensionsShadowListExtensions),
-                Map.entry("appconfig-extensions-shadow:UpdateExtension", this::testAppconfigExtensionsShadowUpdateExtension),
-                Map.entry("appconfig-extensions-shadow:CreateExtensionAssociation", this::testAppconfigExtensionsShadowCreateExtensionAssociation),
-                Map.entry("appconfig-extensions-shadow:GetExtensionAssociation", this::testAppconfigExtensionsShadowGetExtensionAssociation),
-                Map.entry("appconfig-extensions-shadow:ListExtensionAssociations", this::testAppconfigExtensionsShadowListExtensionAssociations),
-                Map.entry("appconfig-extensions-shadow:UpdateExtensionAssociation", this::testAppconfigExtensionsShadowUpdateExtensionAssociation),
-                Map.entry("appconfig-extensions-shadow:DeleteExtensionAssociation", this::testAppconfigExtensionsShadowDeleteExtensionAssociation),
-                Map.entry("appconfig-extensions-shadow:DeleteExtension", this::testAppconfigExtensionsShadowDeleteExtension));
+                Map.entry("appconfig-extensions:CreateExtension", this::testAppconfigExtensionsCreateExtension),
+                Map.entry("appconfig-extensions:GetExtension", this::testAppconfigExtensionsGetExtension),
+                Map.entry("appconfig-extensions:ListExtensions", this::testAppconfigExtensionsListExtensions),
+                Map.entry("appconfig-extensions:UpdateExtension", this::testAppconfigExtensionsUpdateExtension),
+                Map.entry("appconfig-extensions:CreateExtensionAssociation", this::testAppconfigExtensionsCreateExtensionAssociation),
+                Map.entry("appconfig-extensions:GetExtensionAssociation", this::testAppconfigExtensionsGetExtensionAssociation),
+                Map.entry("appconfig-extensions:ListExtensionAssociations", this::testAppconfigExtensionsListExtensionAssociations),
+                Map.entry("appconfig-extensions:UpdateExtensionAssociation", this::testAppconfigExtensionsUpdateExtensionAssociation),
+                Map.entry("appconfig-extensions:DeleteExtensionAssociation", this::testAppconfigExtensionsDeleteExtensionAssociation),
+                Map.entry("appconfig-extensions:DeleteExtension", this::testAppconfigExtensionsDeleteExtension));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-extensions-shadow", this::setupAppconfigExtensionsShadow));
+                Map.entry("appconfig-extensions", this::setupAppconfigExtensions));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-extensions-shadow", this::teardownAppconfigExtensionsShadow));
+                Map.entry("appconfig-extensions", this::teardownAppconfigExtensions));
     }
 
     /**
@@ -95,13 +95,13 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
         return client;
     }
 
-    private void setupAppconfigExtensionsShadow(TestContext t) {
+    private void setupAppconfigExtensions(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runSetup(t);
+        GROUP_APPCONFIG_EXTENSIONS.runSetup(t);
     }
 
-    private void teardownAppconfigExtensionsShadow(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTeardown(t,
+    private void teardownAppconfigExtensions(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTeardown(t,
                 new Call("DeleteExtensionAssociation", "{\"ExtensionAssociationId\":{\"$ref\":\"assoc.id\"}}",
                         b -> DeleteExtensionAssociationRequest.builder()
                                 .extensionAssociationId(b.string("ExtensionAssociationId", Values.ref("assoc.id")))
@@ -114,8 +114,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                         r -> cl().deleteExtension((DeleteExtensionRequest) r)));
     }
 
-    private void testAppconfigExtensionsShadowCreateExtension(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "CreateExtension",
+    private void testAppconfigExtensionsCreateExtension(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "CreateExtension",
                 new Call("CreateExtension", "{\"Actions\":{\"PRE_START_DEPLOYMENT\":[{\"Name\":\"compat\",\"Uri\":\"arn:aws:sns:us-east-1:000000000000:compat\"}]},\"Name\":{\"$name\":\"ext\"}}",
                         b -> CreateExtensionRequest.builder()
                                 .actionsWithStrings(Map.of("PRE_START_DEPLOYMENT", List.of(Action.builder().name("compat").uri("arn:aws:sns:us-east-1:000000000000:compat").build())))
@@ -140,8 +140,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowGetExtension(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "GetExtension",
+    private void testAppconfigExtensionsGetExtension(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "GetExtension",
                 new Call("GetExtension", "{\"ExtensionIdentifier\":{\"$ref\":\"ext.id\"}}",
                         b -> GetExtensionRequest.builder()
                                 .extensionIdentifier(b.string("ExtensionIdentifier", Values.ref("ext.id")))
@@ -155,8 +155,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowListExtensions(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "ListExtensions",
+    private void testAppconfigExtensionsListExtensions(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "ListExtensions",
                 new Call("ListExtensions", "{}",
                         b -> ListExtensionsRequest.builder()
                                 .build(),
@@ -170,8 +170,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowUpdateExtension(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "UpdateExtension",
+    private void testAppconfigExtensionsUpdateExtension(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "UpdateExtension",
                 new Call("UpdateExtension", "{\"Description\":\"updated by compat\",\"ExtensionIdentifier\":{\"$ref\":\"ext.id\"}}",
                         b -> UpdateExtensionRequest.builder()
                                 .description("updated by compat")
@@ -194,8 +194,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowCreateExtensionAssociation(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "CreateExtensionAssociation",
+    private void testAppconfigExtensionsCreateExtensionAssociation(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "CreateExtensionAssociation",
                 new Call("CreateExtensionAssociation", "{\"ExtensionIdentifier\":{\"$ref\":\"ext.id\"},\"ResourceIdentifier\":\"arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz\"}",
                         b -> CreateExtensionAssociationRequest.builder()
                                 .extensionIdentifier(b.string("ExtensionIdentifier", Values.ref("ext.id")))
@@ -218,8 +218,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowGetExtensionAssociation(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "GetExtensionAssociation",
+    private void testAppconfigExtensionsGetExtensionAssociation(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "GetExtensionAssociation",
                 new Call("GetExtensionAssociation", "{\"ExtensionAssociationId\":{\"$ref\":\"assoc.id\"}}",
                         b -> GetExtensionAssociationRequest.builder()
                                 .extensionAssociationId(b.string("ExtensionAssociationId", Values.ref("assoc.id")))
@@ -232,8 +232,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowListExtensionAssociations(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "ListExtensionAssociations",
+    private void testAppconfigExtensionsListExtensionAssociations(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "ListExtensionAssociations",
                 new Call("ListExtensionAssociations", "{}",
                         b -> ListExtensionAssociationsRequest.builder()
                                 .build(),
@@ -245,8 +245,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowUpdateExtensionAssociation(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "UpdateExtensionAssociation",
+    private void testAppconfigExtensionsUpdateExtensionAssociation(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "UpdateExtensionAssociation",
                 new Call("UpdateExtensionAssociation", "{\"ExtensionAssociationId\":{\"$ref\":\"assoc.id\"},\"Parameters\":{\"compat\":\"true\"}}",
                         b -> UpdateExtensionAssociationRequest.builder()
                                 .extensionAssociationId(b.string("ExtensionAssociationId", Values.ref("assoc.id")))
@@ -269,8 +269,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowDeleteExtensionAssociation(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "DeleteExtensionAssociation",
+    private void testAppconfigExtensionsDeleteExtensionAssociation(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "DeleteExtensionAssociation",
                 new Call("DeleteExtensionAssociation", "{\"ExtensionAssociationId\":{\"$ref\":\"assoc.id\"}}",
                         b -> DeleteExtensionAssociationRequest.builder()
                                 .extensionAssociationId(b.string("ExtensionAssociationId", Values.ref("assoc.id")))
@@ -287,8 +287,8 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                 ));
     }
 
-    private void testAppconfigExtensionsShadowDeleteExtension(TestContext t) {
-        GROUP_APPCONFIG_EXTENSIONS_SHADOW.runTest(t, "DeleteExtension",
+    private void testAppconfigExtensionsDeleteExtension(TestContext t) {
+        GROUP_APPCONFIG_EXTENSIONS.runTest(t, "DeleteExtension",
                 new Call("DeleteExtension", "{\"ExtensionIdentifier\":{\"$ref\":\"ext.id\"}}",
                         b -> DeleteExtensionRequest.builder()
                                 .extensionIdentifier(b.string("ExtensionIdentifier", Values.ref("ext.id")))
