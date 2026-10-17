@@ -30,8 +30,8 @@ import software.amazon.awssdk.services.backup.model.ListBackupVaultsRequest;
  */
 public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
 
-    private static final Group GROUP_BACKUP_VAULTS_SHADOW =
-            new Group("backup-vaults-shadow", "compat/model/authored/backup-vaults.json");
+    private static final Group GROUP_BACKUP_VAULTS =
+            new Group("backup-vaults", "compat/model/authored/backup-vaults.json");
 
     private final AwsClients clients;
     private volatile BackupClient client;
@@ -48,28 +48,28 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("backup-vaults-shadow:CreateBackupVault", this::testBackupVaultsShadowCreateBackupVault),
-                Map.entry("backup-vaults-shadow:DescribeBackupVault", this::testBackupVaultsShadowDescribeBackupVault),
-                Map.entry("backup-vaults-shadow:ListBackupVaults", this::testBackupVaultsShadowListBackupVaults),
-                Map.entry("backup-vaults-shadow:ListBackupVaultsPaginated", this::testBackupVaultsShadowListBackupVaultsPaginated),
-                Map.entry("backup-vaults-shadow:ListBackupVaultsByShared", this::testBackupVaultsShadowListBackupVaultsByShared),
-                Map.entry("backup-vaults-shadow:DescribeBackupVaultNotFound", this::testBackupVaultsShadowDescribeBackupVaultNotFound),
-                Map.entry("backup-vaults-shadow:CreateBackupVaultAlreadyExists", this::testBackupVaultsShadowCreateBackupVaultAlreadyExists),
-                Map.entry("backup-vaults-shadow:CreateBackupVaultInvalidName", this::testBackupVaultsShadowCreateBackupVaultInvalidName),
-                Map.entry("backup-vaults-shadow:DeleteBackupVault", this::testBackupVaultsShadowDeleteBackupVault),
-                Map.entry("backup-vaults-shadow:DeleteBackupVaultNotFound", this::testBackupVaultsShadowDeleteBackupVaultNotFound));
+                Map.entry("backup-vaults:CreateBackupVault", this::testBackupVaultsCreateBackupVault),
+                Map.entry("backup-vaults:DescribeBackupVault", this::testBackupVaultsDescribeBackupVault),
+                Map.entry("backup-vaults:ListBackupVaults", this::testBackupVaultsListBackupVaults),
+                Map.entry("backup-vaults:ListBackupVaultsPaginated", this::testBackupVaultsListBackupVaultsPaginated),
+                Map.entry("backup-vaults:ListBackupVaultsByShared", this::testBackupVaultsListBackupVaultsByShared),
+                Map.entry("backup-vaults:DescribeBackupVaultNotFound", this::testBackupVaultsDescribeBackupVaultNotFound),
+                Map.entry("backup-vaults:CreateBackupVaultAlreadyExists", this::testBackupVaultsCreateBackupVaultAlreadyExists),
+                Map.entry("backup-vaults:CreateBackupVaultInvalidName", this::testBackupVaultsCreateBackupVaultInvalidName),
+                Map.entry("backup-vaults:DeleteBackupVault", this::testBackupVaultsDeleteBackupVault),
+                Map.entry("backup-vaults:DeleteBackupVaultNotFound", this::testBackupVaultsDeleteBackupVaultNotFound));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("backup-vaults-shadow", this::setupBackupVaultsShadow));
+                Map.entry("backup-vaults", this::setupBackupVaults));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("backup-vaults-shadow", this::teardownBackupVaultsShadow));
+                Map.entry("backup-vaults", this::teardownBackupVaults));
     }
 
     /**
@@ -89,8 +89,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
         return client;
     }
 
-    private void setupBackupVaultsShadow(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runSetup(t,
+    private void setupBackupVaults(TestContext t) {
+        GROUP_BACKUP_VAULTS.runSetup(t,
                 new Call("CreateBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault2\"}}",
                         b -> CreateBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault2")))
@@ -98,8 +98,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                         r -> cl().createBackupVault((CreateBackupVaultRequest) r)));
     }
 
-    private void teardownBackupVaultsShadow(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTeardown(t,
+    private void teardownBackupVaults(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTeardown(t,
                 new Call("DeleteBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault2\"}}",
                         b -> DeleteBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault2")))
@@ -112,8 +112,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                         r -> cl().deleteBackupVault((DeleteBackupVaultRequest) r)));
     }
 
-    private void testBackupVaultsShadowCreateBackupVault(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "CreateBackupVault",
+    private void testBackupVaultsCreateBackupVault(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "CreateBackupVault",
                 new Call("CreateBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault\"}}",
                         b -> CreateBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault")))
@@ -128,8 +128,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowDescribeBackupVault(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "DescribeBackupVault",
+    private void testBackupVaultsDescribeBackupVault(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "DescribeBackupVault",
                 new Call("DescribeBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault\"}}",
                         b -> DescribeBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault")))
@@ -147,8 +147,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowListBackupVaults(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "ListBackupVaults",
+    private void testBackupVaultsListBackupVaults(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "ListBackupVaults",
                 new Call("ListBackupVaults", "{}",
                         b -> ListBackupVaultsRequest.builder()
                                 .build(),
@@ -162,8 +162,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowListBackupVaultsPaginated(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "ListBackupVaultsPaginated",
+    private void testBackupVaultsListBackupVaultsPaginated(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "ListBackupVaultsPaginated",
                 new Call("ListBackupVaults", "{\"MaxResults\":1}",
                         b -> ListBackupVaultsRequest.builder()
                                 .maxResults(1)
@@ -208,8 +208,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowListBackupVaultsByShared(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "ListBackupVaultsByShared",
+    private void testBackupVaultsListBackupVaultsByShared(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "ListBackupVaultsByShared",
                 new Call("ListBackupVaults", "{\"ByShared\":true}",
                         b -> ListBackupVaultsRequest.builder()
                                 .byShared(true)
@@ -231,8 +231,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowDescribeBackupVaultNotFound(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "DescribeBackupVaultNotFound",
+    private void testBackupVaultsDescribeBackupVaultNotFound(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "DescribeBackupVaultNotFound",
                 new Call("DescribeBackupVault", "{\"BackupVaultName\":{\"$name\":\"absent\"}}",
                         b -> DescribeBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("absent")))
@@ -243,8 +243,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowCreateBackupVaultAlreadyExists(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "CreateBackupVaultAlreadyExists",
+    private void testBackupVaultsCreateBackupVaultAlreadyExists(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "CreateBackupVaultAlreadyExists",
                 new Call("CreateBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault\"}}",
                         b -> CreateBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault")))
@@ -255,8 +255,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowCreateBackupVaultInvalidName(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "CreateBackupVaultInvalidName",
+    private void testBackupVaultsCreateBackupVaultInvalidName(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "CreateBackupVaultInvalidName",
                 new Call("CreateBackupVault", "{\"BackupVaultName\":\"oc.invalid.vault.name\"}",
                         b -> CreateBackupVaultRequest.builder()
                                 .backupVaultName("oc.invalid.vault.name")
@@ -267,8 +267,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowDeleteBackupVault(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "DeleteBackupVault",
+    private void testBackupVaultsDeleteBackupVault(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "DeleteBackupVault",
                 new Call("DeleteBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault\"}}",
                         b -> DeleteBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault")))
@@ -285,8 +285,8 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupVaultsShadowDeleteBackupVaultNotFound(TestContext t) {
-        GROUP_BACKUP_VAULTS_SHADOW.runTest(t, "DeleteBackupVaultNotFound",
+    private void testBackupVaultsDeleteBackupVaultNotFound(TestContext t) {
+        GROUP_BACKUP_VAULTS.runTest(t, "DeleteBackupVaultNotFound",
                 new Call("DeleteBackupVault", "{\"BackupVaultName\":{\"$name\":\"absent\"}}",
                         b -> DeleteBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("absent")))

@@ -34,8 +34,8 @@ import software.amazon.awssdk.services.ecr.model.PutImageRequest;
  */
 public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
 
-    private static final Group GROUP_ECR_IMAGES_SHADOW =
-            new Group("ecr-images-shadow", "compat/model/authored/ecr-images.json");
+    private static final Group GROUP_ECR_IMAGES =
+            new Group("ecr-images", "compat/model/authored/ecr-images.json");
 
     private final AwsClients clients;
     private volatile EcrClient client;
@@ -52,25 +52,25 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("ecr-images-shadow:PutImage", this::testEcrImagesShadowPutImage),
-                Map.entry("ecr-images-shadow:ListImages", this::testEcrImagesShadowListImages),
-                Map.entry("ecr-images-shadow:ListImagesPaginated", this::testEcrImagesShadowListImagesPaginated),
-                Map.entry("ecr-images-shadow:DescribeImages", this::testEcrImagesShadowDescribeImages),
-                Map.entry("ecr-images-shadow:BatchGetImage", this::testEcrImagesShadowBatchGetImage),
-                Map.entry("ecr-images-shadow:BatchDeleteImage", this::testEcrImagesShadowBatchDeleteImage),
-                Map.entry("ecr-images-shadow:DescribeImagesNotFound", this::testEcrImagesShadowDescribeImagesNotFound));
+                Map.entry("ecr-images:PutImage", this::testEcrImagesPutImage),
+                Map.entry("ecr-images:ListImages", this::testEcrImagesListImages),
+                Map.entry("ecr-images:ListImagesPaginated", this::testEcrImagesListImagesPaginated),
+                Map.entry("ecr-images:DescribeImages", this::testEcrImagesDescribeImages),
+                Map.entry("ecr-images:BatchGetImage", this::testEcrImagesBatchGetImage),
+                Map.entry("ecr-images:BatchDeleteImage", this::testEcrImagesBatchDeleteImage),
+                Map.entry("ecr-images:DescribeImagesNotFound", this::testEcrImagesDescribeImagesNotFound));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("ecr-images-shadow", this::setupEcrImagesShadow));
+                Map.entry("ecr-images", this::setupEcrImages));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("ecr-images-shadow", this::teardownEcrImagesShadow));
+                Map.entry("ecr-images", this::teardownEcrImages));
     }
 
     /**
@@ -90,8 +90,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
         return client;
     }
 
-    private void setupEcrImagesShadow(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runSetup(t,
+    private void setupEcrImages(TestContext t) {
+        GROUP_ECR_IMAGES.runSetup(t,
                 new Call("CreateRepository", "{\"repositoryName\":{\"$name\":\"imgs\"}}",
                         b -> CreateRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("imgs")))
@@ -132,8 +132,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                         r -> cl().putImage((PutImageRequest) r)));
     }
 
-    private void teardownEcrImagesShadow(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTeardown(t,
+    private void teardownEcrImages(TestContext t) {
+        GROUP_ECR_IMAGES.runTeardown(t,
                 new Call("DeleteRepository", "{\"force\":true,\"repositoryName\":{\"$name\":\"paged\"}}",
                         b -> DeleteRepositoryRequest.builder()
                                 .force(true)
@@ -148,8 +148,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                         r -> cl().deleteRepository((DeleteRepositoryRequest) r)));
     }
 
-    private void testEcrImagesShadowPutImage(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTest(t, "PutImage",
+    private void testEcrImagesPutImage(TestContext t) {
+        GROUP_ECR_IMAGES.runTest(t, "PutImage",
                 new Call("PutImage", "{\"imageManifest\":\"{\\\"schemaVersion\\\":2,\\\"mediaType\\\":\\\"application/vnd.docker.distribution.manifest.v2+json\\\",\\\"config\\\":{\\\"mediaType\\\":\\\"application/vnd.docker.container.image.v1+json\\\",\\\"size\\\":2,\\\"digest\\\":\\\"sha256:0000000000000000000000000000000000000000000000000000000000000010\\\"},\\\"layers\\\":[]}\",\"imageTag\":\"v1\",\"repositoryName\":{\"$name\":\"imgs\"}}",
                         b -> PutImageRequest.builder()
                                 .imageManifest("{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000010\"},\"layers\":[]}")
@@ -175,8 +175,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrImagesShadowListImages(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTest(t, "ListImages",
+    private void testEcrImagesListImages(TestContext t) {
+        GROUP_ECR_IMAGES.runTest(t, "ListImages",
                 new Call("ListImages", "{\"repositoryName\":{\"$name\":\"imgs\"}}",
                         b -> ListImagesRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("imgs")))
@@ -192,8 +192,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrImagesShadowListImagesPaginated(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTest(t, "ListImagesPaginated",
+    private void testEcrImagesListImagesPaginated(TestContext t) {
+        GROUP_ECR_IMAGES.runTest(t, "ListImagesPaginated",
                 new Call("ListImages", "{\"maxResults\":1,\"repositoryName\":{\"$name\":\"paged\"}}",
                         b -> ListImagesRequest.builder()
                                 .maxResults(1)
@@ -260,8 +260,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrImagesShadowDescribeImages(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTest(t, "DescribeImages",
+    private void testEcrImagesDescribeImages(TestContext t) {
+        GROUP_ECR_IMAGES.runTest(t, "DescribeImages",
                 new Call("DescribeImages", "{\"imageIds\":[{\"imageTag\":\"v1\"}],\"repositoryName\":{\"$name\":\"imgs\"}}",
                         b -> DescribeImagesRequest.builder()
                                 .imageIds(List.of(ImageIdentifier.builder().imageTag("v1").build()))
@@ -282,8 +282,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrImagesShadowBatchGetImage(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTest(t, "BatchGetImage",
+    private void testEcrImagesBatchGetImage(TestContext t) {
+        GROUP_ECR_IMAGES.runTest(t, "BatchGetImage",
                 new Call("BatchGetImage", "{\"imageIds\":[{\"imageTag\":\"v1\"}],\"repositoryName\":{\"$name\":\"imgs\"}}",
                         b -> BatchGetImageRequest.builder()
                                 .imageIds(List.of(ImageIdentifier.builder().imageTag("v1").build()))
@@ -300,8 +300,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrImagesShadowBatchDeleteImage(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTest(t, "BatchDeleteImage",
+    private void testEcrImagesBatchDeleteImage(TestContext t) {
+        GROUP_ECR_IMAGES.runTest(t, "BatchDeleteImage",
                 new Call("BatchDeleteImage", "{\"imageIds\":[{\"imageTag\":\"doomed\"}],\"repositoryName\":{\"$name\":\"imgs\"}}",
                         b -> BatchDeleteImageRequest.builder()
                                 .imageIds(List.of(ImageIdentifier.builder().imageTag("doomed").build()))
@@ -335,8 +335,8 @@ public final class ScenariosAuthoredEcrImagesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrImagesShadowDescribeImagesNotFound(TestContext t) {
-        GROUP_ECR_IMAGES_SHADOW.runTest(t, "DescribeImagesNotFound",
+    private void testEcrImagesDescribeImagesNotFound(TestContext t) {
+        GROUP_ECR_IMAGES.runTest(t, "DescribeImagesNotFound",
                 new Call("DescribeImages", "{\"imageIds\":[{\"imageTag\":\"no-such-tag\"}],\"repositoryName\":{\"$name\":\"imgs\"}}",
                         b -> DescribeImagesRequest.builder()
                                 .imageIds(List.of(ImageIdentifier.builder().imageTag("no-such-tag").build()))

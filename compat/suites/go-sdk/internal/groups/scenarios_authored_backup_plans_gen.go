@@ -24,22 +24,22 @@ func ScenariosAuthoredBackupPlans(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-backup-plans",
 		Impls: map[string]harness.TestFn{
-			"backup-plans-shadow:CreateBackupPlan":             g.testBackupPlansShadowCreateBackupPlan,
-			"backup-plans-shadow:GetBackupPlan":                g.testBackupPlansShadowGetBackupPlan,
-			"backup-plans-shadow:ListBackupPlans":              g.testBackupPlansShadowListBackupPlans,
-			"backup-plans-shadow:ListBackupPlansPaginated":     g.testBackupPlansShadowListBackupPlansPaginated,
-			"backup-plans-shadow:UpdateBackupPlan":             g.testBackupPlansShadowUpdateBackupPlan,
-			"backup-plans-shadow:GetBackupPlanNotFound":        g.testBackupPlansShadowGetBackupPlanNotFound,
-			"backup-plans-shadow:GetBackupPlanVersionNotFound": g.testBackupPlansShadowGetBackupPlanVersionNotFound,
-			"backup-plans-shadow:UpdateBackupPlanNotFound":     g.testBackupPlansShadowUpdateBackupPlanNotFound,
-			"backup-plans-shadow:DeleteBackupPlan":             g.testBackupPlansShadowDeleteBackupPlan,
-			"backup-plans-shadow:DeleteBackupPlanNotFound":     g.testBackupPlansShadowDeleteBackupPlanNotFound,
+			"backup-plans:CreateBackupPlan":             g.testBackupPlansCreateBackupPlan,
+			"backup-plans:GetBackupPlan":                g.testBackupPlansGetBackupPlan,
+			"backup-plans:ListBackupPlans":              g.testBackupPlansListBackupPlans,
+			"backup-plans:ListBackupPlansPaginated":     g.testBackupPlansListBackupPlansPaginated,
+			"backup-plans:UpdateBackupPlan":             g.testBackupPlansUpdateBackupPlan,
+			"backup-plans:GetBackupPlanNotFound":        g.testBackupPlansGetBackupPlanNotFound,
+			"backup-plans:GetBackupPlanVersionNotFound": g.testBackupPlansGetBackupPlanVersionNotFound,
+			"backup-plans:UpdateBackupPlanNotFound":     g.testBackupPlansUpdateBackupPlanNotFound,
+			"backup-plans:DeleteBackupPlan":             g.testBackupPlansDeleteBackupPlan,
+			"backup-plans:DeleteBackupPlanNotFound":     g.testBackupPlansDeleteBackupPlanNotFound,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-plans-shadow": g.setupBackupPlansShadow,
+			"backup-plans": g.setupBackupPlans,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-plans-shadow": g.teardownBackupPlansShadow,
+			"backup-plans": g.teardownBackupPlans,
 		},
 	}
 }
@@ -59,10 +59,10 @@ func (g *authoredBackupPlansScenarios) cl() *backup.Client {
 	return g.client
 }
 
-var groupBackupPlansShadow = scenario.Group{Name: "backup-plans-shadow", File: "compat/model/authored/backup-plans.json"}
+var groupBackupPlans = scenario.Group{Name: "backup-plans", File: "compat/model/authored/backup-plans.json"}
 
-func (g *authoredBackupPlansScenarios) setupBackupPlansShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunSetup(ctx, t,
+func (g *authoredBackupPlansScenarios) setupBackupPlans(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault"}}`,
@@ -102,8 +102,8 @@ func (g *authoredBackupPlansScenarios) setupBackupPlansShadow(ctx context.Contex
 	)
 }
 
-func (g *authoredBackupPlansScenarios) teardownBackupPlansShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTeardown(ctx, t,
+func (g *authoredBackupPlansScenarios) teardownBackupPlans(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteBackupPlan",
 			Params: `{"BackupPlanId":{"$ref":"plan2.id"}}`,
@@ -143,8 +143,8 @@ func (g *authoredBackupPlansScenarios) teardownBackupPlansShadow(ctx context.Con
 	)
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowCreateBackupPlan(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "CreateBackupPlan", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansCreateBackupPlan(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "CreateBackupPlan", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateBackupPlan",
 			Params: `{"BackupPlan":{"BackupPlanName":{"$name":"plan"},"Rules":[{"RuleName":"daily","ScheduleExpression":"cron(0 5 ? * * *)","TargetBackupVaultName":{"$name":"vault"}}]}}`,
@@ -181,8 +181,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowCreateBackupPlan(ctx
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowGetBackupPlan(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "GetBackupPlan", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansGetBackupPlan(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "GetBackupPlan", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetBackupPlan",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"}}`,
@@ -210,8 +210,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowGetBackupPlan(ctx co
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowListBackupPlans(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "ListBackupPlans", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansListBackupPlans(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "ListBackupPlans", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListBackupPlans",
 			Params: `{}`,
@@ -234,8 +234,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowListBackupPlans(ctx 
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowListBackupPlansPaginated(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "ListBackupPlansPaginated", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansListBackupPlansPaginated(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "ListBackupPlansPaginated", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListBackupPlans",
 			Params: `{"MaxResults":1}`,
@@ -332,8 +332,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowListBackupPlansPagin
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowUpdateBackupPlan(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "UpdateBackupPlan", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansUpdateBackupPlan(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "UpdateBackupPlan", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateBackupPlan",
 			Params: `{"BackupPlan":{"BackupPlanName":{"$concat":[{"$name":"plan"},"-updated"]},"Rules":[{"RuleName":"daily","ScheduleExpression":"cron(0 5 ? * * *)","TargetBackupVaultName":{"$name":"vault"}}]},"BackupPlanId":{"$ref":"plan.id"}}`,
@@ -402,8 +402,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowUpdateBackupPlan(ctx
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowGetBackupPlanNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "GetBackupPlanNotFound", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansGetBackupPlanNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "GetBackupPlanNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetBackupPlan",
 			Params: `{"BackupPlanId":"00000000-0000-0000-0000-000000000000"}`,
@@ -422,8 +422,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowGetBackupPlanNotFoun
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowGetBackupPlanVersionNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "GetBackupPlanVersionNotFound", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansGetBackupPlanVersionNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "GetBackupPlanVersionNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetBackupPlan",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"},"VersionId":"no-such-version"}`,
@@ -443,8 +443,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowGetBackupPlanVersion
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowUpdateBackupPlanNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "UpdateBackupPlanNotFound", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansUpdateBackupPlanNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "UpdateBackupPlanNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateBackupPlan",
 			Params: `{"BackupPlan":{"BackupPlanName":"oc-absent-plan","Rules":[{"RuleName":"daily","ScheduleExpression":"cron(0 5 ? * * *)","TargetBackupVaultName":{"$name":"vault"}}]},"BackupPlanId":"00000000-0000-0000-0000-000000000000"}`,
@@ -473,8 +473,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowUpdateBackupPlanNotF
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowDeleteBackupPlan(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "DeleteBackupPlan", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansDeleteBackupPlan(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "DeleteBackupPlan", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteBackupPlan",
 			Params: `{"BackupPlanId":{"$ref":"plan.id"}}`,
@@ -512,8 +512,8 @@ func (g *authoredBackupPlansScenarios) testBackupPlansShadowDeleteBackupPlan(ctx
 	})
 }
 
-func (g *authoredBackupPlansScenarios) testBackupPlansShadowDeleteBackupPlanNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupPlansShadow.RunTest(ctx, t, "DeleteBackupPlanNotFound", scenario.Test{
+func (g *authoredBackupPlansScenarios) testBackupPlansDeleteBackupPlanNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupPlans.RunTest(ctx, t, "DeleteBackupPlanNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteBackupPlan",
 			Params: `{"BackupPlanId":"00000000-0000-0000-0000-000000000000"}`,

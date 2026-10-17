@@ -23,22 +23,22 @@ func ScenariosAuthoredEcrRepositories(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-ecr-repositories",
 		Impls: map[string]harness.TestFn{
-			"ecr-repositories-shadow:CreateRepository":              g.testEcrRepositoriesShadowCreateRepository,
-			"ecr-repositories-shadow:DescribeRepositories":          g.testEcrRepositoriesShadowDescribeRepositories,
-			"ecr-repositories-shadow:DescribeRepositoriesAll":       g.testEcrRepositoriesShadowDescribeRepositoriesAll,
-			"ecr-repositories-shadow:DescribeRepositoriesPaginated": g.testEcrRepositoriesShadowDescribeRepositoriesPaginated,
-			"ecr-repositories-shadow:DescribeRepositoriesSigned":    g.testEcrRepositoriesShadowDescribeRepositoriesSigned,
-			"ecr-repositories-shadow:DescribeRepositoriesNotFound":  g.testEcrRepositoriesShadowDescribeRepositoriesNotFound,
-			"ecr-repositories-shadow:CreateRepositoryAlreadyExists": g.testEcrRepositoriesShadowCreateRepositoryAlreadyExists,
-			"ecr-repositories-shadow:DeleteRepository":              g.testEcrRepositoriesShadowDeleteRepository,
-			"ecr-repositories-shadow:DeleteRepositoryNotEmpty":      g.testEcrRepositoriesShadowDeleteRepositoryNotEmpty,
-			"ecr-repositories-shadow:DeleteRepositoryForce":         g.testEcrRepositoriesShadowDeleteRepositoryForce,
+			"ecr-repositories:CreateRepository":              g.testEcrRepositoriesCreateRepository,
+			"ecr-repositories:DescribeRepositories":          g.testEcrRepositoriesDescribeRepositories,
+			"ecr-repositories:DescribeRepositoriesAll":       g.testEcrRepositoriesDescribeRepositoriesAll,
+			"ecr-repositories:DescribeRepositoriesPaginated": g.testEcrRepositoriesDescribeRepositoriesPaginated,
+			"ecr-repositories:DescribeRepositoriesSigned":    g.testEcrRepositoriesDescribeRepositoriesSigned,
+			"ecr-repositories:DescribeRepositoriesNotFound":  g.testEcrRepositoriesDescribeRepositoriesNotFound,
+			"ecr-repositories:CreateRepositoryAlreadyExists": g.testEcrRepositoriesCreateRepositoryAlreadyExists,
+			"ecr-repositories:DeleteRepository":              g.testEcrRepositoriesDeleteRepository,
+			"ecr-repositories:DeleteRepositoryNotEmpty":      g.testEcrRepositoriesDeleteRepositoryNotEmpty,
+			"ecr-repositories:DeleteRepositoryForce":         g.testEcrRepositoriesDeleteRepositoryForce,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-repositories-shadow": g.setupEcrRepositoriesShadow,
+			"ecr-repositories": g.setupEcrRepositories,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-repositories-shadow": g.teardownEcrRepositoriesShadow,
+			"ecr-repositories": g.teardownEcrRepositories,
 		},
 	}
 }
@@ -58,10 +58,10 @@ func (g *authoredEcrRepositoriesScenarios) cl() *ecr.Client {
 	return g.client
 }
 
-var groupEcrRepositoriesShadow = scenario.Group{Name: "ecr-repositories-shadow", File: "compat/model/authored/ecr-repositories.json"}
+var groupEcrRepositories = scenario.Group{Name: "ecr-repositories", File: "compat/model/authored/ecr-repositories.json"}
 
-func (g *authoredEcrRepositoriesScenarios) setupEcrRepositoriesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunSetup(ctx, t,
+func (g *authoredEcrRepositoriesScenarios) setupEcrRepositories(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateRepository",
 			Params: `{"repositoryName":{"$name":"page1"}}`,
@@ -159,8 +159,8 @@ func (g *authoredEcrRepositoriesScenarios) setupEcrRepositoriesShadow(ctx contex
 	)
 }
 
-func (g *authoredEcrRepositoriesScenarios) teardownEcrRepositoriesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTeardown(ctx, t,
+func (g *authoredEcrRepositoriesScenarios) teardownEcrRepositories(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteRepository",
 			Params: `{"force":true,"repositoryName":{"$name":"force"}}`,
@@ -242,8 +242,8 @@ func (g *authoredEcrRepositoriesScenarios) teardownEcrRepositoriesShadow(ctx con
 	)
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowCreateRepository(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "CreateRepository", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesCreateRepository(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "CreateRepository", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateRepository",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -264,9 +264,9 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowCreateReposi
 				scenario.NonEmpty("$.repository.createdAt"),
 				scenario.Equals("$.repository.imageTagMutability", "MUTABLE"),
 				scenario.NonEmpty("$.repository.registryId"),
-				scenario.Matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-shadow-repo$"),
+				scenario.Matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-repo$"),
 				scenario.Equals("$.repository.repositoryName", scenario.Name("repo")),
-				scenario.Matches("$.repository.repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+				scenario.Matches("$.repository.repositoryUri", "/.+-ecr-repositories-repo$"),
 			),
 			scenario.Readback(
 				scenario.Call{
@@ -288,8 +288,8 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowCreateReposi
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepositories(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DescribeRepositories", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDescribeRepositories(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DescribeRepositories", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeRepositories",
 			Params: `{"repositoryNames":[{"$name":"repo"}]}`,
@@ -308,15 +308,15 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepo
 				scenario.NonEmpty("$.repositories[0].registryId"),
 				scenario.Equals("$.repositories[0].repositoryArn", scenario.Ref("repo.arn")),
 				scenario.Equals("$.repositories[0].repositoryName", scenario.Name("repo")),
-				scenario.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+				scenario.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$"),
 				scenario.Missing("$.repositories[1]"),
 			),
 		},
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepositoriesAll(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DescribeRepositoriesAll", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDescribeRepositoriesAll(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DescribeRepositoriesAll", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeRepositories",
 			Params: `{}`,
@@ -351,8 +351,8 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepo
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepositoriesPaginated(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DescribeRepositoriesPaginated", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDescribeRepositoriesPaginated(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DescribeRepositoriesPaginated", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeRepositories",
 			Params: `{"maxResults":1}`,
@@ -489,8 +489,8 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepo
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepositoriesSigned(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DescribeRepositoriesSigned", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDescribeRepositoriesSigned(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DescribeRepositoriesSigned", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeRepositories",
 			Params: `{"repositoryNames":[{"$name":"repo"}]}`,
@@ -509,14 +509,14 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepo
 				scenario.NonEmpty("$.repositories[0].registryId"),
 				scenario.Equals("$.repositories[0].repositoryArn", scenario.Ref("repo.arn")),
 				scenario.Equals("$.repositories[0].repositoryName", scenario.Name("repo")),
-				scenario.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+				scenario.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$"),
 			),
 		},
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepositoriesNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DescribeRepositoriesNotFound", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDescribeRepositoriesNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DescribeRepositoriesNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeRepositories",
 			Params: `{"repositoryNames":[{"$name":"absent"}]}`,
@@ -535,8 +535,8 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDescribeRepo
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowCreateRepositoryAlreadyExists(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "CreateRepositoryAlreadyExists", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesCreateRepositoryAlreadyExists(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "CreateRepositoryAlreadyExists", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateRepository",
 			Params: `{"repositoryName":{"$name":"repo"}}`,
@@ -555,8 +555,8 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowCreateReposi
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDeleteRepository(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DeleteRepository", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDeleteRepository(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DeleteRepository", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRepository",
 			Params: `{"repositoryName":{"$name":"del"}}`,
@@ -592,8 +592,8 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDeleteReposi
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDeleteRepositoryNotEmpty(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DeleteRepositoryNotEmpty", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDeleteRepositoryNotEmpty(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DeleteRepositoryNotEmpty", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRepository",
 			Params: `{"repositoryName":{"$name":"nonempty"}}`,
@@ -627,8 +627,8 @@ func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDeleteReposi
 	})
 }
 
-func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesShadowDeleteRepositoryForce(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrRepositoriesShadow.RunTest(ctx, t, "DeleteRepositoryForce", scenario.Test{
+func (g *authoredEcrRepositoriesScenarios) testEcrRepositoriesDeleteRepositoryForce(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrRepositories.RunTest(ctx, t, "DeleteRepositoryForce", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteRepository",
 			Params: `{"force":true,"repositoryName":{"$name":"force"}}`,

@@ -136,18 +136,6 @@
     },
     {
       "suite": "dotnet-sdk",
-      "service": "backup",
-      "group": "backup-plans",
-      "tests": 10
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "backup",
-      "group": "backup-vaults",
-      "tests": 10
-    },
-    {
-      "suite": "dotnet-sdk",
       "service": "cloudformation",
       "group": "cloudformation-eks-refs",
       "tests": 6
@@ -241,18 +229,6 @@
       "service": "ec2",
       "group": "ec2-vpc",
       "tests": 15
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "ecr",
-      "group": "ecr-images",
-      "tests": 7
-    },
-    {
-      "suite": "dotnet-sdk",
-      "service": "ecr",
-      "group": "ecr-repositories",
-      "tests": 10
     },
     {
       "suite": "dotnet-sdk",
@@ -514,30 +490,6 @@
     },
     {
       "suite": "go-sdk",
-      "service": "backup",
-      "group": "backup-plans",
-      "tests": 10
-    },
-    {
-      "suite": "go-sdk",
-      "service": "backup",
-      "group": "backup-vaults",
-      "tests": 10
-    },
-    {
-      "suite": "go-sdk",
-      "service": "ecr",
-      "group": "ecr-images",
-      "tests": 7
-    },
-    {
-      "suite": "go-sdk",
-      "service": "ecr",
-      "group": "ecr-repositories",
-      "tests": 10
-    },
-    {
-      "suite": "go-sdk",
       "service": "eks",
       "group": "eks-addons",
       "tests": 8
@@ -649,30 +601,6 @@
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
-    },
-    {
-      "suite": "java-sdk",
-      "service": "backup",
-      "group": "backup-plans",
-      "tests": 10
-    },
-    {
-      "suite": "java-sdk",
-      "service": "backup",
-      "group": "backup-vaults",
-      "tests": 10
-    },
-    {
-      "suite": "java-sdk",
-      "service": "ecr",
-      "group": "ecr-images",
-      "tests": 7
-    },
-    {
-      "suite": "java-sdk",
-      "service": "ecr",
-      "group": "ecr-repositories",
-      "tests": 10
     },
     {
       "suite": "java-sdk",
@@ -802,30 +730,6 @@
     },
     {
       "suite": "node-js-sdk",
-      "service": "backup",
-      "group": "backup-plans",
-      "tests": 10
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "backup",
-      "group": "backup-vaults",
-      "tests": 10
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "ecr",
-      "group": "ecr-images",
-      "tests": 7
-    },
-    {
-      "suite": "node-js-sdk",
-      "service": "ecr",
-      "group": "ecr-repositories",
-      "tests": 10
-    },
-    {
-      "suite": "node-js-sdk",
       "service": "eks",
       "group": "eks-addons",
       "tests": 8
@@ -937,30 +841,6 @@
       "service": "backup",
       "group": "backup-jobs",
       "tests": 4
-    },
-    {
-      "suite": "python-sdk",
-      "service": "backup",
-      "group": "backup-plans",
-      "tests": 10
-    },
-    {
-      "suite": "python-sdk",
-      "service": "backup",
-      "group": "backup-vaults",
-      "tests": 10
-    },
-    {
-      "suite": "python-sdk",
-      "service": "ecr",
-      "group": "ecr-images",
-      "tests": 7
-    },
-    {
-      "suite": "python-sdk",
-      "service": "ecr",
-      "group": "ecr-repositories",
-      "tests": 10
     },
     {
       "suite": "python-sdk",
@@ -1162,18 +1042,6 @@
     },
     {
       "suite": "rust-sdk",
-      "service": "backup",
-      "group": "backup-plans",
-      "tests": 10
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "backup",
-      "group": "backup-vaults",
-      "tests": 10
-    },
-    {
-      "suite": "rust-sdk",
       "service": "cloudformation",
       "group": "cloudformation-eks-refs",
       "tests": 6
@@ -1267,18 +1135,6 @@
       "service": "ec2",
       "group": "ec2-vpc",
       "tests": 15
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "ecr",
-      "group": "ecr-images",
-      "tests": 7
-    },
-    {
-      "suite": "rust-sdk",
-      "service": "ecr",
-      "group": "ecr-repositories",
-      "tests": 10
     },
     {
       "suite": "rust-sdk",

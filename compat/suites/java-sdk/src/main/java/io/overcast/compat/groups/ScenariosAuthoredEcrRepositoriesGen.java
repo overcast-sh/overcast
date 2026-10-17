@@ -30,8 +30,8 @@ import software.amazon.awssdk.services.ecr.model.PutImageRequest;
  */
 public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
 
-    private static final Group GROUP_ECR_REPOSITORIES_SHADOW =
-            new Group("ecr-repositories-shadow", "compat/model/authored/ecr-repositories.json");
+    private static final Group GROUP_ECR_REPOSITORIES =
+            new Group("ecr-repositories", "compat/model/authored/ecr-repositories.json");
 
     private final AwsClients clients;
     private volatile EcrClient client;
@@ -48,28 +48,28 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("ecr-repositories-shadow:CreateRepository", this::testEcrRepositoriesShadowCreateRepository),
-                Map.entry("ecr-repositories-shadow:DescribeRepositories", this::testEcrRepositoriesShadowDescribeRepositories),
-                Map.entry("ecr-repositories-shadow:DescribeRepositoriesAll", this::testEcrRepositoriesShadowDescribeRepositoriesAll),
-                Map.entry("ecr-repositories-shadow:DescribeRepositoriesPaginated", this::testEcrRepositoriesShadowDescribeRepositoriesPaginated),
-                Map.entry("ecr-repositories-shadow:DescribeRepositoriesSigned", this::testEcrRepositoriesShadowDescribeRepositoriesSigned),
-                Map.entry("ecr-repositories-shadow:DescribeRepositoriesNotFound", this::testEcrRepositoriesShadowDescribeRepositoriesNotFound),
-                Map.entry("ecr-repositories-shadow:CreateRepositoryAlreadyExists", this::testEcrRepositoriesShadowCreateRepositoryAlreadyExists),
-                Map.entry("ecr-repositories-shadow:DeleteRepository", this::testEcrRepositoriesShadowDeleteRepository),
-                Map.entry("ecr-repositories-shadow:DeleteRepositoryNotEmpty", this::testEcrRepositoriesShadowDeleteRepositoryNotEmpty),
-                Map.entry("ecr-repositories-shadow:DeleteRepositoryForce", this::testEcrRepositoriesShadowDeleteRepositoryForce));
+                Map.entry("ecr-repositories:CreateRepository", this::testEcrRepositoriesCreateRepository),
+                Map.entry("ecr-repositories:DescribeRepositories", this::testEcrRepositoriesDescribeRepositories),
+                Map.entry("ecr-repositories:DescribeRepositoriesAll", this::testEcrRepositoriesDescribeRepositoriesAll),
+                Map.entry("ecr-repositories:DescribeRepositoriesPaginated", this::testEcrRepositoriesDescribeRepositoriesPaginated),
+                Map.entry("ecr-repositories:DescribeRepositoriesSigned", this::testEcrRepositoriesDescribeRepositoriesSigned),
+                Map.entry("ecr-repositories:DescribeRepositoriesNotFound", this::testEcrRepositoriesDescribeRepositoriesNotFound),
+                Map.entry("ecr-repositories:CreateRepositoryAlreadyExists", this::testEcrRepositoriesCreateRepositoryAlreadyExists),
+                Map.entry("ecr-repositories:DeleteRepository", this::testEcrRepositoriesDeleteRepository),
+                Map.entry("ecr-repositories:DeleteRepositoryNotEmpty", this::testEcrRepositoriesDeleteRepositoryNotEmpty),
+                Map.entry("ecr-repositories:DeleteRepositoryForce", this::testEcrRepositoriesDeleteRepositoryForce));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("ecr-repositories-shadow", this::setupEcrRepositoriesShadow));
+                Map.entry("ecr-repositories", this::setupEcrRepositories));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("ecr-repositories-shadow", this::teardownEcrRepositoriesShadow));
+                Map.entry("ecr-repositories", this::teardownEcrRepositories));
     }
 
     /**
@@ -89,8 +89,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
         return client;
     }
 
-    private void setupEcrRepositoriesShadow(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runSetup(t,
+    private void setupEcrRepositories(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runSetup(t,
                 new Call("CreateRepository", "{\"repositoryName\":{\"$name\":\"page1\"}}",
                         b -> CreateRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("page1")))
@@ -134,8 +134,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                         r -> cl().putImage((PutImageRequest) r)));
     }
 
-    private void teardownEcrRepositoriesShadow(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTeardown(t,
+    private void teardownEcrRepositories(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTeardown(t,
                 new Call("DeleteRepository", "{\"force\":true,\"repositoryName\":{\"$name\":\"force\"}}",
                         b -> DeleteRepositoryRequest.builder()
                                 .force(true)
@@ -174,8 +174,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                         r -> cl().deleteRepository((DeleteRepositoryRequest) r)));
     }
 
-    private void testEcrRepositoriesShadowCreateRepository(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "CreateRepository",
+    private void testEcrRepositoriesCreateRepository(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "CreateRepository",
                 new Call("CreateRepository", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> CreateRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -187,9 +187,9 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                                 Check.nonEmpty("$.repository.createdAt"),
                                 Check.equalTo("$.repository.imageTagMutability", "MUTABLE"),
                                 Check.nonEmpty("$.repository.registryId"),
-                                Check.matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-shadow-repo$"),
+                                Check.matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-repo$"),
                                 Check.equalTo("$.repository.repositoryName", Values.name("repo")),
-                                Check.matches("$.repository.repositoryUri", "/.+-ecr-repositories-shadow-repo$")
+                                Check.matches("$.repository.repositoryUri", "/.+-ecr-repositories-repo$")
                         ),
                         Clause.readback(
                                 new Call("DescribeRepositories", "{\"repositoryNames\":[{\"$name\":\"repo\"}]}",
@@ -203,8 +203,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRepositoriesShadowDescribeRepositories(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DescribeRepositories",
+    private void testEcrRepositoriesDescribeRepositories(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DescribeRepositories",
                 new Call("DescribeRepositories", "{\"repositoryNames\":[{\"$name\":\"repo\"}]}",
                         b -> DescribeRepositoriesRequest.builder()
                                 .repositoryNames(List.of(b.string("repositoryNames", Values.name("repo"))))
@@ -216,14 +216,14 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                                 Check.nonEmpty("$.repositories[0].registryId"),
                                 Check.equalTo("$.repositories[0].repositoryArn", Values.ref("repo.arn")),
                                 Check.equalTo("$.repositories[0].repositoryName", Values.name("repo")),
-                                Check.matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+                                Check.matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$"),
                                 Check.missing("$.repositories[1]")
                         )
                 ));
     }
 
-    private void testEcrRepositoriesShadowDescribeRepositoriesAll(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DescribeRepositoriesAll",
+    private void testEcrRepositoriesDescribeRepositoriesAll(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DescribeRepositoriesAll",
                 new Call("DescribeRepositories", "{}",
                         b -> DescribeRepositoriesRequest.builder()
                                 .build(),
@@ -250,8 +250,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRepositoriesShadowDescribeRepositoriesPaginated(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DescribeRepositoriesPaginated",
+    private void testEcrRepositoriesDescribeRepositoriesPaginated(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DescribeRepositoriesPaginated",
                 new Call("DescribeRepositories", "{\"maxResults\":1}",
                         b -> DescribeRepositoriesRequest.builder()
                                 .maxResults(1)
@@ -314,8 +314,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRepositoriesShadowDescribeRepositoriesSigned(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DescribeRepositoriesSigned",
+    private void testEcrRepositoriesDescribeRepositoriesSigned(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DescribeRepositoriesSigned",
                 new Call("DescribeRepositories", "{\"repositoryNames\":[{\"$name\":\"repo\"}]}",
                         b -> DescribeRepositoriesRequest.builder()
                                 .repositoryNames(List.of(b.string("repositoryNames", Values.name("repo"))))
@@ -327,13 +327,13 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                                 Check.nonEmpty("$.repositories[0].registryId"),
                                 Check.equalTo("$.repositories[0].repositoryArn", Values.ref("repo.arn")),
                                 Check.equalTo("$.repositories[0].repositoryName", Values.name("repo")),
-                                Check.matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$")
+                                Check.matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$")
                         )
                 ));
     }
 
-    private void testEcrRepositoriesShadowDescribeRepositoriesNotFound(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DescribeRepositoriesNotFound",
+    private void testEcrRepositoriesDescribeRepositoriesNotFound(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DescribeRepositoriesNotFound",
                 new Call("DescribeRepositories", "{\"repositoryNames\":[{\"$name\":\"absent\"}]}",
                         b -> DescribeRepositoriesRequest.builder()
                                 .repositoryNames(List.of(b.string("repositoryNames", Values.name("absent"))))
@@ -344,8 +344,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRepositoriesShadowCreateRepositoryAlreadyExists(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "CreateRepositoryAlreadyExists",
+    private void testEcrRepositoriesCreateRepositoryAlreadyExists(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "CreateRepositoryAlreadyExists",
                 new Call("CreateRepository", "{\"repositoryName\":{\"$name\":\"repo\"}}",
                         b -> CreateRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("repo")))
@@ -356,8 +356,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRepositoriesShadowDeleteRepository(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DeleteRepository",
+    private void testEcrRepositoriesDeleteRepository(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DeleteRepository",
                 new Call("DeleteRepository", "{\"repositoryName\":{\"$name\":\"del\"}}",
                         b -> DeleteRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("del")))
@@ -377,8 +377,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRepositoriesShadowDeleteRepositoryNotEmpty(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DeleteRepositoryNotEmpty",
+    private void testEcrRepositoriesDeleteRepositoryNotEmpty(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DeleteRepositoryNotEmpty",
                 new Call("DeleteRepository", "{\"repositoryName\":{\"$name\":\"nonempty\"}}",
                         b -> DeleteRepositoryRequest.builder()
                                 .repositoryName(b.string("repositoryName", Values.name("nonempty")))
@@ -397,8 +397,8 @@ public final class ScenariosAuthoredEcrRepositoriesGen implements ServiceGroup {
                 ));
     }
 
-    private void testEcrRepositoriesShadowDeleteRepositoryForce(TestContext t) {
-        GROUP_ECR_REPOSITORIES_SHADOW.runTest(t, "DeleteRepositoryForce",
+    private void testEcrRepositoriesDeleteRepositoryForce(TestContext t) {
+        GROUP_ECR_REPOSITORIES.runTest(t, "DeleteRepositoryForce",
                 new Call("DeleteRepository", "{\"force\":true,\"repositoryName\":{\"$name\":\"force\"}}",
                         b -> DeleteRepositoryRequest.builder()
                                 .force(true)

@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/backup-vaults.json";
 
-const GROUP_BACKUP_VAULTS_SHADOW: Group = Group {
-    name: "backup-vaults-shadow",
+const GROUP_BACKUP_VAULTS: Group = Group {
+    name: "backup-vaults",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:CreateBackupVault".to_string(),
+                "backup-vaults:CreateBackupVault".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "CreateBackupVault", test_backup_vaults_shadow_create_backup_vault(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "CreateBackupVault", test_backup_vaults_create_backup_vault(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:DescribeBackupVault".to_string(),
+                "backup-vaults:DescribeBackupVault".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "DescribeBackupVault", test_backup_vaults_shadow_describe_backup_vault(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "DescribeBackupVault", test_backup_vaults_describe_backup_vault(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:ListBackupVaults".to_string(),
+                "backup-vaults:ListBackupVaults".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "ListBackupVaults", test_backup_vaults_shadow_list_backup_vaults(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "ListBackupVaults", test_backup_vaults_list_backup_vaults(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:ListBackupVaultsPaginated".to_string(),
+                "backup-vaults:ListBackupVaultsPaginated".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "ListBackupVaultsPaginated", test_backup_vaults_shadow_list_backup_vaults_paginated(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "ListBackupVaultsPaginated", test_backup_vaults_list_backup_vaults_paginated(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:ListBackupVaultsByShared".to_string(),
+                "backup-vaults:ListBackupVaultsByShared".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "ListBackupVaultsByShared", test_backup_vaults_shadow_list_backup_vaults_by_shared(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "ListBackupVaultsByShared", test_backup_vaults_list_backup_vaults_by_shared(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:DescribeBackupVaultNotFound".to_string(),
+                "backup-vaults:DescribeBackupVaultNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "DescribeBackupVaultNotFound", test_backup_vaults_shadow_describe_backup_vault_not_found(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "DescribeBackupVaultNotFound", test_backup_vaults_describe_backup_vault_not_found(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:CreateBackupVaultAlreadyExists".to_string(),
+                "backup-vaults:CreateBackupVaultAlreadyExists".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "CreateBackupVaultAlreadyExists", test_backup_vaults_shadow_create_backup_vault_already_exists(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "CreateBackupVaultAlreadyExists", test_backup_vaults_create_backup_vault_already_exists(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:CreateBackupVaultInvalidName".to_string(),
+                "backup-vaults:CreateBackupVaultInvalidName".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "CreateBackupVaultInvalidName", test_backup_vaults_shadow_create_backup_vault_invalid_name(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "CreateBackupVaultInvalidName", test_backup_vaults_create_backup_vault_invalid_name(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:DeleteBackupVault".to_string(),
+                "backup-vaults:DeleteBackupVault".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "DeleteBackupVault", test_backup_vaults_shadow_delete_backup_vault(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "DeleteBackupVault", test_backup_vaults_delete_backup_vault(&client))
                             .await
                     })
                 }),
@@ -177,12 +177,12 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-vaults-shadow:DeleteBackupVaultNotFound".to_string(),
+                "backup-vaults:DeleteBackupVaultNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW
-                            .run_test(&ctx, "DeleteBackupVaultNotFound", test_backup_vaults_shadow_delete_backup_vault_not_found(&client))
+                        GROUP_BACKUP_VAULTS
+                            .run_test(&ctx, "DeleteBackupVaultNotFound", test_backup_vaults_delete_backup_vault_not_found(&client))
                             .await
                     })
                 }),
@@ -196,11 +196,11 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             setups.insert(
-                "backup-vaults-shadow".to_string(),
+                "backup-vaults".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW.run_setup(&ctx, setup_backup_vaults_shadow(&client)).await
+                        GROUP_BACKUP_VAULTS.run_setup(&ctx, setup_backup_vaults(&client)).await
                     })
                 }),
             );
@@ -213,11 +213,11 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "backup-vaults-shadow".to_string(),
+                "backup-vaults".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_VAULTS_SHADOW.run_teardown(&ctx, teardown_backup_vaults_shadow(&client)).await
+                        GROUP_BACKUP_VAULTS.run_teardown(&ctx, teardown_backup_vaults(&client)).await
                     })
                 }),
             );
@@ -226,7 +226,7 @@ impl ServiceGroup for ScenariosAuthoredBackupVaults {
     }
 }
 
-fn setup_backup_vaults_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn setup_backup_vaults(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateBackupVault",
@@ -253,7 +253,7 @@ fn setup_backup_vaults_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_backup_vaults_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn teardown_backup_vaults(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteBackupVault",
@@ -302,7 +302,7 @@ fn teardown_backup_vaults_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
     ]
 }
 
-fn test_backup_vaults_shadow_create_backup_vault(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_create_backup_vault(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "CreateBackupVault",
@@ -339,7 +339,7 @@ fn test_backup_vaults_shadow_create_backup_vault(client: &aws_sdk_backup::Client
     }
 }
 
-fn test_backup_vaults_shadow_describe_backup_vault(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_describe_backup_vault(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeBackupVault",
@@ -379,7 +379,7 @@ fn test_backup_vaults_shadow_describe_backup_vault(client: &aws_sdk_backup::Clie
     }
 }
 
-fn test_backup_vaults_shadow_list_backup_vaults(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_list_backup_vaults(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "ListBackupVaults",
@@ -412,7 +412,7 @@ fn test_backup_vaults_shadow_list_backup_vaults(client: &aws_sdk_backup::Client)
     }
 }
 
-fn test_backup_vaults_shadow_list_backup_vaults_paginated(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_list_backup_vaults_paginated(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "ListBackupVaults",
@@ -560,7 +560,7 @@ fn test_backup_vaults_shadow_list_backup_vaults_paginated(client: &aws_sdk_backu
     }
 }
 
-fn test_backup_vaults_shadow_list_backup_vaults_by_shared(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_list_backup_vaults_by_shared(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "ListBackupVaults",
@@ -616,7 +616,7 @@ fn test_backup_vaults_shadow_list_backup_vaults_by_shared(client: &aws_sdk_backu
     }
 }
 
-fn test_backup_vaults_shadow_describe_backup_vault_not_found(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_describe_backup_vault_not_found(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeBackupVault",
@@ -646,7 +646,7 @@ fn test_backup_vaults_shadow_describe_backup_vault_not_found(client: &aws_sdk_ba
     }
 }
 
-fn test_backup_vaults_shadow_create_backup_vault_already_exists(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_create_backup_vault_already_exists(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "CreateBackupVault",
@@ -676,7 +676,7 @@ fn test_backup_vaults_shadow_create_backup_vault_already_exists(client: &aws_sdk
     }
 }
 
-fn test_backup_vaults_shadow_create_backup_vault_invalid_name(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_create_backup_vault_invalid_name(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "CreateBackupVault",
@@ -704,7 +704,7 @@ fn test_backup_vaults_shadow_create_backup_vault_invalid_name(client: &aws_sdk_b
     }
 }
 
-fn test_backup_vaults_shadow_delete_backup_vault(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_delete_backup_vault(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteBackupVault",
@@ -758,7 +758,7 @@ fn test_backup_vaults_shadow_delete_backup_vault(client: &aws_sdk_backup::Client
     }
 }
 
-fn test_backup_vaults_shadow_delete_backup_vault_not_found(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_vaults_delete_backup_vault_not_found(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteBackupVault",

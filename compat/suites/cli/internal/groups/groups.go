@@ -43,7 +43,6 @@ func All() []ServiceGroup {
 		CloudFormation().named("cloudformation"),
 		EC2().named("ec2"),
 		ECS().named("ecs"),
-		ECR().named("ecr"),
 		Cognito().named("cognito"),
 		AppSync().named("appsync"),
 		APIGateway().named("apigateway"),
