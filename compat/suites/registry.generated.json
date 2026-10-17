@@ -869,6 +869,131 @@
       ]
     },
     {
+      "service": "ecr",
+      "name": "ecr-images-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/ecr-images.json",
+      "state": "candidate",
+      "shadowOf": "ecr-images",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "PutImage"
+        },
+        {
+          "name": "ListImages",
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "name": "ListImagesPaginated",
+          "op": "ListImages"
+        },
+        {
+          "name": "DescribeImages",
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "name": "BatchGetImage",
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "name": "BatchDeleteImage",
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "name": "DescribeImagesNotFound",
+          "op": "DescribeImages"
+        }
+      ]
+    },
+    {
+      "service": "ecr",
+      "name": "ecr-repositories-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/ecr-repositories.json",
+      "state": "candidate",
+      "shadowOf": "ecr-repositories",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateRepository"
+        },
+        {
+          "name": "DescribeRepositories",
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "name": "DescribeRepositoriesAll",
+          "op": "DescribeRepositories",
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "name": "DescribeRepositoriesPaginated",
+          "op": "DescribeRepositories",
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "name": "DescribeRepositoriesSigned",
+          "op": "DescribeRepositories",
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "name": "DescribeRepositoriesNotFound",
+          "op": "DescribeRepositories"
+        },
+        {
+          "name": "CreateRepositoryAlreadyExists",
+          "op": "CreateRepository",
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "name": "DeleteRepository"
+        },
+        {
+          "name": "DeleteRepositoryNotEmpty",
+          "op": "DeleteRepository"
+        },
+        {
+          "name": "DeleteRepositoryForce",
+          "op": "DeleteRepository"
+        }
+      ]
+    },
+    {
       "service": "elastic-load-balancing",
       "name": "elastic-load-balancing-gen-loadbalancer",
       "generated": true,

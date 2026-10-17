@@ -41,11 +41,17 @@ mod scenarios_authored_backup_tags_gen;
 #[path = "scenarios_authored_cognito_userpools_gen.rs"]
 mod scenarios_authored_cognito_userpools_gen;
 
+#[path = "scenarios_authored_ecr_images_gen.rs"]
+mod scenarios_authored_ecr_images_gen;
+
 #[path = "scenarios_authored_ecr_policies_gen.rs"]
 mod scenarios_authored_ecr_policies_gen;
 
 #[path = "scenarios_authored_ecr_registry_gen.rs"]
 mod scenarios_authored_ecr_registry_gen;
+
+#[path = "scenarios_authored_ecr_repositories_gen.rs"]
+mod scenarios_authored_ecr_repositories_gen;
 
 #[path = "scenarios_authored_ecr_tags_gen.rs"]
 mod scenarios_authored_ecr_tags_gen;
@@ -138,8 +144,10 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_backup_selections_gen::ScenariosAuthoredBackupSelections::new(clients)),
         Box::new(scenarios_authored_backup_tags_gen::ScenariosAuthoredBackupTags::new(clients)),
         Box::new(scenarios_authored_cognito_userpools_gen::ScenariosAuthoredCognitoUserpools::new(clients)),
+        Box::new(scenarios_authored_ecr_images_gen::ScenariosAuthoredEcrImages::new(clients)),
         Box::new(scenarios_authored_ecr_policies_gen::ScenariosAuthoredEcrPolicies::new(clients)),
         Box::new(scenarios_authored_ecr_registry_gen::ScenariosAuthoredEcrRegistry::new(clients)),
+        Box::new(scenarios_authored_ecr_repositories_gen::ScenariosAuthoredEcrRepositories::new(clients)),
         Box::new(scenarios_authored_ecr_tags_gen::ScenariosAuthoredEcrTags::new(clients)),
         Box::new(scenarios_authored_eventbridge_buses_gen::ScenariosAuthoredEventbridgeBuses::new(clients)),
         Box::new(scenarios_authored_eventbridge_events_gen::ScenariosAuthoredEventbridgeEvents::new(clients)),
