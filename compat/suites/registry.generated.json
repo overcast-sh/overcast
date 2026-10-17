@@ -107,6 +107,19 @@
       ]
     },
     {
+      "group": "backup-plans",
+      "scenario": "compat/model/authored/backup-plans.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "backup-selections",
       "scenario": "compat/model/authored/backup-selections.json",
       "suites": [
@@ -133,8 +146,34 @@
       ]
     },
     {
+      "group": "backup-vaults",
+      "scenario": "compat/model/authored/backup-vaults.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "cognito-userpools",
       "scenario": "compat/model/authored/cognito-userpools.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "ecr-images",
+      "scenario": "compat/model/authored/ecr-images.json",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -161,6 +200,19 @@
     {
       "group": "ecr-registry",
       "scenario": "compat/model/authored/ecr-registry.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "ecr-repositories",
+      "scenario": "compat/model/authored/ecr-repositories.json",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -394,151 +446,6 @@
     }
   ],
   "groups": [
-    {
-      "service": "backup",
-      "name": "backup-plans-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/backup-plans.json",
-      "state": "candidate",
-      "shadowOf": "backup-plans",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateBackupPlan"
-        },
-        {
-          "name": "GetBackupPlan",
-          "depends": [
-            "CreateBackupPlan"
-          ]
-        },
-        {
-          "name": "ListBackupPlans",
-          "depends": [
-            "CreateBackupPlan"
-          ]
-        },
-        {
-          "name": "ListBackupPlansPaginated",
-          "op": "ListBackupPlans",
-          "depends": [
-            "CreateBackupPlan"
-          ]
-        },
-        {
-          "name": "UpdateBackupPlan",
-          "depends": [
-            "CreateBackupPlan"
-          ]
-        },
-        {
-          "name": "GetBackupPlanNotFound",
-          "op": "GetBackupPlan"
-        },
-        {
-          "name": "GetBackupPlanVersionNotFound",
-          "op": "GetBackupPlan",
-          "depends": [
-            "CreateBackupPlan"
-          ]
-        },
-        {
-          "name": "UpdateBackupPlanNotFound",
-          "op": "UpdateBackupPlan"
-        },
-        {
-          "name": "DeleteBackupPlan",
-          "depends": [
-            "CreateBackupPlan"
-          ]
-        },
-        {
-          "name": "DeleteBackupPlanNotFound",
-          "op": "DeleteBackupPlan"
-        }
-      ]
-    },
-    {
-      "service": "backup",
-      "name": "backup-vaults-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/backup-vaults.json",
-      "state": "candidate",
-      "shadowOf": "backup-vaults",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateBackupVault"
-        },
-        {
-          "name": "DescribeBackupVault",
-          "depends": [
-            "CreateBackupVault"
-          ]
-        },
-        {
-          "name": "ListBackupVaults",
-          "depends": [
-            "CreateBackupVault"
-          ]
-        },
-        {
-          "name": "ListBackupVaultsPaginated",
-          "op": "ListBackupVaults",
-          "depends": [
-            "CreateBackupVault"
-          ]
-        },
-        {
-          "name": "ListBackupVaultsByShared",
-          "op": "ListBackupVaults",
-          "depends": [
-            "CreateBackupVault"
-          ]
-        },
-        {
-          "name": "DescribeBackupVaultNotFound",
-          "op": "DescribeBackupVault"
-        },
-        {
-          "name": "CreateBackupVaultAlreadyExists",
-          "op": "CreateBackupVault",
-          "depends": [
-            "CreateBackupVault"
-          ]
-        },
-        {
-          "name": "CreateBackupVaultInvalidName",
-          "op": "CreateBackupVault"
-        },
-        {
-          "name": "DeleteBackupVault",
-          "depends": [
-            "CreateBackupVault"
-          ]
-        },
-        {
-          "name": "DeleteBackupVaultNotFound",
-          "op": "DeleteBackupVault"
-        }
-      ]
-    },
     {
       "service": "batch",
       "name": "batch-gen-computeenvironment",
@@ -879,131 +786,6 @@
           "depends": [
             "CreateSchedulingPolicy"
           ]
-        }
-      ]
-    },
-    {
-      "service": "ecr",
-      "name": "ecr-images-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/ecr-images.json",
-      "state": "candidate",
-      "shadowOf": "ecr-images",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "PutImage"
-        },
-        {
-          "name": "ListImages",
-          "depends": [
-            "PutImage"
-          ]
-        },
-        {
-          "name": "ListImagesPaginated",
-          "op": "ListImages"
-        },
-        {
-          "name": "DescribeImages",
-          "depends": [
-            "PutImage"
-          ]
-        },
-        {
-          "name": "BatchGetImage",
-          "depends": [
-            "PutImage"
-          ]
-        },
-        {
-          "name": "BatchDeleteImage",
-          "depends": [
-            "PutImage"
-          ]
-        },
-        {
-          "name": "DescribeImagesNotFound",
-          "op": "DescribeImages"
-        }
-      ]
-    },
-    {
-      "service": "ecr",
-      "name": "ecr-repositories-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/ecr-repositories.json",
-      "state": "candidate",
-      "shadowOf": "ecr-repositories",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateRepository"
-        },
-        {
-          "name": "DescribeRepositories",
-          "depends": [
-            "CreateRepository"
-          ]
-        },
-        {
-          "name": "DescribeRepositoriesAll",
-          "op": "DescribeRepositories",
-          "depends": [
-            "CreateRepository"
-          ]
-        },
-        {
-          "name": "DescribeRepositoriesPaginated",
-          "op": "DescribeRepositories",
-          "depends": [
-            "CreateRepository"
-          ]
-        },
-        {
-          "name": "DescribeRepositoriesSigned",
-          "op": "DescribeRepositories",
-          "depends": [
-            "CreateRepository"
-          ]
-        },
-        {
-          "name": "DescribeRepositoriesNotFound",
-          "op": "DescribeRepositories"
-        },
-        {
-          "name": "CreateRepositoryAlreadyExists",
-          "op": "CreateRepository",
-          "depends": [
-            "CreateRepository"
-          ]
-        },
-        {
-          "name": "DeleteRepository"
-        },
-        {
-          "name": "DeleteRepositoryNotEmpty",
-          "op": "DeleteRepository"
-        },
-        {
-          "name": "DeleteRepositoryForce",
-          "op": "DeleteRepository"
         }
       ]
     },

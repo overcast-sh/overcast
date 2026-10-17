@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEcrImagesShadow = new("ecr-images-shadow", "compat/model/authored/ecr-images.json");
+    private static readonly ScenarioGroup GroupEcrImages = new("ecr-images", "compat/model/authored/ecr-images.json");
 
     private readonly Lazy<AmazonECRClient> _client;
 
@@ -35,29 +35,29 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["ecr-images-shadow:PutImage"] = TestEcrImagesShadowPutImage,
-        ["ecr-images-shadow:ListImages"] = TestEcrImagesShadowListImages,
-        ["ecr-images-shadow:ListImagesPaginated"] = TestEcrImagesShadowListImagesPaginated,
-        ["ecr-images-shadow:DescribeImages"] = TestEcrImagesShadowDescribeImages,
-        ["ecr-images-shadow:BatchGetImage"] = TestEcrImagesShadowBatchGetImage,
-        ["ecr-images-shadow:BatchDeleteImage"] = TestEcrImagesShadowBatchDeleteImage,
-        ["ecr-images-shadow:DescribeImagesNotFound"] = TestEcrImagesShadowDescribeImagesNotFound,
+        ["ecr-images:PutImage"] = TestEcrImagesPutImage,
+        ["ecr-images:ListImages"] = TestEcrImagesListImages,
+        ["ecr-images:ListImagesPaginated"] = TestEcrImagesListImagesPaginated,
+        ["ecr-images:DescribeImages"] = TestEcrImagesDescribeImages,
+        ["ecr-images:BatchGetImage"] = TestEcrImagesBatchGetImage,
+        ["ecr-images:BatchDeleteImage"] = TestEcrImagesBatchDeleteImage,
+        ["ecr-images:DescribeImagesNotFound"] = TestEcrImagesDescribeImagesNotFound,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-images-shadow"] = SetupEcrImagesShadow,
+        ["ecr-images"] = SetupEcrImages,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-images-shadow"] = TeardownEcrImagesShadow,
+        ["ecr-images"] = TeardownEcrImages,
     };
 
     private AmazonECRClient Cl() => _client.Value;
 
-    private Task SetupEcrImagesShadow(TestContext t) =>
-        GroupEcrImagesShadow.RunSetupAsync(t,
+    private Task SetupEcrImages(TestContext t) =>
+        GroupEcrImages.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateRepository",
@@ -146,8 +146,8 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
             }
         );
 
-    private Task TeardownEcrImagesShadow(TestContext t) =>
-        GroupEcrImagesShadow.RunTeardownAsync(t,
+    private Task TeardownEcrImages(TestContext t) =>
+        GroupEcrImages.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteRepository",
@@ -178,7 +178,7 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
             }
         );
 
-    private Task TestEcrImagesShadowPutImage(TestContext t) => GroupEcrImagesShadow.RunTestAsync(t, "PutImage", new ScenarioTest
+    private Task TestEcrImagesPutImage(TestContext t) => GroupEcrImages.RunTestAsync(t, "PutImage", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -225,7 +225,7 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
         ],
     });
 
-    private Task TestEcrImagesShadowListImages(TestContext t) => GroupEcrImagesShadow.RunTestAsync(t, "ListImages", new ScenarioTest
+    private Task TestEcrImagesListImages(TestContext t) => GroupEcrImages.RunTestAsync(t, "ListImages", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -251,7 +251,7 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
         ],
     });
 
-    private Task TestEcrImagesShadowListImagesPaginated(TestContext t) => GroupEcrImagesShadow.RunTestAsync(t, "ListImagesPaginated", new ScenarioTest
+    private Task TestEcrImagesListImagesPaginated(TestContext t) => GroupEcrImages.RunTestAsync(t, "ListImagesPaginated", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -376,7 +376,7 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
         ],
     });
 
-    private Task TestEcrImagesShadowDescribeImages(TestContext t) => GroupEcrImagesShadow.RunTestAsync(t, "DescribeImages", new ScenarioTest
+    private Task TestEcrImagesDescribeImages(TestContext t) => GroupEcrImages.RunTestAsync(t, "DescribeImages", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -407,7 +407,7 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
         ],
     });
 
-    private Task TestEcrImagesShadowBatchGetImage(TestContext t) => GroupEcrImagesShadow.RunTestAsync(t, "BatchGetImage", new ScenarioTest
+    private Task TestEcrImagesBatchGetImage(TestContext t) => GroupEcrImages.RunTestAsync(t, "BatchGetImage", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -434,7 +434,7 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
         ],
     });
 
-    private Task TestEcrImagesShadowBatchDeleteImage(TestContext t) => GroupEcrImagesShadow.RunTestAsync(t, "BatchDeleteImage", new ScenarioTest
+    private Task TestEcrImagesBatchDeleteImage(TestContext t) => GroupEcrImages.RunTestAsync(t, "BatchDeleteImage", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -494,7 +494,7 @@ internal sealed class ScenariosAuthoredEcrImages : IServiceGroup
         ],
     });
 
-    private Task TestEcrImagesShadowDescribeImagesNotFound(TestContext t) => GroupEcrImagesShadow.RunTestAsync(t, "DescribeImagesNotFound", new ScenarioTest
+    private Task TestEcrImagesDescribeImagesNotFound(TestContext t) => GroupEcrImages.RunTestAsync(t, "DescribeImagesNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {

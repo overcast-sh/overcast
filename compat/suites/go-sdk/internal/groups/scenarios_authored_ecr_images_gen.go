@@ -24,19 +24,19 @@ func ScenariosAuthoredEcrImages(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-ecr-images",
 		Impls: map[string]harness.TestFn{
-			"ecr-images-shadow:PutImage":               g.testEcrImagesShadowPutImage,
-			"ecr-images-shadow:ListImages":             g.testEcrImagesShadowListImages,
-			"ecr-images-shadow:ListImagesPaginated":    g.testEcrImagesShadowListImagesPaginated,
-			"ecr-images-shadow:DescribeImages":         g.testEcrImagesShadowDescribeImages,
-			"ecr-images-shadow:BatchGetImage":          g.testEcrImagesShadowBatchGetImage,
-			"ecr-images-shadow:BatchDeleteImage":       g.testEcrImagesShadowBatchDeleteImage,
-			"ecr-images-shadow:DescribeImagesNotFound": g.testEcrImagesShadowDescribeImagesNotFound,
+			"ecr-images:PutImage":               g.testEcrImagesPutImage,
+			"ecr-images:ListImages":             g.testEcrImagesListImages,
+			"ecr-images:ListImagesPaginated":    g.testEcrImagesListImagesPaginated,
+			"ecr-images:DescribeImages":         g.testEcrImagesDescribeImages,
+			"ecr-images:BatchGetImage":          g.testEcrImagesBatchGetImage,
+			"ecr-images:BatchDeleteImage":       g.testEcrImagesBatchDeleteImage,
+			"ecr-images:DescribeImagesNotFound": g.testEcrImagesDescribeImagesNotFound,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-images-shadow": g.setupEcrImagesShadow,
+			"ecr-images": g.setupEcrImages,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"ecr-images-shadow": g.teardownEcrImagesShadow,
+			"ecr-images": g.teardownEcrImages,
 		},
 	}
 }
@@ -56,10 +56,10 @@ func (g *authoredEcrImagesScenarios) cl() *ecr.Client {
 	return g.client
 }
 
-var groupEcrImagesShadow = scenario.Group{Name: "ecr-images-shadow", File: "compat/model/authored/ecr-images.json"}
+var groupEcrImages = scenario.Group{Name: "ecr-images", File: "compat/model/authored/ecr-images.json"}
 
-func (g *authoredEcrImagesScenarios) setupEcrImagesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunSetup(ctx, t,
+func (g *authoredEcrImagesScenarios) setupEcrImages(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateRepository",
 			Params: `{"repositoryName":{"$name":"imgs"}}`,
@@ -143,8 +143,8 @@ func (g *authoredEcrImagesScenarios) setupEcrImagesShadow(ctx context.Context, t
 	)
 }
 
-func (g *authoredEcrImagesScenarios) teardownEcrImagesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTeardown(ctx, t,
+func (g *authoredEcrImagesScenarios) teardownEcrImages(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteRepository",
 			Params: `{"force":true,"repositoryName":{"$name":"paged"}}`,
@@ -174,8 +174,8 @@ func (g *authoredEcrImagesScenarios) teardownEcrImagesShadow(ctx context.Context
 	)
 }
 
-func (g *authoredEcrImagesScenarios) testEcrImagesShadowPutImage(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTest(ctx, t, "PutImage", scenario.Test{
+func (g *authoredEcrImagesScenarios) testEcrImagesPutImage(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTest(ctx, t, "PutImage", scenario.Test{
 		Call: scenario.Call{
 			Op:     "PutImage",
 			Params: `{"imageManifest":"{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000010\"},\"layers\":[]}","imageTag":"v1","repositoryName":{"$name":"imgs"}}`,
@@ -218,8 +218,8 @@ func (g *authoredEcrImagesScenarios) testEcrImagesShadowPutImage(ctx context.Con
 	})
 }
 
-func (g *authoredEcrImagesScenarios) testEcrImagesShadowListImages(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTest(ctx, t, "ListImages", scenario.Test{
+func (g *authoredEcrImagesScenarios) testEcrImagesListImages(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTest(ctx, t, "ListImages", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListImages",
 			Params: `{"repositoryName":{"$name":"imgs"}}`,
@@ -243,8 +243,8 @@ func (g *authoredEcrImagesScenarios) testEcrImagesShadowListImages(ctx context.C
 	})
 }
 
-func (g *authoredEcrImagesScenarios) testEcrImagesShadowListImagesPaginated(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTest(ctx, t, "ListImagesPaginated", scenario.Test{
+func (g *authoredEcrImagesScenarios) testEcrImagesListImagesPaginated(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTest(ctx, t, "ListImagesPaginated", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListImages",
 			Params: `{"maxResults":1,"repositoryName":{"$name":"paged"}}`,
@@ -382,8 +382,8 @@ func (g *authoredEcrImagesScenarios) testEcrImagesShadowListImagesPaginated(ctx 
 	})
 }
 
-func (g *authoredEcrImagesScenarios) testEcrImagesShadowDescribeImages(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTest(ctx, t, "DescribeImages", scenario.Test{
+func (g *authoredEcrImagesScenarios) testEcrImagesDescribeImages(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTest(ctx, t, "DescribeImages", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeImages",
 			Params: `{"imageIds":[{"imageTag":"v1"}],"repositoryName":{"$name":"imgs"}}`,
@@ -412,8 +412,8 @@ func (g *authoredEcrImagesScenarios) testEcrImagesShadowDescribeImages(ctx conte
 	})
 }
 
-func (g *authoredEcrImagesScenarios) testEcrImagesShadowBatchGetImage(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTest(ctx, t, "BatchGetImage", scenario.Test{
+func (g *authoredEcrImagesScenarios) testEcrImagesBatchGetImage(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTest(ctx, t, "BatchGetImage", scenario.Test{
 		Call: scenario.Call{
 			Op:     "BatchGetImage",
 			Params: `{"imageIds":[{"imageTag":"v1"}],"repositoryName":{"$name":"imgs"}}`,
@@ -438,8 +438,8 @@ func (g *authoredEcrImagesScenarios) testEcrImagesShadowBatchGetImage(ctx contex
 	})
 }
 
-func (g *authoredEcrImagesScenarios) testEcrImagesShadowBatchDeleteImage(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTest(ctx, t, "BatchDeleteImage", scenario.Test{
+func (g *authoredEcrImagesScenarios) testEcrImagesBatchDeleteImage(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTest(ctx, t, "BatchDeleteImage", scenario.Test{
 		Call: scenario.Call{
 			Op:     "BatchDeleteImage",
 			Params: `{"imageIds":[{"imageTag":"doomed"}],"repositoryName":{"$name":"imgs"}}`,
@@ -495,8 +495,8 @@ func (g *authoredEcrImagesScenarios) testEcrImagesShadowBatchDeleteImage(ctx con
 	})
 }
 
-func (g *authoredEcrImagesScenarios) testEcrImagesShadowDescribeImagesNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupEcrImagesShadow.RunTest(ctx, t, "DescribeImagesNotFound", scenario.Test{
+func (g *authoredEcrImagesScenarios) testEcrImagesDescribeImagesNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupEcrImages.RunTest(ctx, t, "DescribeImagesNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeImages",
 			Params: `{"imageIds":[{"imageTag":"no-such-tag"}],"repositoryName":{"$name":"imgs"}}`,

@@ -35,8 +35,8 @@ import software.amazon.awssdk.services.backup.model.UpdateBackupPlanRequest;
  */
 public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
 
-    private static final Group GROUP_BACKUP_PLANS_SHADOW =
-            new Group("backup-plans-shadow", "compat/model/authored/backup-plans.json");
+    private static final Group GROUP_BACKUP_PLANS =
+            new Group("backup-plans", "compat/model/authored/backup-plans.json");
 
     private final AwsClients clients;
     private volatile BackupClient client;
@@ -53,28 +53,28 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("backup-plans-shadow:CreateBackupPlan", this::testBackupPlansShadowCreateBackupPlan),
-                Map.entry("backup-plans-shadow:GetBackupPlan", this::testBackupPlansShadowGetBackupPlan),
-                Map.entry("backup-plans-shadow:ListBackupPlans", this::testBackupPlansShadowListBackupPlans),
-                Map.entry("backup-plans-shadow:ListBackupPlansPaginated", this::testBackupPlansShadowListBackupPlansPaginated),
-                Map.entry("backup-plans-shadow:UpdateBackupPlan", this::testBackupPlansShadowUpdateBackupPlan),
-                Map.entry("backup-plans-shadow:GetBackupPlanNotFound", this::testBackupPlansShadowGetBackupPlanNotFound),
-                Map.entry("backup-plans-shadow:GetBackupPlanVersionNotFound", this::testBackupPlansShadowGetBackupPlanVersionNotFound),
-                Map.entry("backup-plans-shadow:UpdateBackupPlanNotFound", this::testBackupPlansShadowUpdateBackupPlanNotFound),
-                Map.entry("backup-plans-shadow:DeleteBackupPlan", this::testBackupPlansShadowDeleteBackupPlan),
-                Map.entry("backup-plans-shadow:DeleteBackupPlanNotFound", this::testBackupPlansShadowDeleteBackupPlanNotFound));
+                Map.entry("backup-plans:CreateBackupPlan", this::testBackupPlansCreateBackupPlan),
+                Map.entry("backup-plans:GetBackupPlan", this::testBackupPlansGetBackupPlan),
+                Map.entry("backup-plans:ListBackupPlans", this::testBackupPlansListBackupPlans),
+                Map.entry("backup-plans:ListBackupPlansPaginated", this::testBackupPlansListBackupPlansPaginated),
+                Map.entry("backup-plans:UpdateBackupPlan", this::testBackupPlansUpdateBackupPlan),
+                Map.entry("backup-plans:GetBackupPlanNotFound", this::testBackupPlansGetBackupPlanNotFound),
+                Map.entry("backup-plans:GetBackupPlanVersionNotFound", this::testBackupPlansGetBackupPlanVersionNotFound),
+                Map.entry("backup-plans:UpdateBackupPlanNotFound", this::testBackupPlansUpdateBackupPlanNotFound),
+                Map.entry("backup-plans:DeleteBackupPlan", this::testBackupPlansDeleteBackupPlan),
+                Map.entry("backup-plans:DeleteBackupPlanNotFound", this::testBackupPlansDeleteBackupPlanNotFound));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("backup-plans-shadow", this::setupBackupPlansShadow));
+                Map.entry("backup-plans", this::setupBackupPlans));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("backup-plans-shadow", this::teardownBackupPlansShadow));
+                Map.entry("backup-plans", this::teardownBackupPlans));
     }
 
     /**
@@ -94,8 +94,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
         return client;
     }
 
-    private void setupBackupPlansShadow(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runSetup(t,
+    private void setupBackupPlans(TestContext t) {
+        GROUP_BACKUP_PLANS.runSetup(t,
                 new Call("CreateBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault\"}}",
                         b -> CreateBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault")))
@@ -109,8 +109,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                         .export("plan2.id", "$.BackupPlanId"));
     }
 
-    private void teardownBackupPlansShadow(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTeardown(t,
+    private void teardownBackupPlans(TestContext t) {
+        GROUP_BACKUP_PLANS.runTeardown(t,
                 new Call("DeleteBackupPlan", "{\"BackupPlanId\":{\"$ref\":\"plan2.id\"}}",
                         b -> DeleteBackupPlanRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan2.id")))
@@ -128,8 +128,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                         r -> cl().deleteBackupVault((DeleteBackupVaultRequest) r)));
     }
 
-    private void testBackupPlansShadowCreateBackupPlan(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "CreateBackupPlan",
+    private void testBackupPlansCreateBackupPlan(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "CreateBackupPlan",
                 new Call("CreateBackupPlan", "{\"BackupPlan\":{\"BackupPlanName\":{\"$name\":\"plan\"},\"Rules\":[{\"RuleName\":\"daily\",\"ScheduleExpression\":\"cron(0 5 ? * * *)\",\"TargetBackupVaultName\":{\"$name\":\"vault\"}}]}}",
                         b -> CreateBackupPlanRequest.builder()
                                 .backupPlan(BackupPlanInput.builder().backupPlanName(b.string("BackupPlan", Values.name("plan"))).rules(List.of(BackupRuleInput.builder().ruleName("daily").scheduleExpression("cron(0 5 ? * * *)").targetBackupVaultName(b.string("BackupPlan", Values.name("vault"))).build())).build())
@@ -147,8 +147,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowGetBackupPlan(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "GetBackupPlan",
+    private void testBackupPlansGetBackupPlan(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "GetBackupPlan",
                 new Call("GetBackupPlan", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"}}",
                         b -> GetBackupPlanRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))
@@ -168,8 +168,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowListBackupPlans(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "ListBackupPlans",
+    private void testBackupPlansListBackupPlans(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "ListBackupPlans",
                 new Call("ListBackupPlans", "{}",
                         b -> ListBackupPlansRequest.builder()
                                 .build(),
@@ -184,8 +184,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowListBackupPlansPaginated(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "ListBackupPlansPaginated",
+    private void testBackupPlansListBackupPlansPaginated(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "ListBackupPlansPaginated",
                 new Call("ListBackupPlans", "{\"MaxResults\":1}",
                         b -> ListBackupPlansRequest.builder()
                                 .maxResults(1)
@@ -230,8 +230,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowUpdateBackupPlan(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "UpdateBackupPlan",
+    private void testBackupPlansUpdateBackupPlan(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "UpdateBackupPlan",
                 new Call("UpdateBackupPlan", "{\"BackupPlan\":{\"BackupPlanName\":{\"$concat\":[{\"$name\":\"plan\"},\"-updated\"]},\"Rules\":[{\"RuleName\":\"daily\",\"ScheduleExpression\":\"cron(0 5 ? * * *)\",\"TargetBackupVaultName\":{\"$name\":\"vault\"}}]},\"BackupPlanId\":{\"$ref\":\"plan.id\"}}",
                         b -> UpdateBackupPlanRequest.builder()
                                 .backupPlan(BackupPlanInput.builder().backupPlanName(b.string("BackupPlan", Values.concat(Values.name("plan"), "-updated"))).rules(List.of(BackupRuleInput.builder().ruleName("daily").scheduleExpression("cron(0 5 ? * * *)").targetBackupVaultName(b.string("BackupPlan", Values.name("vault"))).build())).build())
@@ -267,8 +267,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowGetBackupPlanNotFound(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "GetBackupPlanNotFound",
+    private void testBackupPlansGetBackupPlanNotFound(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "GetBackupPlanNotFound",
                 new Call("GetBackupPlan", "{\"BackupPlanId\":\"00000000-0000-0000-0000-000000000000\"}",
                         b -> GetBackupPlanRequest.builder()
                                 .backupPlanId("00000000-0000-0000-0000-000000000000")
@@ -279,8 +279,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowGetBackupPlanVersionNotFound(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "GetBackupPlanVersionNotFound",
+    private void testBackupPlansGetBackupPlanVersionNotFound(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "GetBackupPlanVersionNotFound",
                 new Call("GetBackupPlan", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"},\"VersionId\":\"no-such-version\"}",
                         b -> GetBackupPlanRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))
@@ -292,8 +292,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowUpdateBackupPlanNotFound(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "UpdateBackupPlanNotFound",
+    private void testBackupPlansUpdateBackupPlanNotFound(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "UpdateBackupPlanNotFound",
                 new Call("UpdateBackupPlan", "{\"BackupPlan\":{\"BackupPlanName\":\"oc-absent-plan\",\"Rules\":[{\"RuleName\":\"daily\",\"ScheduleExpression\":\"cron(0 5 ? * * *)\",\"TargetBackupVaultName\":{\"$name\":\"vault\"}}]},\"BackupPlanId\":\"00000000-0000-0000-0000-000000000000\"}",
                         b -> UpdateBackupPlanRequest.builder()
                                 .backupPlan(BackupPlanInput.builder().backupPlanName("oc-absent-plan").rules(List.of(BackupRuleInput.builder().ruleName("daily").scheduleExpression("cron(0 5 ? * * *)").targetBackupVaultName(b.string("BackupPlan", Values.name("vault"))).build())).build())
@@ -305,8 +305,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowDeleteBackupPlan(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "DeleteBackupPlan",
+    private void testBackupPlansDeleteBackupPlan(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "DeleteBackupPlan",
                 new Call("DeleteBackupPlan", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"}}",
                         b -> DeleteBackupPlanRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))
@@ -329,8 +329,8 @@ public final class ScenariosAuthoredBackupPlansGen implements ServiceGroup {
                 ));
     }
 
-    private void testBackupPlansShadowDeleteBackupPlanNotFound(TestContext t) {
-        GROUP_BACKUP_PLANS_SHADOW.runTest(t, "DeleteBackupPlanNotFound",
+    private void testBackupPlansDeleteBackupPlanNotFound(TestContext t) {
+        GROUP_BACKUP_PLANS.runTest(t, "DeleteBackupPlanNotFound",
                 new Call("DeleteBackupPlan", "{\"BackupPlanId\":\"00000000-0000-0000-0000-000000000000\"}",
                         b -> DeleteBackupPlanRequest.builder()
                                 .backupPlanId("00000000-0000-0000-0000-000000000000")

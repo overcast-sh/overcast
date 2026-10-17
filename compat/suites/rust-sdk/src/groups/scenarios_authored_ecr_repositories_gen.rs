@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/ecr-repositories.json";
 
-const GROUP_ECR_REPOSITORIES_SHADOW: Group = Group {
-    name: "ecr-repositories-shadow",
+const GROUP_ECR_REPOSITORIES: Group = Group {
+    name: "ecr-repositories",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:CreateRepository".to_string(),
+                "ecr-repositories:CreateRepository".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "CreateRepository", test_ecr_repositories_shadow_create_repository(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "CreateRepository", test_ecr_repositories_create_repository(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DescribeRepositories".to_string(),
+                "ecr-repositories:DescribeRepositories".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DescribeRepositories", test_ecr_repositories_shadow_describe_repositories(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DescribeRepositories", test_ecr_repositories_describe_repositories(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DescribeRepositoriesAll".to_string(),
+                "ecr-repositories:DescribeRepositoriesAll".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DescribeRepositoriesAll", test_ecr_repositories_shadow_describe_repositories_all(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DescribeRepositoriesAll", test_ecr_repositories_describe_repositories_all(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DescribeRepositoriesPaginated".to_string(),
+                "ecr-repositories:DescribeRepositoriesPaginated".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DescribeRepositoriesPaginated", test_ecr_repositories_shadow_describe_repositories_paginated(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DescribeRepositoriesPaginated", test_ecr_repositories_describe_repositories_paginated(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DescribeRepositoriesSigned".to_string(),
+                "ecr-repositories:DescribeRepositoriesSigned".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DescribeRepositoriesSigned", test_ecr_repositories_shadow_describe_repositories_signed(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DescribeRepositoriesSigned", test_ecr_repositories_describe_repositories_signed(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DescribeRepositoriesNotFound".to_string(),
+                "ecr-repositories:DescribeRepositoriesNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DescribeRepositoriesNotFound", test_ecr_repositories_shadow_describe_repositories_not_found(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DescribeRepositoriesNotFound", test_ecr_repositories_describe_repositories_not_found(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:CreateRepositoryAlreadyExists".to_string(),
+                "ecr-repositories:CreateRepositoryAlreadyExists".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "CreateRepositoryAlreadyExists", test_ecr_repositories_shadow_create_repository_already_exists(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "CreateRepositoryAlreadyExists", test_ecr_repositories_create_repository_already_exists(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DeleteRepository".to_string(),
+                "ecr-repositories:DeleteRepository".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DeleteRepository", test_ecr_repositories_shadow_delete_repository(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DeleteRepository", test_ecr_repositories_delete_repository(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DeleteRepositoryNotEmpty".to_string(),
+                "ecr-repositories:DeleteRepositoryNotEmpty".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DeleteRepositoryNotEmpty", test_ecr_repositories_shadow_delete_repository_not_empty(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DeleteRepositoryNotEmpty", test_ecr_repositories_delete_repository_not_empty(&client))
                             .await
                     })
                 }),
@@ -177,12 +177,12 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-repositories-shadow:DeleteRepositoryForce".to_string(),
+                "ecr-repositories:DeleteRepositoryForce".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW
-                            .run_test(&ctx, "DeleteRepositoryForce", test_ecr_repositories_shadow_delete_repository_force(&client))
+                        GROUP_ECR_REPOSITORIES
+                            .run_test(&ctx, "DeleteRepositoryForce", test_ecr_repositories_delete_repository_force(&client))
                             .await
                     })
                 }),
@@ -196,11 +196,11 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             setups.insert(
-                "ecr-repositories-shadow".to_string(),
+                "ecr-repositories".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW.run_setup(&ctx, setup_ecr_repositories_shadow(&client)).await
+                        GROUP_ECR_REPOSITORIES.run_setup(&ctx, setup_ecr_repositories(&client)).await
                     })
                 }),
             );
@@ -213,11 +213,11 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "ecr-repositories-shadow".to_string(),
+                "ecr-repositories".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_REPOSITORIES_SHADOW.run_teardown(&ctx, teardown_ecr_repositories_shadow(&client)).await
+                        GROUP_ECR_REPOSITORIES.run_teardown(&ctx, teardown_ecr_repositories(&client)).await
                     })
                 }),
             );
@@ -226,7 +226,7 @@ impl ServiceGroup for ScenariosAuthoredEcrRepositories {
     }
 }
 
-fn setup_ecr_repositories_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn setup_ecr_repositories(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateRepository",
@@ -389,7 +389,7 @@ fn setup_ecr_repositories_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_ecr_repositories_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn teardown_ecr_repositories(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteRepository",
@@ -538,7 +538,7 @@ fn teardown_ecr_repositories_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn test_ecr_repositories_shadow_create_repository(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_create_repository(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "CreateRepository",
@@ -567,9 +567,9 @@ fn test_ecr_repositories_shadow_create_repository(client: &aws_sdk_ecr::Client) 
                 scenario::non_empty("$.repository.createdAt"),
                 scenario::equals("$.repository.imageTagMutability", scenario::lit(::serde_json::json!("MUTABLE"))),
                 scenario::non_empty("$.repository.registryId"),
-                scenario::matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-shadow-repo$"),
+                scenario::matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-repo$"),
                 scenario::equals("$.repository.repositoryName", scenario::name("repo")),
-                scenario::matches("$.repository.repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+                scenario::matches("$.repository.repositoryUri", "/.+-ecr-repositories-repo$"),
             ]),
             scenario::readback(
                 Call {
@@ -603,7 +603,7 @@ fn test_ecr_repositories_shadow_create_repository(client: &aws_sdk_ecr::Client) 
     }
 }
 
-fn test_ecr_repositories_shadow_describe_repositories(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_describe_repositories(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeRepositories",
@@ -633,14 +633,14 @@ fn test_ecr_repositories_shadow_describe_repositories(client: &aws_sdk_ecr::Clie
                 scenario::non_empty("$.repositories[0].registryId"),
                 scenario::equals("$.repositories[0].repositoryArn", scenario::context("repo.arn")),
                 scenario::equals("$.repositories[0].repositoryName", scenario::name("repo")),
-                scenario::matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+                scenario::matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$"),
                 scenario::missing("$.repositories[1]"),
             ]),
         ],
     }
 }
 
-fn test_ecr_repositories_shadow_describe_repositories_all(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_describe_repositories_all(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeRepositories",
@@ -690,7 +690,7 @@ fn test_ecr_repositories_shadow_describe_repositories_all(client: &aws_sdk_ecr::
     }
 }
 
-fn test_ecr_repositories_shadow_describe_repositories_paginated(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_describe_repositories_paginated(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeRepositories",
@@ -899,7 +899,7 @@ fn test_ecr_repositories_shadow_describe_repositories_paginated(client: &aws_sdk
     }
 }
 
-fn test_ecr_repositories_shadow_describe_repositories_signed(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_describe_repositories_signed(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeRepositories",
@@ -929,13 +929,13 @@ fn test_ecr_repositories_shadow_describe_repositories_signed(client: &aws_sdk_ec
                 scenario::non_empty("$.repositories[0].registryId"),
                 scenario::equals("$.repositories[0].repositoryArn", scenario::context("repo.arn")),
                 scenario::equals("$.repositories[0].repositoryName", scenario::name("repo")),
-                scenario::matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+                scenario::matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$"),
             ]),
         ],
     }
 }
 
-fn test_ecr_repositories_shadow_describe_repositories_not_found(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_describe_repositories_not_found(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeRepositories",
@@ -965,7 +965,7 @@ fn test_ecr_repositories_shadow_describe_repositories_not_found(client: &aws_sdk
     }
 }
 
-fn test_ecr_repositories_shadow_create_repository_already_exists(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_create_repository_already_exists(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "CreateRepository",
@@ -993,7 +993,7 @@ fn test_ecr_repositories_shadow_create_repository_already_exists(client: &aws_sd
     }
 }
 
-fn test_ecr_repositories_shadow_delete_repository(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_delete_repository(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRepository",
@@ -1048,7 +1048,7 @@ fn test_ecr_repositories_shadow_delete_repository(client: &aws_sdk_ecr::Client) 
     }
 }
 
-fn test_ecr_repositories_shadow_delete_repository_not_empty(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_delete_repository_not_empty(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRepository",
@@ -1105,7 +1105,7 @@ fn test_ecr_repositories_shadow_delete_repository_not_empty(client: &aws_sdk_ecr
     }
 }
 
-fn test_ecr_repositories_shadow_delete_repository_force(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_repositories_delete_repository_force(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteRepository",

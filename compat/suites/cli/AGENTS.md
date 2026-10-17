@@ -24,7 +24,7 @@ correct and expected — they are the coverage gap metric, not bugs to silence.
 
 **Implemented**, and the widest suite here: `groups.All` wires 35 service
 groups, several of them (AppConfig, AppConfig Data, OpenSearch, Backup, MSK,
-EKS, ECR) with no counterpart in any SDK suite yet. It runs in the compat CI
+EKS) with no counterpart in any SDK suite yet. It runs in the compat CI
 matrix (`.github/workflows/compat.yml`) alongside every other suite.
 
 ---

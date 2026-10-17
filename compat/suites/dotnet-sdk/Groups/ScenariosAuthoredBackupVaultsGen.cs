@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupBackupVaultsShadow = new("backup-vaults-shadow", "compat/model/authored/backup-vaults.json");
+    private static readonly ScenarioGroup GroupBackupVaults = new("backup-vaults", "compat/model/authored/backup-vaults.json");
 
     private readonly Lazy<AmazonBackupClient> _client;
 
@@ -35,32 +35,32 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["backup-vaults-shadow:CreateBackupVault"] = TestBackupVaultsShadowCreateBackupVault,
-        ["backup-vaults-shadow:DescribeBackupVault"] = TestBackupVaultsShadowDescribeBackupVault,
-        ["backup-vaults-shadow:ListBackupVaults"] = TestBackupVaultsShadowListBackupVaults,
-        ["backup-vaults-shadow:ListBackupVaultsPaginated"] = TestBackupVaultsShadowListBackupVaultsPaginated,
-        ["backup-vaults-shadow:ListBackupVaultsByShared"] = TestBackupVaultsShadowListBackupVaultsByShared,
-        ["backup-vaults-shadow:DescribeBackupVaultNotFound"] = TestBackupVaultsShadowDescribeBackupVaultNotFound,
-        ["backup-vaults-shadow:CreateBackupVaultAlreadyExists"] = TestBackupVaultsShadowCreateBackupVaultAlreadyExists,
-        ["backup-vaults-shadow:CreateBackupVaultInvalidName"] = TestBackupVaultsShadowCreateBackupVaultInvalidName,
-        ["backup-vaults-shadow:DeleteBackupVault"] = TestBackupVaultsShadowDeleteBackupVault,
-        ["backup-vaults-shadow:DeleteBackupVaultNotFound"] = TestBackupVaultsShadowDeleteBackupVaultNotFound,
+        ["backup-vaults:CreateBackupVault"] = TestBackupVaultsCreateBackupVault,
+        ["backup-vaults:DescribeBackupVault"] = TestBackupVaultsDescribeBackupVault,
+        ["backup-vaults:ListBackupVaults"] = TestBackupVaultsListBackupVaults,
+        ["backup-vaults:ListBackupVaultsPaginated"] = TestBackupVaultsListBackupVaultsPaginated,
+        ["backup-vaults:ListBackupVaultsByShared"] = TestBackupVaultsListBackupVaultsByShared,
+        ["backup-vaults:DescribeBackupVaultNotFound"] = TestBackupVaultsDescribeBackupVaultNotFound,
+        ["backup-vaults:CreateBackupVaultAlreadyExists"] = TestBackupVaultsCreateBackupVaultAlreadyExists,
+        ["backup-vaults:CreateBackupVaultInvalidName"] = TestBackupVaultsCreateBackupVaultInvalidName,
+        ["backup-vaults:DeleteBackupVault"] = TestBackupVaultsDeleteBackupVault,
+        ["backup-vaults:DeleteBackupVaultNotFound"] = TestBackupVaultsDeleteBackupVaultNotFound,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-vaults-shadow"] = SetupBackupVaultsShadow,
+        ["backup-vaults"] = SetupBackupVaults,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-vaults-shadow"] = TeardownBackupVaultsShadow,
+        ["backup-vaults"] = TeardownBackupVaults,
     };
 
     private AmazonBackupClient Cl() => _client.Value;
 
-    private Task SetupBackupVaultsShadow(TestContext t) =>
-        GroupBackupVaultsShadow.RunSetupAsync(t,
+    private Task SetupBackupVaults(TestContext t) =>
+        GroupBackupVaults.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateBackupVault",
@@ -76,8 +76,8 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
             }
         );
 
-    private Task TeardownBackupVaultsShadow(TestContext t) =>
-        GroupBackupVaultsShadow.RunTeardownAsync(t,
+    private Task TeardownBackupVaults(TestContext t) =>
+        GroupBackupVaults.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteBackupVault",
@@ -106,7 +106,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
             }
         );
 
-    private Task TestBackupVaultsShadowCreateBackupVault(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "CreateBackupVault", new ScenarioTest
+    private Task TestBackupVaultsCreateBackupVault(TestContext t) => GroupBackupVaults.RunTestAsync(t, "CreateBackupVault", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -131,7 +131,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowDescribeBackupVault(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "DescribeBackupVault", new ScenarioTest
+    private Task TestBackupVaultsDescribeBackupVault(TestContext t) => GroupBackupVaults.RunTestAsync(t, "DescribeBackupVault", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -159,7 +159,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowListBackupVaults(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "ListBackupVaults", new ScenarioTest
+    private Task TestBackupVaultsListBackupVaults(TestContext t) => GroupBackupVaults.RunTestAsync(t, "ListBackupVaults", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -183,7 +183,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowListBackupVaultsPaginated(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "ListBackupVaultsPaginated", new ScenarioTest
+    private Task TestBackupVaultsListBackupVaultsPaginated(TestContext t) => GroupBackupVaults.RunTestAsync(t, "ListBackupVaultsPaginated", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -272,7 +272,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowListBackupVaultsByShared(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "ListBackupVaultsByShared", new ScenarioTest
+    private Task TestBackupVaultsListBackupVaultsByShared(TestContext t) => GroupBackupVaults.RunTestAsync(t, "ListBackupVaultsByShared", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -312,7 +312,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowDescribeBackupVaultNotFound(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "DescribeBackupVaultNotFound", new ScenarioTest
+    private Task TestBackupVaultsDescribeBackupVaultNotFound(TestContext t) => GroupBackupVaults.RunTestAsync(t, "DescribeBackupVaultNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -333,7 +333,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowCreateBackupVaultAlreadyExists(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "CreateBackupVaultAlreadyExists", new ScenarioTest
+    private Task TestBackupVaultsCreateBackupVaultAlreadyExists(TestContext t) => GroupBackupVaults.RunTestAsync(t, "CreateBackupVaultAlreadyExists", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -354,7 +354,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowCreateBackupVaultInvalidName(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "CreateBackupVaultInvalidName", new ScenarioTest
+    private Task TestBackupVaultsCreateBackupVaultInvalidName(TestContext t) => GroupBackupVaults.RunTestAsync(t, "CreateBackupVaultInvalidName", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -375,7 +375,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowDeleteBackupVault(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "DeleteBackupVault", new ScenarioTest
+    private Task TestBackupVaultsDeleteBackupVault(TestContext t) => GroupBackupVaults.RunTestAsync(t, "DeleteBackupVault", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -410,7 +410,7 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         ],
     });
 
-    private Task TestBackupVaultsShadowDeleteBackupVaultNotFound(TestContext t) => GroupBackupVaultsShadow.RunTestAsync(t, "DeleteBackupVaultNotFound", new ScenarioTest
+    private Task TestBackupVaultsDeleteBackupVaultNotFound(TestContext t) => GroupBackupVaults.RunTestAsync(t, "DeleteBackupVaultNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {

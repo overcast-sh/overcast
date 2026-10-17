@@ -23,22 +23,22 @@ func ScenariosAuthoredBackupVaults(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-backup-vaults",
 		Impls: map[string]harness.TestFn{
-			"backup-vaults-shadow:CreateBackupVault":              g.testBackupVaultsShadowCreateBackupVault,
-			"backup-vaults-shadow:DescribeBackupVault":            g.testBackupVaultsShadowDescribeBackupVault,
-			"backup-vaults-shadow:ListBackupVaults":               g.testBackupVaultsShadowListBackupVaults,
-			"backup-vaults-shadow:ListBackupVaultsPaginated":      g.testBackupVaultsShadowListBackupVaultsPaginated,
-			"backup-vaults-shadow:ListBackupVaultsByShared":       g.testBackupVaultsShadowListBackupVaultsByShared,
-			"backup-vaults-shadow:DescribeBackupVaultNotFound":    g.testBackupVaultsShadowDescribeBackupVaultNotFound,
-			"backup-vaults-shadow:CreateBackupVaultAlreadyExists": g.testBackupVaultsShadowCreateBackupVaultAlreadyExists,
-			"backup-vaults-shadow:CreateBackupVaultInvalidName":   g.testBackupVaultsShadowCreateBackupVaultInvalidName,
-			"backup-vaults-shadow:DeleteBackupVault":              g.testBackupVaultsShadowDeleteBackupVault,
-			"backup-vaults-shadow:DeleteBackupVaultNotFound":      g.testBackupVaultsShadowDeleteBackupVaultNotFound,
+			"backup-vaults:CreateBackupVault":              g.testBackupVaultsCreateBackupVault,
+			"backup-vaults:DescribeBackupVault":            g.testBackupVaultsDescribeBackupVault,
+			"backup-vaults:ListBackupVaults":               g.testBackupVaultsListBackupVaults,
+			"backup-vaults:ListBackupVaultsPaginated":      g.testBackupVaultsListBackupVaultsPaginated,
+			"backup-vaults:ListBackupVaultsByShared":       g.testBackupVaultsListBackupVaultsByShared,
+			"backup-vaults:DescribeBackupVaultNotFound":    g.testBackupVaultsDescribeBackupVaultNotFound,
+			"backup-vaults:CreateBackupVaultAlreadyExists": g.testBackupVaultsCreateBackupVaultAlreadyExists,
+			"backup-vaults:CreateBackupVaultInvalidName":   g.testBackupVaultsCreateBackupVaultInvalidName,
+			"backup-vaults:DeleteBackupVault":              g.testBackupVaultsDeleteBackupVault,
+			"backup-vaults:DeleteBackupVaultNotFound":      g.testBackupVaultsDeleteBackupVaultNotFound,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-vaults-shadow": g.setupBackupVaultsShadow,
+			"backup-vaults": g.setupBackupVaults,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-vaults-shadow": g.teardownBackupVaultsShadow,
+			"backup-vaults": g.teardownBackupVaults,
 		},
 	}
 }
@@ -58,10 +58,10 @@ func (g *authoredBackupVaultsScenarios) cl() *backup.Client {
 	return g.client
 }
 
-var groupBackupVaultsShadow = scenario.Group{Name: "backup-vaults-shadow", File: "compat/model/authored/backup-vaults.json"}
+var groupBackupVaults = scenario.Group{Name: "backup-vaults", File: "compat/model/authored/backup-vaults.json"}
 
-func (g *authoredBackupVaultsScenarios) setupBackupVaultsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunSetup(ctx, t,
+func (g *authoredBackupVaultsScenarios) setupBackupVaults(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunSetup(ctx, t,
 		scenario.Call{
 			Op:     "CreateBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault2"}}`,
@@ -77,8 +77,8 @@ func (g *authoredBackupVaultsScenarios) setupBackupVaultsShadow(ctx context.Cont
 	)
 }
 
-func (g *authoredBackupVaultsScenarios) teardownBackupVaultsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTeardown(ctx, t,
+func (g *authoredBackupVaultsScenarios) teardownBackupVaults(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault2"}}`,
@@ -106,8 +106,8 @@ func (g *authoredBackupVaultsScenarios) teardownBackupVaultsShadow(ctx context.C
 	)
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowCreateBackupVault(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "CreateBackupVault", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsCreateBackupVault(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "CreateBackupVault", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault"}}`,
@@ -130,8 +130,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowCreateBackupVault(
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowDescribeBackupVault(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "DescribeBackupVault", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsDescribeBackupVault(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "DescribeBackupVault", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault"}}`,
@@ -157,8 +157,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowDescribeBackupVaul
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowListBackupVaults(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "ListBackupVaults", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsListBackupVaults(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "ListBackupVaults", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListBackupVaults",
 			Params: `{}`,
@@ -180,8 +180,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowListBackupVaults(c
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowListBackupVaultsPaginated(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "ListBackupVaultsPaginated", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsListBackupVaultsPaginated(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "ListBackupVaultsPaginated", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListBackupVaults",
 			Params: `{"MaxResults":1}`,
@@ -278,8 +278,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowListBackupVaultsPa
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowListBackupVaultsByShared(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "ListBackupVaultsByShared", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsListBackupVaultsByShared(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "ListBackupVaultsByShared", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListBackupVaults",
 			Params: `{"ByShared":true}`,
@@ -316,8 +316,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowListBackupVaultsBy
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowDescribeBackupVaultNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "DescribeBackupVaultNotFound", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsDescribeBackupVaultNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "DescribeBackupVaultNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DescribeBackupVault",
 			Params: `{"BackupVaultName":{"$name":"absent"}}`,
@@ -336,8 +336,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowDescribeBackupVaul
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowCreateBackupVaultAlreadyExists(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "CreateBackupVaultAlreadyExists", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsCreateBackupVaultAlreadyExists(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "CreateBackupVaultAlreadyExists", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault"}}`,
@@ -356,8 +356,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowCreateBackupVaultA
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowCreateBackupVaultInvalidName(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "CreateBackupVaultInvalidName", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsCreateBackupVaultInvalidName(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "CreateBackupVaultInvalidName", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateBackupVault",
 			Params: `{"BackupVaultName":"oc.invalid.vault.name"}`,
@@ -376,8 +376,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowCreateBackupVaultI
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowDeleteBackupVault(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "DeleteBackupVault", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsDeleteBackupVault(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "DeleteBackupVault", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteBackupVault",
 			Params: `{"BackupVaultName":{"$name":"vault"}}`,
@@ -410,8 +410,8 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowDeleteBackupVault(
 	})
 }
 
-func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowDeleteBackupVaultNotFound(ctx context.Context, t *harness.TestContext) error {
-	return groupBackupVaultsShadow.RunTest(ctx, t, "DeleteBackupVaultNotFound", scenario.Test{
+func (g *authoredBackupVaultsScenarios) testBackupVaultsDeleteBackupVaultNotFound(ctx context.Context, t *harness.TestContext) error {
+	return groupBackupVaults.RunTest(ctx, t, "DeleteBackupVaultNotFound", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteBackupVault",
 			Params: `{"BackupVaultName":{"$name":"absent"}}`,

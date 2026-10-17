@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/ecr-images.json";
 
-const GROUP_ECR_IMAGES_SHADOW: Group = Group {
-    name: "ecr-images-shadow",
+const GROUP_ECR_IMAGES: Group = Group {
+    name: "ecr-images",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-images-shadow:PutImage".to_string(),
+                "ecr-images:PutImage".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW
-                            .run_test(&ctx, "PutImage", test_ecr_images_shadow_put_image(&client))
+                        GROUP_ECR_IMAGES
+                            .run_test(&ctx, "PutImage", test_ecr_images_put_image(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-images-shadow:ListImages".to_string(),
+                "ecr-images:ListImages".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW
-                            .run_test(&ctx, "ListImages", test_ecr_images_shadow_list_images(&client))
+                        GROUP_ECR_IMAGES
+                            .run_test(&ctx, "ListImages", test_ecr_images_list_images(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-images-shadow:ListImagesPaginated".to_string(),
+                "ecr-images:ListImagesPaginated".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW
-                            .run_test(&ctx, "ListImagesPaginated", test_ecr_images_shadow_list_images_paginated(&client))
+                        GROUP_ECR_IMAGES
+                            .run_test(&ctx, "ListImagesPaginated", test_ecr_images_list_images_paginated(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-images-shadow:DescribeImages".to_string(),
+                "ecr-images:DescribeImages".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW
-                            .run_test(&ctx, "DescribeImages", test_ecr_images_shadow_describe_images(&client))
+                        GROUP_ECR_IMAGES
+                            .run_test(&ctx, "DescribeImages", test_ecr_images_describe_images(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-images-shadow:BatchGetImage".to_string(),
+                "ecr-images:BatchGetImage".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW
-                            .run_test(&ctx, "BatchGetImage", test_ecr_images_shadow_batch_get_image(&client))
+                        GROUP_ECR_IMAGES
+                            .run_test(&ctx, "BatchGetImage", test_ecr_images_batch_get_image(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-images-shadow:BatchDeleteImage".to_string(),
+                "ecr-images:BatchDeleteImage".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW
-                            .run_test(&ctx, "BatchDeleteImage", test_ecr_images_shadow_batch_delete_image(&client))
+                        GROUP_ECR_IMAGES
+                            .run_test(&ctx, "BatchDeleteImage", test_ecr_images_batch_delete_image(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             impls.insert(
-                "ecr-images-shadow:DescribeImagesNotFound".to_string(),
+                "ecr-images:DescribeImagesNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW
-                            .run_test(&ctx, "DescribeImagesNotFound", test_ecr_images_shadow_describe_images_not_found(&client))
+                        GROUP_ECR_IMAGES
+                            .run_test(&ctx, "DescribeImagesNotFound", test_ecr_images_describe_images_not_found(&client))
                             .await
                     })
                 }),
@@ -154,11 +154,11 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             setups.insert(
-                "ecr-images-shadow".to_string(),
+                "ecr-images".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW.run_setup(&ctx, setup_ecr_images_shadow(&client)).await
+                        GROUP_ECR_IMAGES.run_setup(&ctx, setup_ecr_images(&client)).await
                     })
                 }),
             );
@@ -171,11 +171,11 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "ecr-images-shadow".to_string(),
+                "ecr-images".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_ECR_IMAGES_SHADOW.run_teardown(&ctx, teardown_ecr_images_shadow(&client)).await
+                        GROUP_ECR_IMAGES.run_teardown(&ctx, teardown_ecr_images(&client)).await
                     })
                 }),
             );
@@ -184,7 +184,7 @@ impl ServiceGroup for ScenariosAuthoredEcrImages {
     }
 }
 
-fn setup_ecr_images_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn setup_ecr_images(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateRepository",
@@ -333,7 +333,7 @@ fn setup_ecr_images_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_ecr_images_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
+fn teardown_ecr_images(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteRepository",
@@ -386,7 +386,7 @@ fn teardown_ecr_images_shadow(client: &aws_sdk_ecr::Client) -> Vec<Call> {
     ]
 }
 
-fn test_ecr_images_shadow_put_image(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_images_put_image(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "PutImage",
@@ -453,7 +453,7 @@ fn test_ecr_images_shadow_put_image(client: &aws_sdk_ecr::Client) -> Test {
     }
 }
 
-fn test_ecr_images_shadow_list_images(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_images_list_images(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "ListImages",
@@ -488,7 +488,7 @@ fn test_ecr_images_shadow_list_images(client: &aws_sdk_ecr::Client) -> Test {
     }
 }
 
-fn test_ecr_images_shadow_list_images_paginated(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_images_list_images_paginated(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "ListImages",
@@ -713,7 +713,7 @@ fn test_ecr_images_shadow_list_images_paginated(client: &aws_sdk_ecr::Client) ->
     }
 }
 
-fn test_ecr_images_shadow_describe_images(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_images_describe_images(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeImages",
@@ -760,7 +760,7 @@ fn test_ecr_images_shadow_describe_images(client: &aws_sdk_ecr::Client) -> Test 
     }
 }
 
-fn test_ecr_images_shadow_batch_get_image(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_images_batch_get_image(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "BatchGetImage",
@@ -801,7 +801,7 @@ fn test_ecr_images_shadow_batch_get_image(client: &aws_sdk_ecr::Client) -> Test 
     }
 }
 
-fn test_ecr_images_shadow_batch_delete_image(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_images_batch_delete_image(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "BatchDeleteImage",
@@ -897,7 +897,7 @@ fn test_ecr_images_shadow_batch_delete_image(client: &aws_sdk_ecr::Client) -> Te
     }
 }
 
-fn test_ecr_images_shadow_describe_images_not_found(client: &aws_sdk_ecr::Client) -> Test {
+fn test_ecr_images_describe_images_not_found(client: &aws_sdk_ecr::Client) -> Test {
     Test {
         call: Call {
             op: "DescribeImages",

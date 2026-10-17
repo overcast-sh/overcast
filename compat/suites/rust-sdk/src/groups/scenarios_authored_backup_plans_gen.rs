@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/backup-plans.json";
 
-const GROUP_BACKUP_PLANS_SHADOW: Group = Group {
-    name: "backup-plans-shadow",
+const GROUP_BACKUP_PLANS: Group = Group {
+    name: "backup-plans",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:CreateBackupPlan".to_string(),
+                "backup-plans:CreateBackupPlan".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "CreateBackupPlan", test_backup_plans_shadow_create_backup_plan(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "CreateBackupPlan", test_backup_plans_create_backup_plan(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:GetBackupPlan".to_string(),
+                "backup-plans:GetBackupPlan".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "GetBackupPlan", test_backup_plans_shadow_get_backup_plan(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "GetBackupPlan", test_backup_plans_get_backup_plan(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:ListBackupPlans".to_string(),
+                "backup-plans:ListBackupPlans".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "ListBackupPlans", test_backup_plans_shadow_list_backup_plans(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "ListBackupPlans", test_backup_plans_list_backup_plans(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:ListBackupPlansPaginated".to_string(),
+                "backup-plans:ListBackupPlansPaginated".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "ListBackupPlansPaginated", test_backup_plans_shadow_list_backup_plans_paginated(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "ListBackupPlansPaginated", test_backup_plans_list_backup_plans_paginated(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:UpdateBackupPlan".to_string(),
+                "backup-plans:UpdateBackupPlan".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "UpdateBackupPlan", test_backup_plans_shadow_update_backup_plan(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "UpdateBackupPlan", test_backup_plans_update_backup_plan(&client))
                             .await
                     })
                 }),
@@ -121,12 +121,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:GetBackupPlanNotFound".to_string(),
+                "backup-plans:GetBackupPlanNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "GetBackupPlanNotFound", test_backup_plans_shadow_get_backup_plan_not_found(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "GetBackupPlanNotFound", test_backup_plans_get_backup_plan_not_found(&client))
                             .await
                     })
                 }),
@@ -135,12 +135,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:GetBackupPlanVersionNotFound".to_string(),
+                "backup-plans:GetBackupPlanVersionNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "GetBackupPlanVersionNotFound", test_backup_plans_shadow_get_backup_plan_version_not_found(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "GetBackupPlanVersionNotFound", test_backup_plans_get_backup_plan_version_not_found(&client))
                             .await
                     })
                 }),
@@ -149,12 +149,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:UpdateBackupPlanNotFound".to_string(),
+                "backup-plans:UpdateBackupPlanNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "UpdateBackupPlanNotFound", test_backup_plans_shadow_update_backup_plan_not_found(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "UpdateBackupPlanNotFound", test_backup_plans_update_backup_plan_not_found(&client))
                             .await
                     })
                 }),
@@ -163,12 +163,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:DeleteBackupPlan".to_string(),
+                "backup-plans:DeleteBackupPlan".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "DeleteBackupPlan", test_backup_plans_shadow_delete_backup_plan(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "DeleteBackupPlan", test_backup_plans_delete_backup_plan(&client))
                             .await
                     })
                 }),
@@ -177,12 +177,12 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-plans-shadow:DeleteBackupPlanNotFound".to_string(),
+                "backup-plans:DeleteBackupPlanNotFound".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW
-                            .run_test(&ctx, "DeleteBackupPlanNotFound", test_backup_plans_shadow_delete_backup_plan_not_found(&client))
+                        GROUP_BACKUP_PLANS
+                            .run_test(&ctx, "DeleteBackupPlanNotFound", test_backup_plans_delete_backup_plan_not_found(&client))
                             .await
                     })
                 }),
@@ -196,11 +196,11 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             setups.insert(
-                "backup-plans-shadow".to_string(),
+                "backup-plans".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW.run_setup(&ctx, setup_backup_plans_shadow(&client)).await
+                        GROUP_BACKUP_PLANS.run_setup(&ctx, setup_backup_plans(&client)).await
                     })
                 }),
             );
@@ -213,11 +213,11 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "backup-plans-shadow".to_string(),
+                "backup-plans".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_PLANS_SHADOW.run_teardown(&ctx, teardown_backup_plans_shadow(&client)).await
+                        GROUP_BACKUP_PLANS.run_teardown(&ctx, teardown_backup_plans(&client)).await
                     })
                 }),
             );
@@ -226,7 +226,7 @@ impl ServiceGroup for ScenariosAuthoredBackupPlans {
     }
 }
 
-fn setup_backup_plans_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn setup_backup_plans(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateBackupVault",
@@ -299,7 +299,7 @@ fn setup_backup_plans_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
     ]
 }
 
-fn teardown_backup_plans_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn teardown_backup_plans(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteBackupPlan",
@@ -370,7 +370,7 @@ fn teardown_backup_plans_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
     ]
 }
 
-fn test_backup_plans_shadow_create_backup_plan(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_create_backup_plan(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "CreateBackupPlan",
@@ -433,7 +433,7 @@ fn test_backup_plans_shadow_create_backup_plan(client: &aws_sdk_backup::Client) 
     }
 }
 
-fn test_backup_plans_shadow_get_backup_plan(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_get_backup_plan(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "GetBackupPlan",
@@ -472,7 +472,7 @@ fn test_backup_plans_shadow_get_backup_plan(client: &aws_sdk_backup::Client) -> 
     }
 }
 
-fn test_backup_plans_shadow_list_backup_plans(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_list_backup_plans(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "ListBackupPlans",
@@ -506,7 +506,7 @@ fn test_backup_plans_shadow_list_backup_plans(client: &aws_sdk_backup::Client) -
     }
 }
 
-fn test_backup_plans_shadow_list_backup_plans_paginated(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_list_backup_plans_paginated(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "ListBackupPlans",
@@ -654,7 +654,7 @@ fn test_backup_plans_shadow_list_backup_plans_paginated(client: &aws_sdk_backup:
     }
 }
 
-fn test_backup_plans_shadow_update_backup_plan(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_update_backup_plan(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateBackupPlan",
@@ -773,7 +773,7 @@ fn test_backup_plans_shadow_update_backup_plan(client: &aws_sdk_backup::Client) 
     }
 }
 
-fn test_backup_plans_shadow_get_backup_plan_not_found(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_get_backup_plan_not_found(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "GetBackupPlan",
@@ -801,7 +801,7 @@ fn test_backup_plans_shadow_get_backup_plan_not_found(client: &aws_sdk_backup::C
     }
 }
 
-fn test_backup_plans_shadow_get_backup_plan_version_not_found(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_get_backup_plan_version_not_found(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "GetBackupPlan",
@@ -833,7 +833,7 @@ fn test_backup_plans_shadow_get_backup_plan_version_not_found(client: &aws_sdk_b
     }
 }
 
-fn test_backup_plans_shadow_update_backup_plan_not_found(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_update_backup_plan_not_found(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateBackupPlan",
@@ -887,7 +887,7 @@ fn test_backup_plans_shadow_update_backup_plan_not_found(client: &aws_sdk_backup
     }
 }
 
-fn test_backup_plans_shadow_delete_backup_plan(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_delete_backup_plan(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteBackupPlan",
@@ -946,7 +946,7 @@ fn test_backup_plans_shadow_delete_backup_plan(client: &aws_sdk_backup::Client) 
     }
 }
 
-fn test_backup_plans_shadow_delete_backup_plan_not_found(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_plans_delete_backup_plan_not_found(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteBackupPlan",

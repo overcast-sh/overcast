@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupEcrRepositoriesShadow = new("ecr-repositories-shadow", "compat/model/authored/ecr-repositories.json");
+    private static readonly ScenarioGroup GroupEcrRepositories = new("ecr-repositories", "compat/model/authored/ecr-repositories.json");
 
     private readonly Lazy<AmazonECRClient> _client;
 
@@ -35,32 +35,32 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["ecr-repositories-shadow:CreateRepository"] = TestEcrRepositoriesShadowCreateRepository,
-        ["ecr-repositories-shadow:DescribeRepositories"] = TestEcrRepositoriesShadowDescribeRepositories,
-        ["ecr-repositories-shadow:DescribeRepositoriesAll"] = TestEcrRepositoriesShadowDescribeRepositoriesAll,
-        ["ecr-repositories-shadow:DescribeRepositoriesPaginated"] = TestEcrRepositoriesShadowDescribeRepositoriesPaginated,
-        ["ecr-repositories-shadow:DescribeRepositoriesSigned"] = TestEcrRepositoriesShadowDescribeRepositoriesSigned,
-        ["ecr-repositories-shadow:DescribeRepositoriesNotFound"] = TestEcrRepositoriesShadowDescribeRepositoriesNotFound,
-        ["ecr-repositories-shadow:CreateRepositoryAlreadyExists"] = TestEcrRepositoriesShadowCreateRepositoryAlreadyExists,
-        ["ecr-repositories-shadow:DeleteRepository"] = TestEcrRepositoriesShadowDeleteRepository,
-        ["ecr-repositories-shadow:DeleteRepositoryNotEmpty"] = TestEcrRepositoriesShadowDeleteRepositoryNotEmpty,
-        ["ecr-repositories-shadow:DeleteRepositoryForce"] = TestEcrRepositoriesShadowDeleteRepositoryForce,
+        ["ecr-repositories:CreateRepository"] = TestEcrRepositoriesCreateRepository,
+        ["ecr-repositories:DescribeRepositories"] = TestEcrRepositoriesDescribeRepositories,
+        ["ecr-repositories:DescribeRepositoriesAll"] = TestEcrRepositoriesDescribeRepositoriesAll,
+        ["ecr-repositories:DescribeRepositoriesPaginated"] = TestEcrRepositoriesDescribeRepositoriesPaginated,
+        ["ecr-repositories:DescribeRepositoriesSigned"] = TestEcrRepositoriesDescribeRepositoriesSigned,
+        ["ecr-repositories:DescribeRepositoriesNotFound"] = TestEcrRepositoriesDescribeRepositoriesNotFound,
+        ["ecr-repositories:CreateRepositoryAlreadyExists"] = TestEcrRepositoriesCreateRepositoryAlreadyExists,
+        ["ecr-repositories:DeleteRepository"] = TestEcrRepositoriesDeleteRepository,
+        ["ecr-repositories:DeleteRepositoryNotEmpty"] = TestEcrRepositoriesDeleteRepositoryNotEmpty,
+        ["ecr-repositories:DeleteRepositoryForce"] = TestEcrRepositoriesDeleteRepositoryForce,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-repositories-shadow"] = SetupEcrRepositoriesShadow,
+        ["ecr-repositories"] = SetupEcrRepositories,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["ecr-repositories-shadow"] = TeardownEcrRepositoriesShadow,
+        ["ecr-repositories"] = TeardownEcrRepositories,
     };
 
     private AmazonECRClient Cl() => _client.Value;
 
-    private Task SetupEcrRepositoriesShadow(TestContext t) =>
-        GroupEcrRepositoriesShadow.RunSetupAsync(t,
+    private Task SetupEcrRepositories(TestContext t) =>
+        GroupEcrRepositories.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateRepository",
@@ -166,8 +166,8 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
             }
         );
 
-    private Task TeardownEcrRepositoriesShadow(TestContext t) =>
-        GroupEcrRepositoriesShadow.RunTeardownAsync(t,
+    private Task TeardownEcrRepositories(TestContext t) =>
+        GroupEcrRepositories.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteRepository",
@@ -254,7 +254,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
             }
         );
 
-    private Task TestEcrRepositoriesShadowCreateRepository(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "CreateRepository", new ScenarioTest
+    private Task TestEcrRepositoriesCreateRepository(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "CreateRepository", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -279,9 +279,9 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
                 Check.NonEmpty("$.repository.createdAt"),
                 Check.EqualTo("$.repository.imageTagMutability", "MUTABLE"),
                 Check.NonEmpty("$.repository.registryId"),
-                Check.Matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-shadow-repo$"),
+                Check.Matches("$.repository.repositoryArn", "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-repo$"),
                 Check.EqualTo("$.repository.repositoryName", Val.Name("repo")),
-                Check.Matches("$.repository.repositoryUri", "/.+-ecr-repositories-shadow-repo$")
+                Check.Matches("$.repository.repositoryUri", "/.+-ecr-repositories-repo$")
             ),
             Clause.Readback(
                 new ScenarioCall
@@ -303,7 +303,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDescribeRepositories(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DescribeRepositories", new ScenarioTest
+    private Task TestEcrRepositoriesDescribeRepositories(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DescribeRepositories", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -325,13 +325,13 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
                 Check.NonEmpty("$.repositories[0].registryId"),
                 Check.EqualTo("$.repositories[0].repositoryArn", Val.Ref("repo.arn")),
                 Check.EqualTo("$.repositories[0].repositoryName", Val.Name("repo")),
-                Check.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$"),
+                Check.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$"),
                 Check.Missing("$.repositories[1]")
             )
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDescribeRepositoriesAll(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DescribeRepositoriesAll", new ScenarioTest
+    private Task TestEcrRepositoriesDescribeRepositoriesAll(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DescribeRepositoriesAll", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -368,7 +368,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDescribeRepositoriesPaginated(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DescribeRepositoriesPaginated", new ScenarioTest
+    private Task TestEcrRepositoriesDescribeRepositoriesPaginated(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DescribeRepositoriesPaginated", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -492,7 +492,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDescribeRepositoriesSigned(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DescribeRepositoriesSigned", new ScenarioTest
+    private Task TestEcrRepositoriesDescribeRepositoriesSigned(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DescribeRepositoriesSigned", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -514,12 +514,12 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
                 Check.NonEmpty("$.repositories[0].registryId"),
                 Check.EqualTo("$.repositories[0].repositoryArn", Val.Ref("repo.arn")),
                 Check.EqualTo("$.repositories[0].repositoryName", Val.Name("repo")),
-                Check.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-shadow-repo$")
+                Check.Matches("$.repositories[0].repositoryUri", "/.+-ecr-repositories-repo$")
             )
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDescribeRepositoriesNotFound(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DescribeRepositoriesNotFound", new ScenarioTest
+    private Task TestEcrRepositoriesDescribeRepositoriesNotFound(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DescribeRepositoriesNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -540,7 +540,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
         ],
     });
 
-    private Task TestEcrRepositoriesShadowCreateRepositoryAlreadyExists(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "CreateRepositoryAlreadyExists", new ScenarioTest
+    private Task TestEcrRepositoriesCreateRepositoryAlreadyExists(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "CreateRepositoryAlreadyExists", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -561,7 +561,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDeleteRepository(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DeleteRepository", new ScenarioTest
+    private Task TestEcrRepositoriesDeleteRepository(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DeleteRepository", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -599,7 +599,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDeleteRepositoryNotEmpty(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DeleteRepositoryNotEmpty", new ScenarioTest
+    private Task TestEcrRepositoriesDeleteRepositoryNotEmpty(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DeleteRepositoryNotEmpty", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -638,7 +638,7 @@ internal sealed class ScenariosAuthoredEcrRepositories : IServiceGroup
         ],
     });
 
-    private Task TestEcrRepositoriesShadowDeleteRepositoryForce(TestContext t) => GroupEcrRepositoriesShadow.RunTestAsync(t, "DeleteRepositoryForce", new ScenarioTest
+    private Task TestEcrRepositoriesDeleteRepositoryForce(TestContext t) => GroupEcrRepositories.RunTestAsync(t, "DeleteRepositoryForce", new ScenarioTest
     {
         Call = new ScenarioCall
         {

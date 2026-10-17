@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupBackupPlansShadow = new("backup-plans-shadow", "compat/model/authored/backup-plans.json");
+    private static readonly ScenarioGroup GroupBackupPlans = new("backup-plans", "compat/model/authored/backup-plans.json");
 
     private readonly Lazy<AmazonBackupClient> _client;
 
@@ -35,32 +35,32 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["backup-plans-shadow:CreateBackupPlan"] = TestBackupPlansShadowCreateBackupPlan,
-        ["backup-plans-shadow:GetBackupPlan"] = TestBackupPlansShadowGetBackupPlan,
-        ["backup-plans-shadow:ListBackupPlans"] = TestBackupPlansShadowListBackupPlans,
-        ["backup-plans-shadow:ListBackupPlansPaginated"] = TestBackupPlansShadowListBackupPlansPaginated,
-        ["backup-plans-shadow:UpdateBackupPlan"] = TestBackupPlansShadowUpdateBackupPlan,
-        ["backup-plans-shadow:GetBackupPlanNotFound"] = TestBackupPlansShadowGetBackupPlanNotFound,
-        ["backup-plans-shadow:GetBackupPlanVersionNotFound"] = TestBackupPlansShadowGetBackupPlanVersionNotFound,
-        ["backup-plans-shadow:UpdateBackupPlanNotFound"] = TestBackupPlansShadowUpdateBackupPlanNotFound,
-        ["backup-plans-shadow:DeleteBackupPlan"] = TestBackupPlansShadowDeleteBackupPlan,
-        ["backup-plans-shadow:DeleteBackupPlanNotFound"] = TestBackupPlansShadowDeleteBackupPlanNotFound,
+        ["backup-plans:CreateBackupPlan"] = TestBackupPlansCreateBackupPlan,
+        ["backup-plans:GetBackupPlan"] = TestBackupPlansGetBackupPlan,
+        ["backup-plans:ListBackupPlans"] = TestBackupPlansListBackupPlans,
+        ["backup-plans:ListBackupPlansPaginated"] = TestBackupPlansListBackupPlansPaginated,
+        ["backup-plans:UpdateBackupPlan"] = TestBackupPlansUpdateBackupPlan,
+        ["backup-plans:GetBackupPlanNotFound"] = TestBackupPlansGetBackupPlanNotFound,
+        ["backup-plans:GetBackupPlanVersionNotFound"] = TestBackupPlansGetBackupPlanVersionNotFound,
+        ["backup-plans:UpdateBackupPlanNotFound"] = TestBackupPlansUpdateBackupPlanNotFound,
+        ["backup-plans:DeleteBackupPlan"] = TestBackupPlansDeleteBackupPlan,
+        ["backup-plans:DeleteBackupPlanNotFound"] = TestBackupPlansDeleteBackupPlanNotFound,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-plans-shadow"] = SetupBackupPlansShadow,
+        ["backup-plans"] = SetupBackupPlans,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["backup-plans-shadow"] = TeardownBackupPlansShadow,
+        ["backup-plans"] = TeardownBackupPlans,
     };
 
     private AmazonBackupClient Cl() => _client.Value;
 
-    private Task SetupBackupPlansShadow(TestContext t) =>
-        GroupBackupPlansShadow.RunSetupAsync(t,
+    private Task SetupBackupPlans(TestContext t) =>
+        GroupBackupPlans.RunSetupAsync(t,
             new ScenarioCall
             {
                 Op = "CreateBackupVault",
@@ -104,8 +104,8 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
             }
         );
 
-    private Task TeardownBackupPlansShadow(TestContext t) =>
-        GroupBackupPlansShadow.RunTeardownAsync(t,
+    private Task TeardownBackupPlans(TestContext t) =>
+        GroupBackupPlans.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteBackupPlan",
@@ -147,7 +147,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
             }
         );
 
-    private Task TestBackupPlansShadowCreateBackupPlan(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "CreateBackupPlan", new ScenarioTest
+    private Task TestBackupPlansCreateBackupPlan(TestContext t) => GroupBackupPlans.RunTestAsync(t, "CreateBackupPlan", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -189,7 +189,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowGetBackupPlan(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "GetBackupPlan", new ScenarioTest
+    private Task TestBackupPlansGetBackupPlan(TestContext t) => GroupBackupPlans.RunTestAsync(t, "GetBackupPlan", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -219,7 +219,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowListBackupPlans(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "ListBackupPlans", new ScenarioTest
+    private Task TestBackupPlansListBackupPlans(TestContext t) => GroupBackupPlans.RunTestAsync(t, "ListBackupPlans", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -244,7 +244,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowListBackupPlansPaginated(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "ListBackupPlansPaginated", new ScenarioTest
+    private Task TestBackupPlansListBackupPlansPaginated(TestContext t) => GroupBackupPlans.RunTestAsync(t, "ListBackupPlansPaginated", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -333,7 +333,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowUpdateBackupPlan(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "UpdateBackupPlan", new ScenarioTest
+    private Task TestBackupPlansUpdateBackupPlan(TestContext t) => GroupBackupPlans.RunTestAsync(t, "UpdateBackupPlan", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -409,7 +409,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowGetBackupPlanNotFound(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "GetBackupPlanNotFound", new ScenarioTest
+    private Task TestBackupPlansGetBackupPlanNotFound(TestContext t) => GroupBackupPlans.RunTestAsync(t, "GetBackupPlanNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -430,7 +430,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowGetBackupPlanVersionNotFound(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "GetBackupPlanVersionNotFound", new ScenarioTest
+    private Task TestBackupPlansGetBackupPlanVersionNotFound(TestContext t) => GroupBackupPlans.RunTestAsync(t, "GetBackupPlanVersionNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -452,7 +452,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowUpdateBackupPlanNotFound(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "UpdateBackupPlanNotFound", new ScenarioTest
+    private Task TestBackupPlansUpdateBackupPlanNotFound(TestContext t) => GroupBackupPlans.RunTestAsync(t, "UpdateBackupPlanNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -485,7 +485,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowDeleteBackupPlan(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "DeleteBackupPlan", new ScenarioTest
+    private Task TestBackupPlansDeleteBackupPlan(TestContext t) => GroupBackupPlans.RunTestAsync(t, "DeleteBackupPlan", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -526,7 +526,7 @@ internal sealed class ScenariosAuthoredBackupPlans : IServiceGroup
         ],
     });
 
-    private Task TestBackupPlansShadowDeleteBackupPlanNotFound(TestContext t) => GroupBackupPlansShadow.RunTestAsync(t, "DeleteBackupPlanNotFound", new ScenarioTest
+    private Task TestBackupPlansDeleteBackupPlanNotFound(TestContext t) => GroupBackupPlans.RunTestAsync(t, "DeleteBackupPlanNotFound", new ScenarioTest
     {
         Call = new ScenarioCall
         {

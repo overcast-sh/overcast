@@ -1,5 +1,5 @@
 {
-  "$comment": "Authored shadow port of the hand-written registry group ecr-repositories (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/ecr.go); go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk never implemented it and carry it as parity debt, which the port closes once it is flipped. This is step 1 of the two-PR migration: the group is named ecr-repositories-shadow and runs beside the native, gating nothing. It was left out of the wave 3 ports (#2240) because the IR could not walk the pages of a list and Overcast did not page DescribeRepositories, ListImages or DescribeImages; both are fixed now (#2315, #2317). The clauses are what the cli native asserted, plus read-backs of documented effects where it asserted only success, each choice stated on its test — see compat/model/README.md § Authored scenarios. The cli native also asserts the HTTP status (400) of every error it provokes beside its code. The IR's error clause has no status, so only the code is carried: ECR is awsJson1_1 and none of its modeled errors binds an httpError status, so 400 is the protocol default, and the code is what a caller branches on — the same choice every earlier port made.",
+  "$comment": "Authored port of the hand-written registry group ecr-repositories (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native was the cli suite's (compat/suites/cli/internal/groups/ecr.go); go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk never implemented it and carry it as parity debt, which the port closes. It soaked as ecr-repositories-shadow beside the cli native until the nightly comparison (run 39002025575) found none of its 70 (suite, test) pairs diverged in any of three soak runs; the flip then renamed it to ecr-repositories, pointed the hand-written registry entry at it and deleted the native code. It was left out of the wave 3 ports (#2240) because the IR could not walk the pages of a list and Overcast did not page DescribeRepositories, ListImages or DescribeImages; both are fixed now (#2315, #2317). The clauses are what the cli native asserted, plus read-backs of documented effects where it asserted only success, each choice stated on its test — see compat/model/README.md § Authored scenarios. The cli native also asserts the HTTP status (400) of every error it provokes beside its code. The IR's error clause has no status, so only the code is carried: ECR is awsJson1_1 and none of its modeled errors binds an httpError status, so 400 is the protocol default, and the code is what a caller branches on — the same choice every earlier port made.",
   "version": 1,
   "service": "ecr",
   "client": {
@@ -13,8 +13,8 @@
   },
   "groups": [
     {
-      "$comment": "The native's setup creates two extra repositories (-page1, -page2) so that three exist for the pagination test however the rest of the group fares; so does this setup, and it exports their ARNs. It also creates the three repositories the native creates inside DeleteRepository, DeleteRepositoryNotEmpty and DeleteRepositoryForce, because an IR test has one primary call, and puts an image in two of them. They are named by $name ({runId}-ecr-repositories-shadow-<n>), so they are never the native group's (whose namer is ecr-repo) or another ECR group's; CreateRepository refuses a repeat and the groups run in parallel. The extra repositories exist while the pagination test walks, which only adds pages. Teardown deletes all six with force, as the native does, each call wrapped individually so a repository a test already deleted is skipped. Only the pagination walks are wrapped in `eventually`; the native polls nothing else.",
-      "name": "ecr-repositories-shadow",
+      "$comment": "The native's setup creates two extra repositories (-page1, -page2) so that three exist for the pagination test however the rest of the group fares; so does this setup, and it exports their ARNs. It also creates the three repositories the native creates inside DeleteRepository, DeleteRepositoryNotEmpty and DeleteRepositoryForce, because an IR test has one primary call, and puts an image in two of them. They are named by $name ({runId}-ecr-repositories-<n>), so they are never the native group's (whose namer is ecr-repo) or another ECR group's; CreateRepository refuses a repeat and the groups run in parallel. The extra repositories exist while the pagination test walks, which only adds pages. Teardown deletes all six with force, as the native does, each call wrapped individually so a repository a test already deleted is skipped. Only the pagination walks are wrapped in `eventually`; the native polls nothing else.",
+      "name": "ecr-repositories",
       "kind": "lifecycle",
       "setup": [
         {
@@ -86,7 +86,7 @@
       ],
       "tests": [
         {
-          "$comment": "The native requires the repository CreateRepository describes to carry the name asked for, an ECR ARN ending in it, a non-empty registryId, a repositoryUri naming it, a createdAt and imageTagMutability MUTABLE, then describes it back and requires the same ARN. The ARN and URI suffix cannot interpolate the name, so they are regexes on the shape of the group's own $name ({runId}-ecr-repositories-shadow-repo): the host of the URI is the registry container's published address and is not fixed, only the path is. The ARN is exported for the later tests.",
+          "$comment": "The native requires the repository CreateRepository describes to carry the name asked for, an ECR ARN ending in it, a non-empty registryId, a repositoryUri naming it, a createdAt and imageTagMutability MUTABLE, then describes it back and requires the same ARN. The ARN and URI suffix cannot interpolate the name, so they are regexes on the shape of the group's own $name ({runId}-ecr-repositories-repo): the host of the URI is the registry container's published address and is not fixed, only the path is. The ARN is exported for the later tests.",
           "name": "CreateRepository",
           "op": "CreateRepository",
           "call": {
@@ -110,13 +110,13 @@
                   }
                 },
                 "$.repository.repositoryArn": {
-                  "matches": "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-shadow-repo$"
+                  "matches": "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-repo$"
                 },
                 "$.repository.registryId": {
                   "nonEmpty": true
                 },
                 "$.repository.repositoryUri": {
-                  "matches": "/.+-ecr-repositories-shadow-repo$"
+                  "matches": "/.+-ecr-repositories-repo$"
                 },
                 "$.repository.createdAt": {
                   "nonEmpty": true
@@ -188,7 +188,7 @@
                   "nonEmpty": true
                 },
                 "$.repositories[0].repositoryUri": {
-                  "matches": "/.+-ecr-repositories-shadow-repo$"
+                  "matches": "/.+-ecr-repositories-repo$"
                 },
                 "$.repositories[0].createdAt": {
                   "nonEmpty": true
@@ -387,7 +387,7 @@
                   "nonEmpty": true
                 },
                 "$.repositories[0].repositoryUri": {
-                  "matches": "/.+-ecr-repositories-shadow-repo$"
+                  "matches": "/.+-ecr-repositories-repo$"
                 },
                 "$.repositories[0].createdAt": {
                   "nonEmpty": true

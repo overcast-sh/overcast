@@ -2440,6 +2440,7 @@
     {
       "service": "ecr",
       "name": "ecr-repositories",
+      "scenario": "compat/model/authored/ecr-repositories.json",
       "tests": [
         {
           "name": "CreateRepository"
@@ -2511,6 +2512,7 @@
     {
       "service": "ecr",
       "name": "ecr-images",
+      "scenario": "compat/model/authored/ecr-images.json",
       "tests": [
         {
           "name": "PutImage"
@@ -4109,6 +4111,7 @@
     {
       "service": "backup",
       "name": "backup-vaults",
+      "scenario": "compat/model/authored/backup-vaults.json",
       "tests": [
         {
           "name": "CreateBackupVault"
@@ -4169,6 +4172,7 @@
     {
       "service": "backup",
       "name": "backup-plans",
+      "scenario": "compat/model/authored/backup-plans.json",
       "tests": [
         {
           "name": "CreateBackupPlan"
