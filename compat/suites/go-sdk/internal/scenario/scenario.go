@@ -131,6 +131,11 @@ const (
 	CheckEquals   CheckKind = "equals"
 	CheckMatches  CheckKind = "matches"
 	CheckMissing  CheckKind = "missing"
+	// CheckEndsWith, CheckStartsWith and CheckContains compare a string with
+	// the evaluated operand, a value expression that must yield a string.
+	CheckEndsWith   CheckKind = "endsWith"
+	CheckStartsWith CheckKind = "startsWith"
+	CheckContains   CheckKind = "contains"
 	// CheckEqualsJSON compares a member holding a JSON document by value.
 	CheckEqualsJSON CheckKind = "equalsJSON"
 )
@@ -233,6 +238,23 @@ func Equals(path string, want any) Check {
 // Matches holds when the path resolves to a string matching the pattern.
 func Matches(path, pattern string) Check {
 	return Check{Path: path, Kind: CheckMatches, Value: pattern}
+}
+
+// EndsWith holds when the path resolves to a string that ends with the
+// evaluated operand (case-sensitive, no regex). The operand is a value
+// expression, evaluated like an Equals operand, and must yield a string.
+func EndsWith(path string, suffix any) Check {
+	return Check{Path: path, Kind: CheckEndsWith, Value: suffix}
+}
+
+// StartsWith is EndsWith for the front of the string.
+func StartsWith(path string, prefix any) Check {
+	return Check{Path: path, Kind: CheckStartsWith, Value: prefix}
+}
+
+// Contains is EndsWith for any position in the string.
+func Contains(path string, part any) Check {
+	return Check{Path: path, Kind: CheckContains, Value: part}
 }
 
 // EqualsJSON holds when the path resolves to a JSON document equal, as a JSON

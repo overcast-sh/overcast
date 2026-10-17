@@ -499,6 +499,49 @@ async fn every_check_holds_where_the_ir_says_it_does() {
     assert!(!holds(vec![equals("$.Count", lit(json!("0")))]).await);
 }
 
+#[tokio::test]
+async fn the_affix_checks_evaluate_a_value_expression() {
+    let body = json!({"Url": "http://q/run7-sqs-gen-queue-q", "Count": 0});
+    let run = |check: Check| {
+        let body = body.clone();
+        async move {
+            GROUP
+                .run_test(
+                    &ctx(),
+                    "T",
+                    Test {
+                        call: ok_call("Op", map(vec![]), body),
+                        assert: vec![response_field(vec![check])],
+                    },
+                )
+                .await
+        }
+    };
+
+    assert!(run(ends_with("$.Url", concat(vec![lit(json!("/")), name("q")])))
+        .await
+        .is_ok());
+    assert!(run(starts_with("$.Url", lit(json!("http://q/")))).await.is_ok());
+    assert!(run(ends_with("$.Url", lit(json!("-Q")))).await.is_err(), "case-sensitive");
+    assert!(run(starts_with("$.Url", lit(json!("q/")))).await.is_err());
+    assert!(run(contains("$.Url", concat(vec![lit(json!("q/")), name("q")])))
+        .await
+        .is_ok());
+    assert!(run(contains("$.Url", lit(json!("q/x")))).await.is_err());
+    assert!(run(ends_with("$.Absent", lit(json!("x")))).await.is_err());
+    assert!(run(ends_with("$.Count", lit(json!("0")))).await.is_err(), "wants a string");
+
+    let wrong = run(ends_with("$.Url", lit(json!("-nope")))).await.expect_err("fails");
+    assert!(
+        wrong.contains("responseField endsWith at $.Url: expected a string ending with \"-nope\","),
+        "{wrong}"
+    );
+    let number = run(starts_with("$.Url", lit(json!(7)))).await.expect_err("fails");
+    assert!(number.contains("expected a non-empty string operand"), "{number}");
+    let empty = run(starts_with("$.Url", lit(json!("")))).await.expect_err("fails");
+    assert!(empty.contains("expected a non-empty string operand"), "{empty}");
+}
+
 // ── equalsJSON ──────────────────────────────────────────────────────────────
 //
 // The shared fixture (equalsjsonfixtures.rs) sits outside the image build's

@@ -508,6 +508,13 @@ func dotnetCheck(path string, c check) string {
 		return fmt.Sprintf("Check.Missing(%s)", csString(path))
 	case c.Matches != "":
 		return fmt.Sprintf("Check.Matches(%s, %s)", csString(path), csString(c.Matches))
+	case c.hasAffix():
+		name, operand := c.affix()
+		value, err := dotnetValue(operand)
+		if err != nil {
+			value = fmt.Sprintf("%#v", operand)
+		}
+		return fmt.Sprintf("Check.%s(%s, %s)", upperFirst(name), csString(path), value)
 	case c.EqualsJSON != nil:
 		text, _ := equalsJSONText(c.EqualsJSON)
 		return fmt.Sprintf("Check.EqualsJson(%s, %s)", csString(path), csString(text))

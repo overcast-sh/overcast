@@ -261,6 +261,76 @@ public sealed class ScenarioTests
     }
 
     /// <summary>
+    /// endsWith and startsWith take a value expression as their operand,
+    /// evaluated like an equals operand against the run's id and the group's
+    /// name, and must get a non-empty string out of it.
+    /// </summary>
+    [Fact]
+    public async Task AffixChecksEvaluateTheirOperand()
+    {
+        (Check Check, bool Holds)[] cases =
+        [
+            (Check.EndsWith("$.Name", Val.Concat("-", Val.Name("q"))), false),
+            (Check.EndsWith("$.Url", Val.Concat("/", Val.Name("q"))), true),
+            (Check.StartsWith("$.Url", "http://q/"), true),
+            (Check.Contains("$.Url", Val.Concat("q/", Val.Name("q"))), true),
+            (Check.Contains("$.Url", "q/x"), false),
+            (Check.EndsWith("$.Url", "-Q"), false),
+            (Check.StartsWith("$.Url", "q/"), false),
+            (Check.EndsWith("$.NextToken", "x"), false),
+            (Check.EndsWith("$.Empty", "x"), false),
+            (Check.EndsWith("$.Url", Val.Lit(7)), false),
+            (Check.StartsWith("$.Url", ""), false),
+        ];
+
+        foreach (var (check, holds) in cases)
+        {
+            var test = new ScenarioTest
+            {
+                Call = new ScenarioCall
+                {
+                    Op = "ListQueues",
+                    Params = "{}",
+                    Build = _ => new ListQueuesRequest(),
+                    SendAsync = SendOk(new AffixResponse { Url = "http://q/oc-test-sqs-gen-queue-q", Empty = [] }),
+                },
+                Assert = [Clause.ResponseField(check)],
+            };
+            var failure = await Record.ExceptionAsync(() => Group.RunTestAsync(NewContext(), "ListQueues", test));
+            if (holds)
+            {
+                Assert.True(failure is null, $"{check.Kind} at {check.Path} should hold: {failure?.Message}");
+            }
+            else
+            {
+                Assert.IsType<ScenarioFailure>(failure);
+            }
+        }
+
+        var wrong = await Assert.ThrowsAsync<ScenarioFailure>(() => Group.RunTestAsync(NewContext(), "ListQueues",
+            new ScenarioTest
+            {
+                Call = new ScenarioCall
+                {
+                    Op = "ListQueues",
+                    Params = "{}",
+                    Build = _ => new ListQueuesRequest(),
+                    SendAsync = SendOk(new AffixResponse { Url = "http://q/a" }),
+                },
+                Assert = [Clause.ResponseField(Check.EndsWith("$.Url", "-nope"))],
+            }));
+        Assert.Contains("responseField endsWith at $.Url: expected a string ending with \"-nope\",",
+            wrong.Message, StringComparison.Ordinal);
+    }
+
+    private sealed class AffixResponse
+    {
+        public string? Url { get; init; }
+        public string? NextToken { get; init; }
+        public List<string>? Empty { get; init; }
+    }
+
+    /// <summary>
     /// equalsJSON through the group, on the member it exists for: IAM hands
     /// AWSSDK the role's trust policy as the percent-encoded text the service
     /// sent, and the check decodes and compares it as a document.

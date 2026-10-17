@@ -378,6 +378,12 @@ fn test_s3tables_tables_create_table_bucket(client: &aws_sdk_s3tables::Client) -
             scenario::response_field(vec![
                 scenario::matches("$.arn", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}$"),
             ]),
+            scenario::response_field(vec![
+                scenario::ends_with("$.arn", scenario::concat(vec![
+                    scenario::lit(::serde_json::json!(":bucket/")),
+                    scenario::name("bucket"),
+                ])),
+            ]),
             scenario::readback(
                 Call {
                     op: "GetTableBucket",
@@ -613,6 +619,12 @@ fn test_s3tables_tables_create_table(client: &aws_sdk_s3tables::Client) -> Test 
             scenario::response_field(vec![
                 scenario::matches("$.tableARN", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}/table/[a-zA-Z0-9_-]{1,255}$"),
                 scenario::non_empty("$.versionToken"),
+            ]),
+            scenario::response_field(vec![
+                scenario::starts_with("$.tableARN", scenario::concat(vec![
+                    scenario::context("bucket.arn"),
+                    scenario::lit(::serde_json::json!("/table/")),
+                ])),
             ]),
             scenario::readback(
                 Call {

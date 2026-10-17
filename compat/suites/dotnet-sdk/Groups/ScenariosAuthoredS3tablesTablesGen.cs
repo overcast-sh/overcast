@@ -136,6 +136,9 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
             Clause.ResponseField(
                 Check.Matches("$.arn", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}$")
             ),
+            Clause.ResponseField(
+                Check.EndsWith("$.arn", Val.Concat(":bucket/", Val.Name("bucket")))
+            ),
             Clause.Readback(
                 new ScenarioCall
                 {
@@ -301,6 +304,9 @@ internal sealed class ScenariosAuthoredS3tablesTables : IServiceGroup
             Clause.ResponseField(
                 Check.Matches("$.tableARN", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}/table/[a-zA-Z0-9_-]{1,255}$"),
                 Check.NonEmpty("$.versionToken")
+            ),
+            Clause.ResponseField(
+                Check.StartsWith("$.tableARN", Val.Concat(Val.Ref("bucket.arn"), "/table/"))
             ),
             Clause.Readback(
                 new ScenarioCall

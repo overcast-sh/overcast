@@ -413,6 +413,31 @@ func (e *execution) check(obs observed, path string, c Check, kind, step string)
 		}
 		return nil
 
+	case CheckEndsWith, CheckStartsWith, CheckContains:
+		operand, err := e.eval.eval(c.Value)
+		if err != nil {
+			return e.fail(obs, step, kind+" "+string(c.Kind), path, "the operand to evaluate", quote(err.Error()))
+		}
+		affix, isStr := operand.(string)
+		if !isStr || affix == "" {
+			return e.fail(obs, step, kind+" "+string(c.Kind), path,
+				"a non-empty string operand", quote("the operand evaluated to "+render(operand)))
+		}
+		s, gotStr := got.(string)
+		how, holds := "", false
+		switch c.Kind {
+		case CheckEndsWith:
+			how, holds = "ending with", resolved && gotStr && strings.HasSuffix(s, affix)
+		case CheckStartsWith:
+			how, holds = "starting with", resolved && gotStr && strings.HasPrefix(s, affix)
+		default:
+			how, holds = "containing", resolved && gotStr && strings.Contains(s, affix)
+		}
+		if !holds {
+			return fail(fmt.Sprintf("a string %s %q", how, affix))
+		}
+		return nil
+
 	case CheckEqualsJSON:
 		if holds, actual := equalsJSON(got, resolved, c.Value); !holds {
 			return e.fail(obs, step, kind+" equalsJSON", path, "equalsJSON "+render(c.Value), actual)

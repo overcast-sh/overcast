@@ -143,6 +143,9 @@ func TestCheckDecoding(t *testing.T) {
 		{body: `{"equals":"60"}`, wantKind: CheckEquals, wantVal: "60"},
 		{body: `{"equals":null}`, wantKind: CheckEquals, wantVal: nil},
 		{body: `{"matches":"^p-"}`, wantKind: CheckMatches, wantVal: "^p-"},
+		{body: `{"endsWith":"-1"}`, wantKind: CheckEndsWith, wantVal: "-1"},
+		{body: `{"contains":"thing/"}`, wantKind: CheckContains, wantVal: "thing/"},
+		{body: `{"startsWith":{"$concat":["arn:",{"$ref":"p.q"}]}}`, wantKind: CheckStartsWith, wantVal: obj{"$concat": []any{"arn:", obj{"$ref": "p.q"}}}},
 		{body: `{"equalsJSON":{"Version":"2012-10-17","Statement":[]}}`, wantKind: CheckEqualsJSON, wantVal: map[string]any{"Version": "2012-10-17", "Statement": []any{}}},
 		{body: `{"equalsJSON":["a",{"b":null}]}`, wantKind: CheckEqualsJSON, wantVal: []any{"a", map[string]any{"b": nil}}},
 		// The operand is a literal document, never a value expression: JSON
@@ -237,7 +240,7 @@ func checkClause(t *testing.T, file, where string, a *Assertion) {
 				t.Errorf("%s: %s: %v", file, where, err)
 			}
 			switch check.Kind {
-			case CheckNonEmpty, CheckIsList, CheckEquals, CheckMatches, CheckEqualsJSON, CheckMissing:
+			case CheckNonEmpty, CheckIsList, CheckEquals, CheckMatches, CheckEndsWith, CheckStartsWith, CheckContains, CheckEqualsJSON, CheckMissing:
 			default:
 				t.Errorf("%s: %s: unknown check %q at %s", file, where, check.Kind, path)
 			}

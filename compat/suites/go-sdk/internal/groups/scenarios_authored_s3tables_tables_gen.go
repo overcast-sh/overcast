@@ -134,6 +134,9 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesCreateTableBucket(ct
 			scenario.ResponseField(
 				scenario.Matches("$.arn", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}$"),
 			),
+			scenario.ResponseField(
+				scenario.EndsWith("$.arn", scenario.Concat(":bucket/", scenario.Name("bucket"))),
+			),
 			scenario.Readback(
 				scenario.Call{
 					Op:     "GetTableBucket",
@@ -291,6 +294,9 @@ func (g *authoredS3tablesTablesScenarios) testS3tablesTablesCreateTable(ctx cont
 			scenario.ResponseField(
 				scenario.Matches("$.tableARN", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}/table/[a-zA-Z0-9_-]{1,255}$"),
 				scenario.NonEmpty("$.versionToken"),
+			),
+			scenario.ResponseField(
+				scenario.StartsWith("$.tableARN", scenario.Concat(scenario.Ref("bucket.arn"), "/table/")),
 			),
 			scenario.Readback(
 				scenario.Call{

@@ -76,6 +76,36 @@ function evaluateCheck(
     return { path, expected: "a list (or nothing)", actual };
   }
 
+  if ("endsWith" in check || "startsWith" in check || "contains" in check) {
+    // The operand is evaluated first, as an `equals` operand is, and must come
+    // out as a non-empty string: an empty affix would hold for every string.
+    const mode = "endsWith" in check ? "endsWith" : "startsWith" in check ? "startsWith" : "contains";
+    const operand = evaluateValue(
+      "endsWith" in check ? check.endsWith : "startsWith" in check ? check.startsWith : check.contains,
+      ctx,
+    );
+    if (typeof operand !== "string" || operand === "") {
+      return {
+        path,
+        expected: "a non-empty string operand",
+        actual: `the operand evaluated to ${render(operand)}`,
+      };
+    }
+    const how = { endsWith: "ending with", startsWith: "starting with", contains: "containing" }[mode];
+    const expected = `a string ${how} ${JSON.stringify(operand)}`;
+    if (!found.found) return { path, expected, actual: "<missing>" };
+    if (typeof found.value === "string") {
+      const holds =
+        mode === "endsWith"
+          ? found.value.endsWith(operand)
+          : mode === "startsWith"
+            ? found.value.startsWith(operand)
+            : found.value.includes(operand);
+      if (holds) return null;
+    }
+    return { path, expected, actual };
+  }
+
   if (!found.found) {
     return { path, expected: expectationOf(check, ctx), actual: "<missing>" };
   }

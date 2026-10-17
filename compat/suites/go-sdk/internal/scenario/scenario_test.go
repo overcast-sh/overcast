@@ -248,6 +248,44 @@ func TestChecks_presentValues(t *testing.T) {
 	}
 }
 
+func TestAffixChecks_operandIsAValueExpression(t *testing.T) {
+	// Given: a response whose ARN carries the run's queue name at its end,
+	// and a number where a string would be.
+	out := &sqs.GetQueueAttributesOutput{Attributes: map[string]string{
+		"QueueArn": "arn:aws:sqs:us-east-1:000000000000:oc-test-sqs-gen-queue-q",
+		"Count":    "7",
+	}}
+	for _, tc := range []struct {
+		name    string
+		check   Check
+		holds   bool
+		message string
+	}{
+		{"endsWith holds on a concat of a literal and a name", EndsWith("$.Attributes.QueueArn", Concat(":", Name("q"))), true, ""},
+		{"endsWith is case-sensitive", EndsWith("$.Attributes.QueueArn", "-Q"), false, "ending with"},
+		{"endsWith fails when the suffix is only inside the string", EndsWith("$.Attributes.QueueArn", "arn:aws"), false, "ending with"},
+		{"startsWith holds on a literal", StartsWith("$.Attributes.QueueArn", "arn:aws:sqs:"), true, ""},
+		{"startsWith fails when the string starts otherwise", StartsWith("$.Attributes.QueueArn", "sqs"), false, "starting with"},
+		{"contains holds in the middle", Contains("$.Attributes.QueueArn", Concat(":000000000000:", Name("q"))), true, ""},
+		{"contains fails on a part that is not there", Contains("$.Attributes.QueueArn", ":elsewhere:"), false, "containing"},
+		{"endsWith fails when the path does not resolve", EndsWith("$.Attributes.Nope", "x"), false, "ending with"},
+		{"endsWith fails on a non-string value", EndsWith("$.Attributes", "x"), false, "ending with"},
+		{"an operand that is not a string fails the check", EndsWith("$.Attributes.QueueArn", Lit(7)), false, "non-empty string operand"},
+		{"an empty operand fails the check", StartsWith("$.Attributes.QueueArn", ""), false, "non-empty string operand"},
+		{"an operand that cannot be evaluated fails the check", EndsWith("$.Attributes.QueueArn", Ref("no.such")), false, "no.such"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := runChecks(t, out, tc.check)
+			if holds := err == nil; holds != tc.holds {
+				t.Fatalf("check held = %v, want %v (%v)", holds, tc.holds, err)
+			}
+			if err != nil && !strings.Contains(err.Error(), tc.message) {
+				t.Errorf("message lacks %q:\n%s", tc.message, err.Error())
+			}
+		})
+	}
+}
+
 // TestUnsupportedPatternIsAnOrdinaryMismatch pins the wording every backend
 // shares for a pattern its regex engine will not compile.
 func TestUnsupportedPatternIsAnOrdinaryMismatch(t *testing.T) {

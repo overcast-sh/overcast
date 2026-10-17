@@ -30,7 +30,7 @@
       ],
       "tests": [
         {
-          "$comment": "Union: python/java/dotnet assert the URL is non-empty; go, dotnet and rust also read the queue back out of ListQueues by its own name prefix. rust additionally asserts the URL contains the queue name, which the IR cannot express (a `matches` pattern is a fixed string and cannot embed a $name) — the list-membership clause is strictly stronger, since it ties this exact URL to that exact name.",
+          "$comment": "Union: python/java/dotnet assert the URL is non-empty; go, dotnet and rust also read the queue back out of ListQueues by its own name prefix. rust additionally asserts the URL contains the queue name, which `contains` now says directly (a `matches` pattern is a fixed string and cannot embed a $name). The list-membership clause stays: it ties this exact URL to that exact name.",
           "name": "CreateQueue",
           "op": "CreateQueue",
           "call": {
@@ -42,6 +42,10 @@
             {
               "kind": "responseField",
               "checks": { "$.QueueUrl": { "nonEmpty": true } }
+            },
+            {
+              "kind": "responseField",
+              "checks": { "$.QueueUrl": { "contains": { "$name": "created" } } }
             },
             {
               "kind": "listContains",

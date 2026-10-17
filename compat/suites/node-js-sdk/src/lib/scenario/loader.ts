@@ -324,6 +324,12 @@ function parseCheck(raw: unknown, at: string, fail: Fail): Check {
       return { matches: requireString(o["matches"], `${at}/matches`, fail) };
     case "equals":
       return { equals: parseValue(o["equals"], `${at}/equals`, fail) };
+    case "endsWith":
+      return { endsWith: parseValue(o["endsWith"], `${at}/endsWith`, fail) };
+    case "startsWith":
+      return { startsWith: parseValue(o["startsWith"], `${at}/startsWith`, fail) };
+    case "contains":
+      return { contains: parseValue(o["contains"], `${at}/contains`, fail) };
     case "equalsJSON":
       // Data, not a value: it is never walked for expressions, so an operand
       // that would need one is refused here rather than read either way.

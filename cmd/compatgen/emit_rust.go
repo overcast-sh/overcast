@@ -466,6 +466,13 @@ func rustCheck(path string, c check, indent string) (string, error) {
 		return fmt.Sprintf("scenario::missing(%s)", rustString(path)), nil
 	case c.Matches != "":
 		return fmt.Sprintf("scenario::matches(%s, %s)", rustString(path), rustString(c.Matches)), nil
+	case c.hasAffix():
+		name, operand := c.affix()
+		value, err := rustValue(operand, indent)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("scenario::%s(%s, %s)", snakeCase(name), rustString(path), value), nil
 	case c.EqualsJSON != nil:
 		text, err := equalsJSONText(c.EqualsJSON)
 		if err != nil {

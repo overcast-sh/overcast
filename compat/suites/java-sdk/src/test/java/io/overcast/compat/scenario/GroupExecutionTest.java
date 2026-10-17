@@ -200,6 +200,36 @@ class GroupExecutionTest {
     }
 
     /**
+     * {@code endsWith} and {@code startsWith} take a value expression as their
+     * operand, evaluated like an {@code equals} operand against the run's id
+     * and the group's name, and must get a non-empty string out of it.
+     */
+    @Test
+    void affixChecksEvaluateTheirOperand() {
+        Object page = ListQueuesResponse.builder()
+                .queueUrls("http://q/oc-test-sqs-gen-queue-q").build();
+        assertHolds(page, Check.endsWith("$.QueueUrls[0]", Values.concat("/", Values.name("q"))));
+        assertHolds(page, Check.startsWith("$.QueueUrls[0]", "http://q/"));
+        assertHolds(page, Check.contains("$.QueueUrls[0]", Values.concat("q/", Values.name("q"))));
+        assertFails(page, Check.contains("$.QueueUrls[0]", "q/x"));
+        assertFails(page, Check.endsWith("$.QueueUrls[0]", "-Q"));
+        assertFails(page, Check.startsWith("$.QueueUrls[0]", "q/"));
+        assertFails(page, Check.endsWith("$.NextToken", "x"));
+        assertFails(page, Check.endsWith("$.QueueUrls", "x"));
+
+        AssertionError e = assertThrows(AssertionError.class, () -> GROUP.runTest(ctx(), "ListQueues",
+                new Call("ListQueues", "{}", b -> ListQueuesRequest.builder().build(), ok(page, null)),
+                List.of(Clause.responseField(Check.endsWith("$.QueueUrls[0]", "-nope")))));
+        assertTrue(e.getMessage().contains("responseField endsWith at $.QueueUrls[0]:"
+                + " expected a string ending with \"-nope\","), e.getMessage());
+
+        e = assertThrows(AssertionError.class, () -> GROUP.runTest(ctx(), "ListQueues",
+                new Call("ListQueues", "{}", b -> ListQueuesRequest.builder().build(), ok(page, null)),
+                List.of(Clause.responseField(Check.startsWith("$.QueueUrls[0]", Values.lit(7))))));
+        assertTrue(e.getMessage().contains("expected a non-empty string operand"), e.getMessage());
+    }
+
+    /**
      * {@code equalsJSON} through the group, on the member it exists for: IAM
      * hands this SDK the role's trust policy as the percent-encoded text the
      * service sent, and the check decodes and compares it as a document.

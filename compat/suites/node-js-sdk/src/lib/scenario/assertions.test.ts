@@ -113,6 +113,39 @@ describe("checks", () => {
     assert.match(mismatch.actual, /^unsupported pattern: /);
   });
 
+  it("endsWith and startsWith evaluate a value expression and compare plain text", () => {
+    const url = { Url: "http://q/oc-12345678-sqs-gen-queue-q", N: 3 };
+    const suffix = { $concat: ["/", { $name: "q" }] };
+    assert.equal(evaluateChecks(url, { "$.Url": { endsWith: suffix } }, ctx), null);
+    assert.equal(evaluateChecks(url, { "$.Url": { endsWith: { $name: "q" } } }, ctx), null);
+    assert.equal(evaluateChecks(url, { "$.Url": { startsWith: "http://q/" } }, ctx), null);
+    // Case-sensitive, anchored at its end, and text only.
+    assert.equal(
+      evaluateChecks(url, { "$.Url": { contains: { $concat: ["q/", { $name: "q" }] } } }, ctx),
+      null,
+    );
+    assert.notEqual(evaluateChecks(url, { "$.Url": { contains: "q/x" } }, ctx), null);
+    assert.notEqual(evaluateChecks(url, { "$.Url": { endsWith: "-Q" } }, ctx), null);
+    assert.notEqual(evaluateChecks(url, { "$.Url": { endsWith: "http://q" } }, ctx), null);
+    assert.notEqual(evaluateChecks(url, { "$.Url": { startsWith: "q/" } }, ctx), null);
+    assert.notEqual(evaluateChecks(url, { "$.N": { endsWith: "3" } }, ctx), null);
+    assert.notEqual(evaluateChecks(url, { "$.Nope": { endsWith: "x" } }, ctx), null);
+
+    const mismatch = evaluateChecks(url, { "$.Url": { endsWith: "-nope" } }, ctx);
+    assert.ok(mismatch !== null);
+    assert.equal(mismatch.path, "$.Url");
+    assert.equal(mismatch.expected, 'a string ending with "-nope"');
+  });
+
+  it("an affix operand that is not a non-empty string fails the check", () => {
+    const url = { Url: "http://q/1" };
+    for (const operand of [{ $lit: 7 }, ""]) {
+      const mismatch = evaluateChecks(url, { "$.Url": { startsWith: operand } }, ctx);
+      assert.ok(mismatch !== null, JSON.stringify(operand));
+      assert.equal(mismatch.expected, "a non-empty string operand");
+    }
+  });
+
   it("reports an unsupported pattern whatever the value's type is", () => {
     // The pattern is compiled before the value is looked at, so a broken
     // scenario file reads the same way against a number as against a string —

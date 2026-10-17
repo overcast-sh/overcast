@@ -469,6 +469,13 @@ func javaCheck(path string, c check) string {
 		return fmt.Sprintf("Check.missing(%s)", javaQuote(path))
 	case c.Matches != "":
 		return fmt.Sprintf("Check.matches(%s, %s)", javaQuote(path), javaQuote(c.Matches))
+	case c.hasAffix():
+		name, operand := c.affix()
+		value, err := javaValue(operand)
+		if err != nil {
+			value = fmt.Sprintf("%#v", operand)
+		}
+		return fmt.Sprintf("Check.%s(%s, %s)", name, javaQuote(path), value)
 	case c.EqualsJSON != nil:
 		text, _ := equalsJSONText(c.EqualsJSON)
 		return fmt.Sprintf("Check.equalsJson(%s, %s)", javaQuote(path), javaQuote(text))
@@ -931,8 +938,10 @@ func javaUsesValues(groups []group) bool {
 	}
 	return javaAnyAssertion(groups, func(a assertion) bool {
 		for _, c := range a.Checks {
-			if hasExpr(c.Equals) {
-				return true
+			for _, operand := range c.operands() {
+				if hasExpr(operand) {
+					return true
+				}
 			}
 		}
 		for _, v := range a.Where {

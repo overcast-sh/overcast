@@ -346,6 +346,9 @@ fn test_sqs_queues_create_queue(client: &aws_sdk_sqs::Client) -> Test {
             scenario::response_field(vec![
                 scenario::non_empty("$.QueueUrl"),
             ]),
+            scenario::response_field(vec![
+                scenario::contains("$.QueueUrl", scenario::name("created")),
+            ]),
             scenario::list_contains(
                 Some(Call {
                     op: "ListQueues",

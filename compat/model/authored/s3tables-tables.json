@@ -18,7 +18,7 @@
       "setup": [],
       "tests": [
         {
-          "$comment": "All three natives assert the returned ARN starts with `arn:aws:s3tables:` and ends with `:bucket/<name>`. A `matches` pattern cannot embed a $name (compat/model/README.md § Authored scenarios, the sqs-queues pilot note), so the port splits the claim in two: the ARN matches the model's own TableBucketARN pattern, narrowed to the `aws` partition and the `s3tables` service as the natives narrow it, and a read-back by that ARN answers the bucket this test named. Together they tie this exact ARN to this exact name, which is what the suffix check was for. The ARN is exported because every later call addresses the bucket by it, as the natives carry it forward.",
+          "$comment": "All three natives assert the returned ARN starts with `arn:aws:s3tables:` and ends with `:bucket/<name>`. A `matches` pattern cannot embed a $name, so the first clause has the ARN match the model's own TableBucketARN pattern, narrowed to the `aws` partition and the `s3tables` service as the natives narrow it, and the second says the suffix the natives check directly: `endsWith` takes a value expression, so it can name the bucket this test created without hard-coding the region or the account. A read-back by that ARN answers the same bucket, which the natives did not check. The ARN is exported because every later call addresses the bucket by it, as the natives carry it forward.",
           "name": "CreateTableBucket",
           "op": "CreateTableBucket",
           "call": {
@@ -31,6 +31,12 @@
               "kind": "responseField",
               "checks": {
                 "$.arn": { "matches": "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}$" }
+              }
+            },
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.arn": { "endsWith": { "$concat": [":bucket/", { "$name": "bucket" }] } }
               }
             },
             {
@@ -141,7 +147,7 @@
           "depends": ["CreateNamespace"]
         },
         {
-          "$comment": "All three natives create an ICEBERG table named `orders` and assert the returned tableARN lies under the bucket's ARN (`<bucket ARN>/table/…`) and a versionToken is present. The prefix cannot be written as a pattern around a $ref, so the port splits it as CreateTableBucket does: the ARN matches the model's own TableARN pattern, narrowed to `aws`/`s3tables`, and a GetTable read-back of this bucket, namespace and name answers this exact ARN, which is what ties the table to the bucket. The read-back also exports the table's warehouseLocation and its current versionToken: UpdateTableMetadataLocation binds both by $ref, where each native re-read them with GetTableMetadataLocation just before its update. Nothing between this test and that one writes to the table, so this GetTable's token is still current there, and the stale-token test later proves the service keeps it current no longer than it should. tableARN and versionToken are also exported from this response, the ARN for the read-backs below and the token as the one CreateTable handed out.",
+          "$comment": "All three natives create an ICEBERG table named `orders` and assert the returned tableARN lies under the bucket's ARN (`<bucket ARN>/table/…`) and a versionToken is present. The prefix cannot be written as a pattern around a $ref, so the first clause has the ARN match the model's own TableARN pattern, narrowed to `aws`/`s3tables`, and the second says the prefix directly with `startsWith` over the bucket ARN this run exported. A GetTable read-back of this bucket, namespace and name answers this exact ARN as well. The read-back also exports the table's warehouseLocation and its current versionToken: UpdateTableMetadataLocation binds both by $ref, where each native re-read them with GetTableMetadataLocation just before its update. Nothing between this test and that one writes to the table, so this GetTable's token is still current there, and the stale-token test later proves the service keeps it current no longer than it should. tableARN and versionToken are also exported from this response, the ARN for the read-backs below and the token as the one CreateTable handed out.",
           "name": "CreateTable",
           "op": "CreateTable",
           "call": {
@@ -163,6 +169,12 @@
               "checks": {
                 "$.tableARN": { "matches": "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}/table/[a-zA-Z0-9_-]{1,255}$" },
                 "$.versionToken": { "nonEmpty": true }
+              }
+            },
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.tableARN": { "startsWith": { "$concat": [{ "$ref": "bucket.arn" }, "/table/"] } }
               }
             },
             {

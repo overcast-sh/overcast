@@ -469,6 +469,46 @@ class TestAssertions(unittest.TestCase):
         self.assertIn("sqs-gen-queue/CreateQueue", message)
         self.assertIn(f"{SCENARIO_FILE} assert[0]", message)
 
+    def test_the_affix_checks_evaluate_their_operand(self):
+        """endsWith / startsWith take a value expression, evaluated like an
+        equals operand, and compare plain text, case-sensitively."""
+        def spec_for(path, check):
+            return make_group(tests=[{
+                "name": "CreateQueue", "op": "CreateQueue",
+                "call": {"op": "CreateQueue", "params": {}},
+                "assert": [{"kind": "responseField", "checks": {path: check}}],
+            }])
+
+        client = lambda: FakeClient({"create_queue": [{  # noqa: E731
+            "QueueUrl": "http://q/oc-run-sqs-gen-queue-q", "Count": 3}]})
+        holding = [
+            ("$.QueueUrl", {"endsWith": {"$concat": ["/", {"$name": "q"}]}}),
+            ("$.QueueUrl", {"endsWith": {"$name": "q"}}),
+            ("$.QueueUrl", {"startsWith": "http://q/"}),
+            ("$.QueueUrl", {"contains": {"$concat": ["q/", {"$name": "q"}]}}),
+        ]
+        for path, check in holding:
+            run_one(spec_for(path, check), "CreateQueue", client())
+        failing = [
+            ("$.QueueUrl", {"endsWith": "-Q"}),
+            ("$.QueueUrl", {"startsWith": "q/"}),
+            ("$.Nope", {"endsWith": "x"}),
+            ("$.Count", {"endsWith": "3"}),
+            ("$.QueueUrl", {"endsWith": {"$lit": 7}}),
+            ("$.QueueUrl", {"startsWith": ""}),
+            ("$.QueueUrl", {"contains": "q/x"}),
+        ]
+        for path, check in failing:
+            with self.assertRaises(ScenarioFailure, msg=repr(check)):
+                run_one(spec_for(path, check), "CreateQueue", client())
+
+        with self.assertRaises(ScenarioFailure) as caught:
+            run_one(spec_for("$.QueueUrl", {"endsWith": "-nope"}), "CreateQueue", client())
+        message = str(caught.exception)
+        self.assertIn('expected=a string ending with "-nope"', message)
+        self.assertIn("sqs-gen-queue/CreateQueue", message)
+        self.assertIn(f"{SCENARIO_FILE} assert[0]", message)
+
     def test_non_empty_accepts_zero_and_false(self):
         spec = make_group(tests=[{
             "name": "CancelMessageMoveTask", "op": "CancelMessageMoveTask",

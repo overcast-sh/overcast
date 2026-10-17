@@ -220,6 +220,9 @@ pub enum CheckKind {
     IsList,
     Equals,
     Matches,
+    EndsWith,
+    StartsWith,
+    Contains,
     Missing,
     EqualsJson,
 }
@@ -231,6 +234,9 @@ impl CheckKind {
             CheckKind::IsList => "isList",
             CheckKind::Equals => "equals",
             CheckKind::Matches => "matches",
+            CheckKind::EndsWith => "endsWith",
+            CheckKind::StartsWith => "startsWith",
+            CheckKind::Contains => "contains",
             CheckKind::Missing => "missing",
             CheckKind::EqualsJson => "equalsJSON",
         }
@@ -238,8 +244,9 @@ impl CheckKind {
 }
 
 /// One check on one response path. `value` carries the expected value for
-/// `equals`, the pattern for `matches` and the operand's JSON text for
-/// `equalsJSON`, and is `None` for the rest.
+/// `equals`, the pattern for `matches`, the operand expression for `endsWith`,
+/// `startsWith` and `contains` and the operand's JSON text for `equalsJSON`, and is `None`
+/// for the rest.
 pub struct Check {
     pub path: &'static str,
     pub kind: CheckKind,
@@ -407,6 +414,38 @@ pub fn matches(path: &'static str, pattern: &'static str) -> Check {
         path,
         kind: CheckKind::Matches,
         value: Some(Value::Lit(serde_json::Value::String(pattern.to_string()))),
+    }
+}
+
+/// Holds when the path resolves to a string that ends with the evaluated
+/// operand (case-sensitive, no regex). The operand is a value expression,
+/// evaluated like an `equals` operand, and must yield a string.
+#[allow(dead_code)]
+pub fn ends_with(path: &'static str, suffix: Value) -> Check {
+    Check {
+        path,
+        kind: CheckKind::EndsWith,
+        value: Some(suffix),
+    }
+}
+
+/// `ends_with` for the front of the string.
+#[allow(dead_code)]
+pub fn starts_with(path: &'static str, prefix: Value) -> Check {
+    Check {
+        path,
+        kind: CheckKind::StartsWith,
+        value: Some(prefix),
+    }
+}
+
+/// `ends_with` for any position in the string.
+#[allow(dead_code)]
+pub fn contains(path: &'static str, part: Value) -> Check {
+    Check {
+        path,
+        kind: CheckKind::Contains,
+        value: Some(part),
     }
 }
 

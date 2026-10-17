@@ -854,6 +854,53 @@ impl Execution<'_> {
                     return Err(mismatch(&format!("a string matching {pattern:?}")));
                 }
             }
+            CheckKind::EndsWith | CheckKind::StartsWith | CheckKind::Contains => {
+                let operand = match check.value.as_ref().map(|value| value.eval(&self.bag())) {
+                    Some(Ok(operand)) => operand,
+                    Some(Err(err)) => {
+                        return Err(self.fail(
+                            observed,
+                            step,
+                            &full_kind,
+                            check.path,
+                            "the operand to evaluate",
+                            &failure::quote(&err.message()),
+                        ))
+                    }
+                    None => Json::Null,
+                };
+                let affix = match &operand {
+                    Json::String(affix) if !affix.is_empty() => affix.clone(),
+                    _ => {
+                        return Err(self.fail(
+                            observed,
+                            step,
+                            &full_kind,
+                            check.path,
+                            "a non-empty string operand",
+                            &failure::quote(&format!(
+                                "the operand evaluated to {}",
+                                json::render(&operand)
+                            )),
+                        ))
+                    }
+                };
+                let hit = resolved.and_then(Json::as_str).is_some_and(|value| {
+                    match check.kind {
+                        CheckKind::EndsWith => value.ends_with(affix.as_str()),
+                        CheckKind::StartsWith => value.starts_with(affix.as_str()),
+                        _ => value.contains(affix.as_str()),
+                    }
+                });
+                if !hit {
+                    let how = match check.kind {
+                        CheckKind::EndsWith => "ending with",
+                        CheckKind::StartsWith => "starting with",
+                        _ => "containing",
+                    };
+                    return Err(mismatch(&format!("a string {how} {affix:?}")));
+                }
+            }
             CheckKind::EqualsJson => {
                 // The operand is refused here, as the six-field mismatch a
                 // malformed pattern is, rather than by a panic in the

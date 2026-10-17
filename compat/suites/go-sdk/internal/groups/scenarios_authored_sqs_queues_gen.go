@@ -156,6 +156,9 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesCreateQueue(ctx context.Contex
 			scenario.ResponseField(
 				scenario.NonEmpty("$.QueueUrl"),
 			),
+			scenario.ResponseField(
+				scenario.Contains("$.QueueUrl", scenario.Name("created")),
+			),
 			scenario.ListContains(
 				&scenario.Call{
 					Op:     "ListQueues",

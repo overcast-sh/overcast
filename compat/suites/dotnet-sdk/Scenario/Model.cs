@@ -29,6 +29,9 @@ internal enum CheckKind
     IsList,
     EqualTo,
     Matches,
+    EndsWith,
+    StartsWith,
+    Contains,
     EqualsJson,
     Missing,
 }
@@ -205,8 +208,9 @@ internal sealed record PageWalk(int Size, int MinPages, string OutputToken, Scen
 
 /// <summary>
 /// One check on one response path. <see cref="Value"/> carries the expected
-/// value for EqualTo, the pattern for Matches and the parsed operand document
-/// for EqualsJson, and is null for the rest.
+/// value for EqualTo, the pattern for Matches, the operand expression for
+/// EndsWith, StartsWith and Contains and the parsed operand document for EqualsJson, and
+/// is null for the rest.
 /// </summary>
 internal sealed record Check(string Path, CheckKind Kind, object? Value)
 {
@@ -235,6 +239,19 @@ internal sealed record Check(string Path, CheckKind Kind, object? Value)
 
     /// <summary>Holds when the path resolves to a string matching the pattern.</summary>
     public static Check Matches(string path, string pattern) => new(path, CheckKind.Matches, pattern);
+
+    /// <summary>
+    /// Holds when the path resolves to a string that ends with the evaluated
+    /// operand (case-sensitive, no regex). The operand is a value expression,
+    /// evaluated like an EqualTo operand, and must yield a string.
+    /// </summary>
+    public static Check EndsWith(string path, object? suffix) => new(path, CheckKind.EndsWith, suffix);
+
+    /// <summary>EndsWith for the front of the string.</summary>
+    public static Check StartsWith(string path, object? prefix) => new(path, CheckKind.StartsWith, prefix);
+
+    /// <summary>EndsWith for any position in the string.</summary>
+    public static Check Contains(string path, object? part) => new(path, CheckKind.Contains, part);
 
     /// <summary>
     /// Holds when the path resolves to a JSON document equal, as JSON, to

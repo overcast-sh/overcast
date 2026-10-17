@@ -133,14 +133,20 @@ const (
 	CheckEquals   CheckKind = "equals"
 	CheckMatches  CheckKind = "matches"
 	CheckMissing  CheckKind = "missing"
+	// CheckEndsWith, CheckStartsWith and CheckContains compare a string with
+	// the evaluated operand, a value expression that must yield a non-empty
+	// string.
+	CheckEndsWith   CheckKind = "endsWith"
+	CheckStartsWith CheckKind = "startsWith"
+	CheckContains   CheckKind = "contains"
 	// CheckEqualsJSON compares a member holding a JSON document by value. Its
 	// operand is a literal object or array and is never evaluated.
 	CheckEqualsJSON CheckKind = "equalsJSON"
 )
 
 // Check is exactly one check against one response path. Value carries the
-// `equals` value expression, the `matches` pattern or the `equalsJSON`
-// document; the three boolean checks leave it nil.
+// `equals`, `endsWith`, `startsWith` or `contains` value expression, the `matches` pattern
+// or the `equalsJSON` document; the three boolean checks leave it nil.
 //
 // It is decoded by hand rather than as a struct of optional fields because
 // `{"equals": null}` is a legal check — the IR's Value admits null — and a
@@ -157,13 +163,13 @@ func (c *Check) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	if len(raw) != 1 {
-		return fmt.Errorf("check must carry exactly one of nonEmpty/isList/equals/matches/equalsJSON/missing, got %d entries", len(raw))
+		return fmt.Errorf("check must carry exactly one of nonEmpty/isList/equals/matches/endsWith/startsWith/contains/equalsJSON/missing, got %d entries", len(raw))
 	}
 	for k, v := range raw {
 		switch CheckKind(k) {
 		case CheckNonEmpty, CheckIsList, CheckMissing:
 			c.Kind, c.Value = CheckKind(k), nil
-		case CheckEquals, CheckMatches:
+		case CheckEquals, CheckMatches, CheckEndsWith, CheckStartsWith, CheckContains:
 			c.Kind, c.Value = CheckKind(k), v
 		case CheckEqualsJSON:
 			// Refused here, at load, rather than when the check runs: a bad

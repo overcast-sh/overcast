@@ -431,6 +431,13 @@ func goCheck(path string, c check, indent string) string {
 		return fmt.Sprintf("scenario.Missing(%q)", path)
 	case c.Matches != "":
 		return fmt.Sprintf("scenario.Matches(%q, %q)", path, c.Matches)
+	case c.hasAffix():
+		name, operand := c.affix()
+		value, err := goValue(operand, indent)
+		if err != nil {
+			value = fmt.Sprintf("%#v", operand)
+		}
+		return fmt.Sprintf("scenario.%s(%q, %s)", upperFirst(name), path, value)
 	case c.EqualsJSON != nil:
 		// The document travels as its compact JSON text, which the runtime
 		// parses once; validateAssertion has already held it to the grammar.

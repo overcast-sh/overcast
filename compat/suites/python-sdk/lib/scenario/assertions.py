@@ -356,6 +356,8 @@ def _check(name: str, argument: Any, value: Any,
     if name == "equals":
         expected = ex.evaluate(argument)
         return f"equals {render(expected)}", json_equal(value, expected), None
+    if name in ("endsWith", "startsWith", "contains"):
+        return _affix(name, argument, value, ex)
     if name == "equalsJSON":
         return _equals_json(argument, value)
     if name == "matches":
@@ -367,6 +369,28 @@ def _check(name: str, argument: Any, value: Any,
     if name == "missing":
         return "the path not to resolve", value is MISSING, None
     raise ScenarioFailure(f"unknown check {name!r}")
+
+
+def _affix(name: str, argument: Any, value: Any,
+           ex: Executor) -> tuple[str, bool, Optional[str]]:
+    """``endsWith`` / ``startsWith`` / ``contains``: the value is a string that
+    ends / starts with / holds the evaluated operand, compared
+    case-sensitively and as plain text.
+
+    The operand is a value expression, evaluated as an ``equals`` operand is,
+    and must come out as a non-empty string; anything else is reported as the
+    check's own failure (an empty affix would hold for every string)."""
+    operand = ex.evaluate(argument)
+    if not isinstance(operand, str) or operand == "":
+        raise ScenarioError(f"the operand evaluated to {render(operand)}, "
+                            f"not a non-empty string")
+    how, test = {
+        "endsWith": ("ending with", str.endswith),
+        "startsWith": ("starting with", str.startswith),
+        "contains": ("containing", str.__contains__),
+    }[name]
+    holds = isinstance(value, str) and test(value, operand)
+    return f"a string {how} {render(operand)}", holds, None
 
 
 def _equals_json(operand: Any, value: Any) -> tuple[str, bool, Optional[str]]:
