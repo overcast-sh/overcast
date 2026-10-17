@@ -75,6 +75,23 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
                 {
                     ["queue.url"] = "$.QueueUrl",
                 },
+            },
+            new ScenarioCall
+            {
+                Op = "CreateQueue",
+                Params = "{\"QueueName\":{\"$name\":\"q-second\"}}",
+                Build = b =>
+                {
+                    var request = new CreateQueueRequest();
+                    request.QueueName = b.Bind<string>("QueueName", Val.Name("q-second"));
+                    return request;
+                },
+                SendAsync = async request =>
+                    await Cl().CreateQueueAsync((CreateQueueRequest)request),
+                Export = new()
+                {
+                    ["queue.secondUrl"] = "$.QueueUrl",
+                },
             }
         );
 
@@ -88,6 +105,19 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
                 {
                     var request = new DeleteQueueRequest();
                     request.QueueUrl = b.Bind<string>("QueueUrl", Val.Ref("queue.createdUrl"));
+                    return request;
+                },
+                SendAsync = async request =>
+                    await Cl().DeleteQueueAsync((DeleteQueueRequest)request),
+            },
+            new ScenarioCall
+            {
+                Op = "DeleteQueue",
+                Params = "{\"QueueUrl\":{\"$ref\":\"queue.secondUrl\"}}",
+                Build = b =>
+                {
+                    var request = new DeleteQueueRequest();
+                    request.QueueUrl = b.Bind<string>("QueueUrl", Val.Ref("queue.secondUrl"));
                     return request;
                 },
                 SendAsync = async request =>
@@ -214,7 +244,7 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
                 },
                 "$.QueueUrls",
                 new WhereEntry("$", Val.Ref("queue.url"))
-            ).Paginated(new PageWalk(1, 0, "NextToken",
+            ).Paginated(new PageWalk(1, 2, "NextToken",
                 new ScenarioCall
                 {
                     Op = "ListQueues",

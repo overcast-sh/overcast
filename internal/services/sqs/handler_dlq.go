@@ -25,7 +25,9 @@ import (
 )
 
 type listDeadLetterSourceQueuesRequest struct {
-	QueueUrl string `json:"QueueUrl"`
+	QueueUrl   string `json:"QueueUrl"`
+	MaxResults *int   `json:"MaxResults,omitempty"`
+	NextToken  string `json:"NextToken,omitempty"`
 }
 
 // listDeadLetterSourceQueuesResponse mirrors AWS's response shape.
@@ -38,6 +40,7 @@ type listDeadLetterSourceQueuesRequest struct {
 // `QueueUrl`, so the Query-protocol XML still renders repeated <QueueUrl>
 // elements — see collectionElements in query.go.
 type listDeadLetterSourceQueuesResponse struct {
+	NextToken string   `json:"NextToken,omitempty"`
 	QueueUrls []string `json:"queueUrls"`
 }
 
@@ -224,9 +227,7 @@ func (h *Handler) moveToDLQ(ctx context.Context, srcQueueName string, srcQueue *
 // It returns all queues whose RedrivePolicy targets the specified DLQ.
 // AWS docs: https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ListDeadLetterSourceQueues.html
 func (h *Handler) ListDeadLetterSourceQueues(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		QueueUrl string `json:"QueueUrl"`
-	}
+	var req listDeadLetterSourceQueuesRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
@@ -236,9 +237,7 @@ func (h *Handler) ListDeadLetterSourceQueues(w http.ResponseWriter, r *http.Requ
 
 	// Share the typed implementation so the two dispatch paths cannot drift on
 	// the response member name.
-	resp, aerr := h.listDeadLetterSourceQueuesTyped(r.Context(), &listDeadLetterSourceQueuesRequest{
-		QueueUrl: req.QueueUrl,
-	})
+	resp, aerr := h.listDeadLetterSourceQueuesTyped(r.Context(), &req)
 	if aerr != nil {
 		writeJSONError(w, r, aerr)
 		return
@@ -276,7 +275,11 @@ func (h *Handler) listDeadLetterSourceQueuesTyped(ctx context.Context, in *listD
 		sourceURLs = []string{}
 	}
 
-	return &listDeadLetterSourceQueuesResponse{QueueUrls: sourceURLs}, nil
+	sourceURLs, token, aerr := paginateQueueURLs(sourceURLs, in.MaxResults, in.NextToken)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &listDeadLetterSourceQueuesResponse{QueueUrls: sourceURLs, NextToken: token}, nil
 }
 
 // ── StartMessageMoveTask ───────────────────────────────────────────────────

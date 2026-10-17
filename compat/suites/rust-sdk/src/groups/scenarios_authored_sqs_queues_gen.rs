@@ -222,6 +222,28 @@ fn setup_sqs_queues(client: &aws_sdk_sqs::Client) -> Vec<Call> {
                 })
             },
         },
+        Call {
+            op: "CreateQueue",
+            params: scenario::map(vec![("QueueName", scenario::name("q-second"))]),
+            export: vec![
+                ("queue.secondUrl", "$.QueueUrl"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .create_queue()
+                            .queue_name(b.string("QueueName")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
     ]
 }
 
@@ -231,6 +253,28 @@ fn teardown_sqs_queues(client: &aws_sdk_sqs::Client) -> Vec<Call> {
             op: "DeleteQueue",
             params: scenario::map(vec![
                 ("QueueUrl", scenario::context("queue.createdUrl")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .delete_queue()
+                            .queue_url(b.string("QueueUrl")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        Call {
+            op: "DeleteQueue",
+            params: scenario::map(vec![
+                ("QueueUrl", scenario::context("queue.secondUrl")),
             ]),
             export: Vec::new(),
             invoke: {
@@ -427,7 +471,7 @@ fn test_sqs_queues_list_queues(client: &aws_sdk_sqs::Client) -> Test {
                 ),
                 scenario::Page {
                     size: 1,
-                    min_pages: 0,
+                    min_pages: 2,
                     output_token: "NextToken",
                     next: Call {
                         op: "ListQueues",
