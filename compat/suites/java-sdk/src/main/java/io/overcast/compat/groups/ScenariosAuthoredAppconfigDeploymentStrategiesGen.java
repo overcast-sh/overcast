@@ -30,8 +30,8 @@ import software.amazon.awssdk.services.appconfig.model.UpdateDeploymentStrategyR
  */
 public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements ServiceGroup {
 
-    private static final Group GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW =
-            new Group("appconfig-deployment-strategies-shadow", "compat/model/authored/appconfig-deployment-strategies.json");
+    private static final Group GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES =
+            new Group("appconfig-deployment-strategies", "compat/model/authored/appconfig-deployment-strategies.json");
 
     private final AwsClients clients;
     private volatile AppConfigClient client;
@@ -48,23 +48,23 @@ public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements 
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("appconfig-deployment-strategies-shadow:CreateDeploymentStrategy", this::testAppconfigDeploymentStrategiesShadowCreateDeploymentStrategy),
-                Map.entry("appconfig-deployment-strategies-shadow:GetDeploymentStrategy", this::testAppconfigDeploymentStrategiesShadowGetDeploymentStrategy),
-                Map.entry("appconfig-deployment-strategies-shadow:ListDeploymentStrategies", this::testAppconfigDeploymentStrategiesShadowListDeploymentStrategies),
-                Map.entry("appconfig-deployment-strategies-shadow:UpdateDeploymentStrategy", this::testAppconfigDeploymentStrategiesShadowUpdateDeploymentStrategy),
-                Map.entry("appconfig-deployment-strategies-shadow:DeleteDeploymentStrategy", this::testAppconfigDeploymentStrategiesShadowDeleteDeploymentStrategy));
+                Map.entry("appconfig-deployment-strategies:CreateDeploymentStrategy", this::testAppconfigDeploymentStrategiesCreateDeploymentStrategy),
+                Map.entry("appconfig-deployment-strategies:GetDeploymentStrategy", this::testAppconfigDeploymentStrategiesGetDeploymentStrategy),
+                Map.entry("appconfig-deployment-strategies:ListDeploymentStrategies", this::testAppconfigDeploymentStrategiesListDeploymentStrategies),
+                Map.entry("appconfig-deployment-strategies:UpdateDeploymentStrategy", this::testAppconfigDeploymentStrategiesUpdateDeploymentStrategy),
+                Map.entry("appconfig-deployment-strategies:DeleteDeploymentStrategy", this::testAppconfigDeploymentStrategiesDeleteDeploymentStrategy));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("appconfig-deployment-strategies-shadow", this::setupAppconfigDeploymentStrategiesShadow));
+                Map.entry("appconfig-deployment-strategies", this::setupAppconfigDeploymentStrategies));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("appconfig-deployment-strategies-shadow", this::teardownAppconfigDeploymentStrategiesShadow));
+                Map.entry("appconfig-deployment-strategies", this::teardownAppconfigDeploymentStrategies));
     }
 
     /**
@@ -84,13 +84,13 @@ public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements 
         return client;
     }
 
-    private void setupAppconfigDeploymentStrategiesShadow(TestContext t) {
+    private void setupAppconfigDeploymentStrategies(TestContext t) {
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.runSetup(t);
+        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.runSetup(t);
     }
 
-    private void teardownAppconfigDeploymentStrategiesShadow(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.runTeardown(t,
+    private void teardownAppconfigDeploymentStrategies(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.runTeardown(t,
                 new Call("DeleteDeploymentStrategy", "{\"DeploymentStrategyId\":{\"$ref\":\"ds.id\"}}",
                         b -> DeleteDeploymentStrategyRequest.builder()
                                 .deploymentStrategyId(b.string("DeploymentStrategyId", Values.ref("ds.id")))
@@ -98,8 +98,8 @@ public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements 
                         r -> cl().deleteDeploymentStrategy((DeleteDeploymentStrategyRequest) r)));
     }
 
-    private void testAppconfigDeploymentStrategiesShadowCreateDeploymentStrategy(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.runTest(t, "CreateDeploymentStrategy",
+    private void testAppconfigDeploymentStrategiesCreateDeploymentStrategy(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.runTest(t, "CreateDeploymentStrategy",
                 new Call("CreateDeploymentStrategy", "{\"DeploymentDurationInMinutes\":0,\"GrowthFactor\":100,\"Name\":{\"$name\":\"ds\"},\"ReplicateTo\":\"NONE\"}",
                         b -> CreateDeploymentStrategyRequest.builder()
                                 .deploymentDurationInMinutes(0)
@@ -128,8 +128,8 @@ public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements 
                 ));
     }
 
-    private void testAppconfigDeploymentStrategiesShadowGetDeploymentStrategy(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.runTest(t, "GetDeploymentStrategy",
+    private void testAppconfigDeploymentStrategiesGetDeploymentStrategy(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.runTest(t, "GetDeploymentStrategy",
                 new Call("GetDeploymentStrategy", "{\"DeploymentStrategyId\":{\"$ref\":\"ds.id\"}}",
                         b -> GetDeploymentStrategyRequest.builder()
                                 .deploymentStrategyId(b.string("DeploymentStrategyId", Values.ref("ds.id")))
@@ -143,8 +143,8 @@ public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements 
                 ));
     }
 
-    private void testAppconfigDeploymentStrategiesShadowListDeploymentStrategies(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.runTest(t, "ListDeploymentStrategies",
+    private void testAppconfigDeploymentStrategiesListDeploymentStrategies(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.runTest(t, "ListDeploymentStrategies",
                 new Call("ListDeploymentStrategies", "{}",
                         b -> ListDeploymentStrategiesRequest.builder()
                                 .build(),
@@ -158,8 +158,8 @@ public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements 
                 ));
     }
 
-    private void testAppconfigDeploymentStrategiesShadowUpdateDeploymentStrategy(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.runTest(t, "UpdateDeploymentStrategy",
+    private void testAppconfigDeploymentStrategiesUpdateDeploymentStrategy(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.runTest(t, "UpdateDeploymentStrategy",
                 new Call("UpdateDeploymentStrategy", "{\"DeploymentStrategyId\":{\"$ref\":\"ds.id\"},\"Description\":\"updated by compat\"}",
                         b -> UpdateDeploymentStrategyRequest.builder()
                                 .deploymentStrategyId(b.string("DeploymentStrategyId", Values.ref("ds.id")))
@@ -182,8 +182,8 @@ public final class ScenariosAuthoredAppconfigDeploymentStrategiesGen implements 
                 ));
     }
 
-    private void testAppconfigDeploymentStrategiesShadowDeleteDeploymentStrategy(TestContext t) {
-        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.runTest(t, "DeleteDeploymentStrategy",
+    private void testAppconfigDeploymentStrategiesDeleteDeploymentStrategy(TestContext t) {
+        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.runTest(t, "DeleteDeploymentStrategy",
                 new Call("DeleteDeploymentStrategy", "{\"DeploymentStrategyId\":{\"$ref\":\"ds.id\"}}",
                         b -> DeleteDeploymentStrategyRequest.builder()
                                 .deploymentStrategyId(b.string("DeploymentStrategyId", Values.ref("ds.id")))

@@ -188,7 +188,7 @@
       "service": "appconfig",
       "group": "appconfig-deployment-strategies",
       "test": "CreateDeploymentStrategy",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "dotnet-sdk",
@@ -321,7 +321,7 @@
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "CreateExtension",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "dotnet-sdk",
@@ -363,7 +363,7 @@
       "service": "appconfig",
       "group": "appconfig-extensions",
       "test": "ListExtensionAssociations",
-      "status": "skip"
+      "status": "unimplemented"
     },
     {
       "suite": "dotnet-sdk",

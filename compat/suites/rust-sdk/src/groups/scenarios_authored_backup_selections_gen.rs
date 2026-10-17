@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/backup-selections.json";
 
-const GROUP_BACKUP_SELECTIONS_SHADOW: Group = Group {
-    name: "backup-selections-shadow",
+const GROUP_BACKUP_SELECTIONS: Group = Group {
+    name: "backup-selections",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredBackupSelections {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-selections-shadow:CreateBackupSelection".to_string(),
+                "backup-selections:CreateBackupSelection".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_SELECTIONS_SHADOW
-                            .run_test(&ctx, "CreateBackupSelection", test_backup_selections_shadow_create_backup_selection(&client))
+                        GROUP_BACKUP_SELECTIONS
+                            .run_test(&ctx, "CreateBackupSelection", test_backup_selections_create_backup_selection(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredBackupSelections {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-selections-shadow:ListBackupSelections".to_string(),
+                "backup-selections:ListBackupSelections".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_SELECTIONS_SHADOW
-                            .run_test(&ctx, "ListBackupSelections", test_backup_selections_shadow_list_backup_selections(&client))
+                        GROUP_BACKUP_SELECTIONS
+                            .run_test(&ctx, "ListBackupSelections", test_backup_selections_list_backup_selections(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredBackupSelections {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-selections-shadow:GetBackupSelection".to_string(),
+                "backup-selections:GetBackupSelection".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_SELECTIONS_SHADOW
-                            .run_test(&ctx, "GetBackupSelection", test_backup_selections_shadow_get_backup_selection(&client))
+                        GROUP_BACKUP_SELECTIONS
+                            .run_test(&ctx, "GetBackupSelection", test_backup_selections_get_backup_selection(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredBackupSelections {
         {
             let client = self.client.clone();
             impls.insert(
-                "backup-selections-shadow:DeleteBackupSelection".to_string(),
+                "backup-selections:DeleteBackupSelection".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_SELECTIONS_SHADOW
-                            .run_test(&ctx, "DeleteBackupSelection", test_backup_selections_shadow_delete_backup_selection(&client))
+                        GROUP_BACKUP_SELECTIONS
+                            .run_test(&ctx, "DeleteBackupSelection", test_backup_selections_delete_backup_selection(&client))
                             .await
                     })
                 }),
@@ -112,11 +112,11 @@ impl ServiceGroup for ScenariosAuthoredBackupSelections {
         {
             let client = self.client.clone();
             setups.insert(
-                "backup-selections-shadow".to_string(),
+                "backup-selections".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_SELECTIONS_SHADOW.run_setup(&ctx, setup_backup_selections_shadow(&client)).await
+                        GROUP_BACKUP_SELECTIONS.run_setup(&ctx, setup_backup_selections(&client)).await
                     })
                 }),
             );
@@ -129,11 +129,11 @@ impl ServiceGroup for ScenariosAuthoredBackupSelections {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "backup-selections-shadow".to_string(),
+                "backup-selections".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_BACKUP_SELECTIONS_SHADOW.run_teardown(&ctx, teardown_backup_selections_shadow(&client)).await
+                        GROUP_BACKUP_SELECTIONS.run_teardown(&ctx, teardown_backup_selections(&client)).await
                     })
                 }),
             );
@@ -142,7 +142,7 @@ impl ServiceGroup for ScenariosAuthoredBackupSelections {
     }
 }
 
-fn setup_backup_selections_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn setup_backup_selections(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "CreateBackupVault",
@@ -215,7 +215,7 @@ fn setup_backup_selections_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> 
     ]
 }
 
-fn teardown_backup_selections_shadow(client: &aws_sdk_backup::Client) -> Vec<Call> {
+fn teardown_backup_selections(client: &aws_sdk_backup::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteBackupSelection",
@@ -288,7 +288,7 @@ fn teardown_backup_selections_shadow(client: &aws_sdk_backup::Client) -> Vec<Cal
     ]
 }
 
-fn test_backup_selections_shadow_create_backup_selection(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_selections_create_backup_selection(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "CreateBackupSelection",
@@ -367,7 +367,7 @@ fn test_backup_selections_shadow_create_backup_selection(client: &aws_sdk_backup
     }
 }
 
-fn test_backup_selections_shadow_list_backup_selections(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_selections_list_backup_selections(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "ListBackupSelections",
@@ -407,7 +407,7 @@ fn test_backup_selections_shadow_list_backup_selections(client: &aws_sdk_backup:
     }
 }
 
-fn test_backup_selections_shadow_get_backup_selection(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_selections_get_backup_selection(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "GetBackupSelection",
@@ -446,7 +446,7 @@ fn test_backup_selections_shadow_get_backup_selection(client: &aws_sdk_backup::C
     }
 }
 
-fn test_backup_selections_shadow_delete_backup_selection(client: &aws_sdk_backup::Client) -> Test {
+fn test_backup_selections_delete_backup_selection(client: &aws_sdk_backup::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteBackupSelection",

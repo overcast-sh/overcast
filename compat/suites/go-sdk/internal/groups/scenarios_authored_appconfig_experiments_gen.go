@@ -23,15 +23,15 @@ func ScenariosAuthoredAppconfigExperiments(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-experiments",
 		Impls: map[string]harness.TestFn{
-			"appconfig-experiments-shadow:ListExperimentDefinitions": g.testAppconfigExperimentsShadowListExperimentDefinitions,
-			"appconfig-experiments-shadow:ListExperimentRuns":        g.testAppconfigExperimentsShadowListExperimentRuns,
-			"appconfig-experiments-shadow:ListExperimentRunEvents":   g.testAppconfigExperimentsShadowListExperimentRunEvents,
+			"appconfig-experiments:ListExperimentDefinitions": g.testAppconfigExperimentsListExperimentDefinitions,
+			"appconfig-experiments:ListExperimentRuns":        g.testAppconfigExperimentsListExperimentRuns,
+			"appconfig-experiments:ListExperimentRunEvents":   g.testAppconfigExperimentsListExperimentRunEvents,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-experiments-shadow": g.setupAppconfigExperimentsShadow,
+			"appconfig-experiments": g.setupAppconfigExperiments,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-experiments-shadow": g.teardownAppconfigExperimentsShadow,
+			"appconfig-experiments": g.teardownAppconfigExperiments,
 		},
 	}
 }
@@ -51,20 +51,20 @@ func (g *authoredAppconfigExperimentsScenarios) cl() *appconfig.Client {
 	return g.client
 }
 
-var groupAppconfigExperimentsShadow = scenario.Group{Name: "appconfig-experiments-shadow", File: "compat/model/authored/appconfig-experiments.json"}
+var groupAppconfigExperiments = scenario.Group{Name: "appconfig-experiments", File: "compat/model/authored/appconfig-experiments.json"}
 
-func (g *authoredAppconfigExperimentsScenarios) setupAppconfigExperimentsShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredAppconfigExperimentsScenarios) setupAppconfigExperiments(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupAppconfigExperimentsShadow.RunSetup(ctx, t)
+	return groupAppconfigExperiments.RunSetup(ctx, t)
 }
 
-func (g *authoredAppconfigExperimentsScenarios) teardownAppconfigExperimentsShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredAppconfigExperimentsScenarios) teardownAppconfigExperiments(ctx context.Context, t *harness.TestContext) error {
 	// No teardown steps: an empty phase is a no-op, not a missing one.
-	return groupAppconfigExperimentsShadow.RunTeardown(ctx, t)
+	return groupAppconfigExperiments.RunTeardown(ctx, t)
 }
 
-func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsShadowListExperimentDefinitions(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExperimentsShadow.RunTest(ctx, t, "ListExperimentDefinitions", scenario.Test{
+func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsListExperimentDefinitions(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExperiments.RunTest(ctx, t, "ListExperimentDefinitions", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListExperimentDefinitions",
 			Params: `{"ApplicationIdentifier":"zzzzzzz"}`,
@@ -85,8 +85,8 @@ func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsShadowLi
 	})
 }
 
-func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsShadowListExperimentRuns(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExperimentsShadow.RunTest(ctx, t, "ListExperimentRuns", scenario.Test{
+func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsListExperimentRuns(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExperiments.RunTest(ctx, t, "ListExperimentRuns", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListExperimentRuns",
 			Params: `{"ApplicationIdentifier":"zzzzzzz","ExperimentDefinitionIdentifier":"zzzzzzz"}`,
@@ -108,8 +108,8 @@ func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsShadowLi
 	})
 }
 
-func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsShadowListExperimentRunEvents(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExperimentsShadow.RunTest(ctx, t, "ListExperimentRunEvents", scenario.Test{
+func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsListExperimentRunEvents(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExperiments.RunTest(ctx, t, "ListExperimentRunEvents", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListExperimentRunEvents",
 			Params: `{"ApplicationIdentifier":"zzzzzzz","ExperimentDefinitionIdentifier":"zzzzzzz","Run":1}`,
