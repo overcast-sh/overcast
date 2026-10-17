@@ -395,6 +395,151 @@
   ],
   "groups": [
     {
+      "service": "backup",
+      "name": "backup-plans-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/backup-plans.json",
+      "state": "candidate",
+      "shadowOf": "backup-plans",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateBackupPlan"
+        },
+        {
+          "name": "GetBackupPlan",
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "name": "ListBackupPlans",
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "name": "ListBackupPlansPaginated",
+          "op": "ListBackupPlans",
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "name": "UpdateBackupPlan",
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "name": "GetBackupPlanNotFound",
+          "op": "GetBackupPlan"
+        },
+        {
+          "name": "GetBackupPlanVersionNotFound",
+          "op": "GetBackupPlan",
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "name": "UpdateBackupPlanNotFound",
+          "op": "UpdateBackupPlan"
+        },
+        {
+          "name": "DeleteBackupPlan",
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "name": "DeleteBackupPlanNotFound",
+          "op": "DeleteBackupPlan"
+        }
+      ]
+    },
+    {
+      "service": "backup",
+      "name": "backup-vaults-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/backup-vaults.json",
+      "state": "candidate",
+      "shadowOf": "backup-vaults",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateBackupVault"
+        },
+        {
+          "name": "DescribeBackupVault",
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "name": "ListBackupVaults",
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "name": "ListBackupVaultsPaginated",
+          "op": "ListBackupVaults",
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "name": "ListBackupVaultsByShared",
+          "op": "ListBackupVaults",
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "name": "DescribeBackupVaultNotFound",
+          "op": "DescribeBackupVault"
+        },
+        {
+          "name": "CreateBackupVaultAlreadyExists",
+          "op": "CreateBackupVault",
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "name": "CreateBackupVaultInvalidName",
+          "op": "CreateBackupVault"
+        },
+        {
+          "name": "DeleteBackupVault",
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "name": "DeleteBackupVaultNotFound",
+          "op": "DeleteBackupVault"
+        }
+      ]
+    },
+    {
       "service": "batch",
       "name": "batch-gen-computeenvironment",
       "generated": true,

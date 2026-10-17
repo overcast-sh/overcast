@@ -1,0 +1,528 @@
+{
+  "$comment": "Authored shadow port of the hand-written registry group backup-plans (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/backup.go); the other six suites never implemented it and carry it as parity debt, which the port closes once it is flipped. This is step 1 of the two-PR migration: the group is named backup-plans-shadow and runs beside the native, gating nothing. It was left out of the wave 3 ports (#2238) because the IR could neither walk the pages of a list nor embed a $name or $ref in an ARN check; both exist now (#2315, #2322). The clauses are what the cli native asserted, plus read-backs of documented effects where it asserted only success, each choice stated on its test - see compat/model/README.md § Authored scenarios. Signing: the cli native makes every call of this group UNSIGNED, deliberately, because unsigned is where #963 hid (an unsigned request for a Backup collection fell through to S3's wildcard and came back HTTP 200 with a ListBucketResult). The IR has no unsigned call (README § client and § A call: every backend signs), and no test of this group asserts anything about signing - each asserts the response content, so a collection answered by S3 still fails the same contains/equals checks. Every scenario call is therefore signed, as a real Backup client's always is. What the port cannot carry is the unsigned request itself, which stays covered by the cli native until it is deleted at the flip; the flip must keep an unsigned guard for the Backup collections elsewhere. The cli native also asserts the HTTP status (400) of every error it provokes beside its code. The IR's error clause has no status, so only the code is carried: the model binds none of these errors to a status other than the restJson1 default for a client error (only ConflictException carries an httpError trait), and the code is what a caller branches on - the same choice every earlier port made.",
+  "version": 1,
+  "service": "backup",
+  "client": {
+    "sdkId": "Backup",
+    "endpointPrefix": "backup",
+    "signingName": "backup",
+    "protocol": "restJson1",
+    "apiVersion": "2018-11-15",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Setup creates the vault the group's rules target (AWS requires TargetBackupVaultName to name a real vault, so the group owns one rather than borrowing another group's, which would run in parallel) and the second plan the native's ListBackupPlansPaginated creates inside the test (an IR test has one primary call); its id is exported as plan2.id. All are named by $name ({runId}-backup-plans-shadow-vault / -plan / -plan2). Teardown mirrors the native's in reverse creation order: the second plan, the first (already removed by DeleteBackupPlan, so that call errors and teardown ignores it; each teardown call is individually wrapped, as the native discards the same errors), then the vault. The registry declares depends on the tests that read the created plan, and the tests run in order. No clause is wrapped in `eventually` except the paginated walks, which say why: the native polls nothing else.",
+      "name": "backup-plans-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateBackupVault",
+          "params": {
+            "BackupVaultName": {
+              "$name": "vault"
+            }
+          }
+        },
+        {
+          "op": "CreateBackupPlan",
+          "params": {
+            "BackupPlan": {
+              "BackupPlanName": {
+                "$name": "plan2"
+              },
+              "Rules": [
+                {
+                  "RuleName": "weekly",
+                  "TargetBackupVaultName": {
+                    "$name": "vault"
+                  },
+                  "ScheduleExpression": "cron(0 5 ? * * *)"
+                }
+              ]
+            }
+          },
+          "export": {
+            "plan2.id": "$.BackupPlanId"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "Native: BackupPlanId is non-empty (exported for every later test, with VersionId), BackupPlanArn ends in :backup-plan:<id>, VersionId is non-empty and CreationDate is present. The ARN check is an endsWith on a $concat of the literal and the exported plan id. The plan is the native's: one daily rule on cron(0 5 ? * * *) targeting the group's vault, named {runId}-backup-plans-shadow-plan.",
+          "name": "CreateBackupPlan",
+          "op": "CreateBackupPlan",
+          "call": {
+            "op": "CreateBackupPlan",
+            "params": {
+              "BackupPlan": {
+                "BackupPlanName": {
+                  "$name": "plan"
+                },
+                "Rules": [
+                  {
+                    "RuleName": "daily",
+                    "TargetBackupVaultName": {
+                      "$name": "vault"
+                    },
+                    "ScheduleExpression": "cron(0 5 ? * * *)"
+                  }
+                ]
+              }
+            },
+            "export": {
+              "plan.id": "$.BackupPlanId",
+              "plan.version": "$.VersionId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupPlanId": {
+                  "nonEmpty": true
+                },
+                "$.BackupPlanArn": {
+                  "endsWith": {
+                    "$concat": [
+                      ":backup-plan:",
+                      {
+                        "$ref": "plan.id"
+                      }
+                    ]
+                  }
+                },
+                "$.VersionId": {
+                  "nonEmpty": true
+                },
+                "$.CreationDate": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Native: BackupPlanId is the id created, BackupPlan is present with the plan's name, and Rules holds exactly the one rule that was created, with its RuleName (daily), TargetBackupVaultName (the group's vault) and ScheduleExpression. 'Exactly one' is Rules[0] present and Rules[1] missing; the rule's three members are equals checks on Rules[0].",
+          "name": "GetBackupPlan",
+          "op": "GetBackupPlan",
+          "call": {
+            "op": "GetBackupPlan",
+            "params": {
+              "BackupPlanId": {
+                "$ref": "plan.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupPlanId": {
+                  "equals": {
+                    "$ref": "plan.id"
+                  }
+                },
+                "$.BackupPlan": {
+                  "nonEmpty": true
+                },
+                "$.BackupPlan.BackupPlanName": {
+                  "equals": {
+                    "$name": "plan"
+                  }
+                },
+                "$.BackupPlan.Rules[0]": {
+                  "nonEmpty": true
+                },
+                "$.BackupPlan.Rules[1]": {
+                  "missing": true
+                },
+                "$.BackupPlan.Rules[0].RuleName": {
+                  "equals": "daily"
+                },
+                "$.BackupPlan.Rules[0].TargetBackupVaultName": {
+                  "equals": {
+                    "$name": "vault"
+                  }
+                },
+                "$.BackupPlan.Rules[0].ScheduleExpression": {
+                  "equals": "cron(0 5 ? * * *)"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "$comment": "Native: the BackupPlansList is present and holds the created plan, matched on BackupPlanId, with its BackupPlanName. One listContains on both members of the item. The unpaginated call; the default page holds every plan a suite's emulator has, so the first page is enough.",
+          "name": "ListBackupPlans",
+          "op": "ListBackupPlans",
+          "call": {
+            "op": "ListBackupPlans",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.BackupPlansList",
+              "where": {
+                "$.BackupPlanId": {
+                  "$ref": "plan.id"
+                },
+                "$.BackupPlanName": {
+                  "$name": "plan"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "$comment": "Native: create a second plan (weekly rule, name -2), list at --page-size 1 (the CLI follows NextToken to the end) and require both plans in the union of the pages, failing with 'NextToken did not carry the caller past page one'. The second plan ({runId}-backup-plans-shadow-plan2, id exported as plan2.id) is created in setup because an IR test has one primary call; teardown deletes it, as the native's does. The primary call is the first page at MaxResults 1 and must hold a plan. Two listContains clauses, one per plan id, each walk every page at a page size of 1 (member names from ListBackupPlans' @paginated trait: MaxResults, NextToken, NextToken). minPages 2 is the native's own claim (its failure message says NextToken did not carry the caller past page one): with two plans at one per page, a service that ignored MaxResults or stopped after page one fails it. Scoping: ListBackupPlans has no filter, so the walk is the whole account, as the native's is. Backup pages by offset and a plan created or deleted by a parallel Backup group mid-walk can skip one of ours, so each walk sits in `eventually`, repeated whole up to three times.",
+          "name": "ListBackupPlansPaginated",
+          "op": "ListBackupPlans",
+          "call": {
+            "op": "ListBackupPlans",
+            "params": {
+              "MaxResults": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupPlansList": {
+                  "nonEmpty": true
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 3,
+              "delayMs": 250,
+              "assert": {
+                "kind": "listContains",
+                "itemsPath": "$.BackupPlansList",
+                "where": {
+                  "$.BackupPlanId": {
+                    "$ref": "plan.id"
+                  }
+                },
+                "call": {
+                  "op": "ListBackupPlans",
+                  "params": {}
+                },
+                "paginate": {
+                  "pageSize": 1,
+                  "minPages": 2,
+                  "inputToken": "NextToken",
+                  "outputToken": "NextToken",
+                  "pageSizeMember": "MaxResults"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 3,
+              "delayMs": 250,
+              "assert": {
+                "kind": "listContains",
+                "itemsPath": "$.BackupPlansList",
+                "where": {
+                  "$.BackupPlanId": {
+                    "$ref": "plan2.id"
+                  }
+                },
+                "call": {
+                  "op": "ListBackupPlans",
+                  "params": {}
+                },
+                "paginate": {
+                  "pageSize": 1,
+                  "minPages": 2,
+                  "inputToken": "NextToken",
+                  "outputToken": "NextToken",
+                  "pageSizeMember": "MaxResults"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "$comment": "Native: UpdateBackupPlan returns the same BackupPlanId, a non-empty VersionId different from the one before, and a CreationDate; it then proves the mutation through ListBackupPlans: the plan is still listed, with the new BackupPlanName ({plan name}-updated) and with the VersionId the update returned. The IR has no 'not equal' check, so 'a new version' is stated two ways: the update's VersionId is exported (plan.version2), the listing must hold the plan under that id, name and version, and a second clause says the listing holds NO item with this plan id and the version CreateBackupPlan returned (plan.version). Together: the plan is listed at the new version and not at the old one, which is the native's before != after.",
+          "name": "UpdateBackupPlan",
+          "op": "UpdateBackupPlan",
+          "call": {
+            "op": "UpdateBackupPlan",
+            "params": {
+              "BackupPlanId": {
+                "$ref": "plan.id"
+              },
+              "BackupPlan": {
+                "BackupPlanName": {
+                  "$concat": [
+                    {
+                      "$name": "plan"
+                    },
+                    "-updated"
+                  ]
+                },
+                "Rules": [
+                  {
+                    "RuleName": "daily",
+                    "TargetBackupVaultName": {
+                      "$name": "vault"
+                    },
+                    "ScheduleExpression": "cron(0 5 ? * * *)"
+                  }
+                ]
+              }
+            },
+            "export": {
+              "plan.version2": "$.VersionId"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupPlanId": {
+                  "equals": {
+                    "$ref": "plan.id"
+                  }
+                },
+                "$.VersionId": {
+                  "nonEmpty": true
+                },
+                "$.CreationDate": {
+                  "nonEmpty": true
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.BackupPlansList",
+              "where": {
+                "$.BackupPlanId": {
+                  "$ref": "plan.id"
+                },
+                "$.BackupPlanName": {
+                  "$concat": [
+                    {
+                      "$name": "plan"
+                    },
+                    "-updated"
+                  ]
+                },
+                "$.VersionId": {
+                  "$ref": "plan.version2"
+                }
+              },
+              "call": {
+                "op": "ListBackupPlans",
+                "params": {}
+              }
+            },
+            {
+              "kind": "absent",
+              "itemsPath": "$.BackupPlansList",
+              "where": {
+                "$.BackupPlanId": {
+                  "$ref": "plan.id"
+                },
+                "$.VersionId": {
+                  "$ref": "plan.version"
+                }
+              },
+              "call": {
+                "op": "ListBackupPlans",
+                "params": {}
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "$comment": "Native: a well-formed id that was never created (the all-zero UUID) fails with ResourceNotFoundException.",
+          "name": "GetBackupPlanNotFound",
+          "op": "GetBackupPlan",
+          "call": {
+            "op": "GetBackupPlan",
+            "params": {
+              "BackupPlanId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Native: a version of a plan that does exist is not found when the VersionId is no-such-version; Overcast keeps only the current version, and the failure mode to avoid is answering with the current version under the requested one's name.",
+          "name": "GetBackupPlanVersionNotFound",
+          "op": "GetBackupPlan",
+          "call": {
+            "op": "GetBackupPlan",
+            "params": {
+              "BackupPlanId": {
+                "$ref": "plan.id"
+              },
+              "VersionId": "no-such-version"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "$comment": "Native: updating the all-zero plan id, with a plan document named oc-absent-plan targeting the group's vault, fails with ResourceNotFoundException.",
+          "name": "UpdateBackupPlanNotFound",
+          "op": "UpdateBackupPlan",
+          "call": {
+            "op": "UpdateBackupPlan",
+            "params": {
+              "BackupPlanId": "00000000-0000-0000-0000-000000000000",
+              "BackupPlan": {
+                "BackupPlanName": "oc-absent-plan",
+                "Rules": [
+                  {
+                    "RuleName": "daily",
+                    "TargetBackupVaultName": {
+                      "$name": "vault"
+                    },
+                    "ScheduleExpression": "cron(0 5 ? * * *)"
+                  }
+                ]
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Native: the response carries the BackupPlanId, a DeletionDate and a VersionId, and the plan is no longer in ListBackupPlans afterwards. The listing check is an `absent` on BackupPlanId (a missing list counts as empty). Teardown deletes the plan again and ignores the error.",
+          "name": "DeleteBackupPlan",
+          "op": "DeleteBackupPlan",
+          "call": {
+            "op": "DeleteBackupPlan",
+            "params": {
+              "BackupPlanId": {
+                "$ref": "plan.id"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupPlanId": {
+                  "equals": {
+                    "$ref": "plan.id"
+                  }
+                },
+                "$.DeletionDate": {
+                  "nonEmpty": true
+                },
+                "$.VersionId": {
+                  "nonEmpty": true
+                }
+              }
+            },
+            {
+              "kind": "absent",
+              "itemsPath": "$.BackupPlansList",
+              "where": {
+                "$.BackupPlanId": {
+                  "$ref": "plan.id"
+                }
+              },
+              "call": {
+                "op": "ListBackupPlans",
+                "params": {}
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupPlan"
+          ]
+        },
+        {
+          "$comment": "Native: deleting the all-zero plan id fails with ResourceNotFoundException.",
+          "name": "DeleteBackupPlanNotFound",
+          "op": "DeleteBackupPlan",
+          "call": {
+            "op": "DeleteBackupPlan",
+            "params": {
+              "BackupPlanId": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteBackupPlan",
+          "params": {
+            "BackupPlanId": {
+              "$ref": "plan2.id"
+            }
+          }
+        },
+        {
+          "op": "DeleteBackupPlan",
+          "params": {
+            "BackupPlanId": {
+              "$ref": "plan.id"
+            }
+          }
+        },
+        {
+          "op": "DeleteBackupVault",
+          "params": {
+            "BackupVaultName": {
+              "$name": "vault"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
