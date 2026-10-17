@@ -59,6 +59,25 @@ type putImageScanningConfigurationRequest struct {
 
 type describeRepositoriesRequest struct {
 	RepositoryNames []string `json:"repositoryNames" cbor:"repositoryNames"`
+	MaxResults      *int     `json:"maxResults" cbor:"maxResults"`
+	NextToken       string   `json:"nextToken" cbor:"nextToken"`
+}
+
+// listImagesRequest is ListImages' input: a repository reference plus paging.
+type listImagesRequest struct {
+	RepositoryName string `json:"repositoryName" cbor:"repositoryName"`
+	RegistryId     string `json:"registryId" cbor:"registryId"`
+	MaxResults     *int   `json:"maxResults" cbor:"maxResults"`
+	NextToken      string `json:"nextToken" cbor:"nextToken"`
+}
+
+// describeImagesRequest is DescribeImages' input: image selectors plus paging.
+type describeImagesRequest struct {
+	RepositoryName string            `json:"repositoryName" cbor:"repositoryName"`
+	RegistryId     string            `json:"registryId" cbor:"registryId"`
+	ImageIds       []ImageIdentifier `json:"imageIds" cbor:"imageIds"`
+	MaxResults     *int              `json:"maxResults" cbor:"maxResults"`
+	NextToken      string            `json:"nextToken" cbor:"nextToken"`
 }
 
 type deleteRepositoryRequest struct {
@@ -151,6 +170,7 @@ type putImageScanningConfigurationResponse struct {
 
 type describeRepositoriesResponse struct {
 	Repositories []*Repository `json:"repositories" cbor:"repositories"`
+	NextToken    string        `json:"nextToken,omitempty" cbor:"nextToken,omitempty"`
 }
 
 type deleteRepositoryResponse struct {
@@ -177,11 +197,13 @@ type replicationConfig struct {
 }
 
 type listImagesResponse struct {
-	ImageIds []ImageIdentifier `json:"imageIds" cbor:"imageIds"`
+	ImageIds  []ImageIdentifier `json:"imageIds" cbor:"imageIds"`
+	NextToken string            `json:"nextToken,omitempty" cbor:"nextToken,omitempty"`
 }
 
 type describeImagesResponse struct {
 	ImageDetails []imageDetailWire `json:"imageDetails" cbor:"imageDetails"`
+	NextToken    string            `json:"nextToken,omitempty" cbor:"nextToken,omitempty"`
 }
 
 type imageDetailWire struct {
@@ -246,6 +268,7 @@ type getRepositoryPolicyResponse struct {
 type deleteRepositoryPolicyResponse struct {
 	RegistryId     string `json:"registryId" cbor:"registryId"`
 	RepositoryName string `json:"repositoryName" cbor:"repositoryName"`
+	PolicyText     string `json:"policyText" cbor:"policyText"`
 }
 
 type putLifecyclePolicyResponse struct {
@@ -261,8 +284,9 @@ type getLifecyclePolicyResponse struct {
 }
 
 type deleteLifecyclePolicyResponse struct {
-	RegistryId     string `json:"registryId" cbor:"registryId"`
-	RepositoryName string `json:"repositoryName" cbor:"repositoryName"`
+	RegistryId          string `json:"registryId" cbor:"registryId"`
+	RepositoryName      string `json:"repositoryName" cbor:"repositoryName"`
+	LifecyclePolicyText string `json:"lifecyclePolicyText" cbor:"lifecyclePolicyText"`
 }
 
 type tagResourceResponse struct{}
@@ -274,6 +298,39 @@ type listTagsForResourceResponse struct {
 }
 
 // ---- Typed handler functions ----
+
+// ecrPageOptions is the shared page size for DescribeRepositories, ListImages
+// and DescribeImages.
+// Per AWS docs (https://docs.aws.amazon.com/AmazonECR/latest/APIReference/API_ListImages.html
+// and the DescribeRepositories / DescribeImages siblings): maxResults is
+// 1..1000 (the pinned model's MaxResults range), and "If this parameter is not
+// used, then ... returns up to 100 results and a nextToken value".
+var ecrPageOptions = serviceutil.PaginateOptions{DefaultLimit: 100, MaxLimit: 1000}
+
+// ecrPage validates maxResults against the model's 1..1000 range and applies
+// maxResults/nextToken to items. Both failures are InvalidParameterException,
+// the only validation error the pinned model lists for these operations. The
+// token is serviceutil's opaque, deterministic start-offset token, so the same
+// request always yields the same token; one the service never issued is
+// refused rather than treated as the first page.
+func ecrPage[T any](items []T, maxResults *int, nextToken string) ([]T, string, *protocol.AWSError) {
+	limit := 0
+	if maxResults != nil {
+		limit = *maxResults
+		if limit < 1 || limit > 1000 {
+			return nil, "", ecrInvalidParameter(fmt.Sprintf("Invalid parameter at 'maxResults' failed to satisfy constraint: Member must have value between 1 and 1000, got %d", limit))
+		}
+	}
+	page, err := serviceutil.Paginate(items, limit, nextToken, ecrPageOptions)
+	if err != nil {
+		return nil, "", ecrInvalidParameter("Invalid parameter at 'nextToken': the token is not valid")
+	}
+	return page.Items, page.NextToken, nil
+}
+
+func ecrInvalidParameter(msg string) *protocol.AWSError {
+	return &protocol.AWSError{Code: "InvalidParameterException", Message: msg, HTTPStatus: http.StatusBadRequest}
+}
 
 func (s *Service) regionCtx(ctx context.Context) string {
 	return middleware.RegionFromContext(ctx, s.cfg.Region)
@@ -395,6 +452,11 @@ func (s *Service) putImageScanningConfigurationTyped(ctx context.Context, req *p
 func (s *Service) describeRepositoriesTyped(ctx context.Context, req *describeRepositoriesRequest) (*describeRepositoriesResponse, *protocol.AWSError) {
 	region := s.regionCtx(ctx)
 	if len(req.RepositoryNames) > 0 {
+		// Per AWS docs (API_DescribeRepositories.html): maxResults and nextToken
+		// "cannot be used when you specify repositories with repositoryNames".
+		if req.MaxResults != nil || req.NextToken != "" {
+			return nil, ecrInvalidParameter("maxResults and nextToken cannot be used when repositoryNames is specified")
+		}
 		repos := make([]*Repository, 0, len(req.RepositoryNames))
 		for _, name := range req.RepositoryNames {
 			repo, found, err := s.getRepo(ctx, region, name)
@@ -425,7 +487,11 @@ func (s *Service) describeRepositoriesTyped(ctx context.Context, req *describeRe
 	sort.Slice(repos, func(i, j int) bool {
 		return repos[i].RepositoryName < repos[j].RepositoryName
 	})
-	return &describeRepositoriesResponse{Repositories: repos}, nil
+	repos, next, aerr := ecrPage(repos, req.MaxResults, req.NextToken)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &describeRepositoriesResponse{Repositories: repos, NextToken: next}, nil
 }
 
 func (s *Service) deleteRepositoryTyped(ctx context.Context, req *deleteRepositoryRequest) (*deleteRepositoryResponse, *protocol.AWSError) {
@@ -486,7 +552,7 @@ func (s *Service) describeRegistryTyped(ctx context.Context, _ *struct{}) (*desc
 	}, nil
 }
 
-func (s *Service) listImagesTyped(ctx context.Context, req *repoRefRequest) (*listImagesResponse, *protocol.AWSError) {
+func (s *Service) listImagesTyped(ctx context.Context, req *listImagesRequest) (*listImagesResponse, *protocol.AWSError) {
 	region := s.regionCtx(ctx)
 	_, found, err := s.getRepo(ctx, region, req.RepositoryName)
 	if err != nil {
@@ -515,11 +581,28 @@ func (s *Service) listImagesTyped(ctx context.Context, req *repoRefRequest) (*li
 		}
 		ids = append(ids, img.ImageId)
 	}
-	return &listImagesResponse{ImageIds: ids}, nil
+	// Sorted so a token means the same offset on every call, whatever the
+	// store backend's scan order.
+	sort.Slice(ids, func(i, j int) bool {
+		if ids[i].ImageDigest != ids[j].ImageDigest {
+			return ids[i].ImageDigest < ids[j].ImageDigest
+		}
+		return ids[i].ImageTag < ids[j].ImageTag
+	})
+	ids, next, aerr := ecrPage(ids, req.MaxResults, req.NextToken)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &listImagesResponse{ImageIds: ids, NextToken: next}, nil
 }
 
-func (s *Service) describeImagesTyped(ctx context.Context, req *imageIDSetRequest) (*describeImagesResponse, *protocol.AWSError) {
+func (s *Service) describeImagesTyped(ctx context.Context, req *describeImagesRequest) (*describeImagesResponse, *protocol.AWSError) {
 	region := s.regionCtx(ctx)
+	// Per AWS docs (API_DescribeImages.html): maxResults and nextToken "cannot
+	// be used when you specify images with imageIds".
+	if len(req.ImageIds) > 0 && (req.MaxResults != nil || req.NextToken != "") {
+		return nil, ecrInvalidParameter("maxResults and nextToken cannot be used when imageIds is specified")
+	}
 	_, found, err := s.getRepo(ctx, region, req.RepositoryName)
 	if err != nil {
 		return nil, protocol.ErrInternalError
@@ -567,7 +650,11 @@ func (s *Service) describeImagesTyped(ctx context.Context, req *imageIDSetReques
 		}
 		details = append(details, d)
 	}
-	return &describeImagesResponse{ImageDetails: details}, nil
+	details, next, aerr := ecrPage(details, req.MaxResults, req.NextToken)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &describeImagesResponse{ImageDetails: details, NextToken: next}, nil
 }
 
 func (s *Service) putImageTyped(ctx context.Context, req *putImageRequest) (*putImageResponse, *protocol.AWSError) {
@@ -816,7 +903,7 @@ func (s *Service) deleteRepositoryPolicyTyped(ctx context.Context, req *repoRefR
 		return nil, s.errRepoNotFoundTyped(req.RepositoryName)
 	}
 	key := serviceutil.RegionKey(region, req.RepositoryName)
-	_, hasPolicy, err := s.store.Get(ctx, policyNamespace, key)
+	policyText, hasPolicy, err := s.store.Get(ctx, policyNamespace, key)
 	if err != nil {
 		return nil, protocol.ErrInternalError
 	}
@@ -829,6 +916,7 @@ func (s *Service) deleteRepositoryPolicyTyped(ctx context.Context, req *repoRefR
 	return &deleteRepositoryPolicyResponse{
 		RegistryId:     s.accountID(),
 		RepositoryName: req.RepositoryName,
+		PolicyText:     policyText,
 	}, nil
 }
 
@@ -888,7 +976,7 @@ func (s *Service) deleteLifecyclePolicyTyped(ctx context.Context, req *repoRefRe
 		return nil, s.errRepoNotFoundTyped(req.RepositoryName)
 	}
 	key := serviceutil.RegionKey(region, req.RepositoryName)
-	_, hasLP, err := s.store.Get(ctx, lifecycleNS, key)
+	lifecycleText, hasLP, err := s.store.Get(ctx, lifecycleNS, key)
 	if err != nil {
 		return nil, protocol.ErrInternalError
 	}
@@ -899,8 +987,9 @@ func (s *Service) deleteLifecyclePolicyTyped(ctx context.Context, req *repoRefRe
 	}
 	_ = s.store.Delete(ctx, lifecycleNS, key)
 	return &deleteLifecyclePolicyResponse{
-		RegistryId:     s.accountID(),
-		RepositoryName: req.RepositoryName,
+		RegistryId:          s.accountID(),
+		RepositoryName:      req.RepositoryName,
+		LifecyclePolicyText: lifecycleText,
 	}, nil
 }
 

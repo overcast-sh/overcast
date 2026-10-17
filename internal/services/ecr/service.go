@@ -608,55 +608,16 @@ func (s *Service) createRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) describeRepositories(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RepositoryNames []string `json:"repositoryNames"`
-	}
+	var req describeRepositoriesRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	region := s.region(r)
-	ctx := r.Context()
-
-	// If names specified, fetch each individually.
-	if len(req.RepositoryNames) > 0 {
-		repos := make([]*Repository, 0, len(req.RepositoryNames))
-		for _, name := range req.RepositoryNames {
-			repo, found, err := s.getRepo(ctx, region, name)
-			if err != nil {
-				protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-				return
-			}
-			if !found {
-				s.errRepoNotFound(w, r, name)
-				return
-			}
-			s.applyCurrentRepoURI(ctx, region, repo)
-			repos = append(repos, repo)
-		}
-		protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"repositories": repos})
+	resp, aerr := s.describeRepositoriesTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-
-	// List all repos in region.
-	kvs, err := s.store.Scan(ctx, repoNamespace, serviceutil.RegionKey(region, ""))
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	repos := make([]*Repository, 0, len(kvs))
-	for _, kv := range kvs {
-		var repo Repository
-		if err := json.Unmarshal([]byte(kv.Value), &repo); err != nil {
-			continue
-		}
-		s.applyCurrentRepoURI(ctx, region, &repo)
-		repos = append(repos, &repo)
-	}
-	sort.Slice(repos, func(i, j int) bool {
-		return repos[i].RepositoryName < repos[j].RepositoryName
-	})
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"repositories": repos})
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
 }
 
 func (s *Service) deleteRepository(w http.ResponseWriter, r *http.Request) {
@@ -1114,121 +1075,29 @@ func (s *Service) registryLacksManifest(ctx context.Context, client *http.Client
 }
 
 func (s *Service) listImages(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RepositoryName string `json:"repositoryName"`
-		RegistryId     string `json:"registryId"`
-	}
+	var req listImagesRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	region := s.region(r)
-	ctx := r.Context()
-	_, found, err := s.getRepo(ctx, region, req.RepositoryName)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
+	resp, aerr := s.listImagesTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	if !found {
-		s.errRepoNotFound(w, r, req.RepositoryName)
-		return
-	}
-	_ = s.syncRepoImagesFromRegistry(ctx, region, req.RepositoryName)
-
-	prefix := serviceutil.RegionKey(region, req.RepositoryName+"/")
-	kvs, err := s.store.Scan(ctx, imageNamespace, prefix)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	ids := make([]ImageIdentifier, 0, len(kvs))
-	for _, kv := range kvs {
-		var img Image
-		if err := json.Unmarshal([]byte(kv.Value), &img); err != nil {
-			continue
-		}
-		ids = append(ids, img.ImageId)
-	}
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"imageIds": ids})
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
 }
 
 func (s *Service) describeImages(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RepositoryName string            `json:"repositoryName"`
-		RegistryId     string            `json:"registryId"`
-		ImageIds       []ImageIdentifier `json:"imageIds"`
-	}
+	var req describeImagesRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	region := s.region(r)
-	ctx := r.Context()
-	_, found, err := s.getRepo(ctx, region, req.RepositoryName)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
+	resp, aerr := s.describeImagesTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	if !found {
-		s.errRepoNotFound(w, r, req.RepositoryName)
-		return
-	}
-	sweep := s.syncRepoImagesFromRegistry(ctx, region, req.RepositoryName)
-
-	prefix := serviceutil.RegionKey(region, req.RepositoryName+"/")
-	kvs, err := s.store.Scan(ctx, imageNamespace, prefix)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-
-	images := make([]Image, 0, len(kvs))
-	for _, kv := range kvs {
-		var img Image
-		if err := json.Unmarshal([]byte(kv.Value), &img); err != nil {
-			continue
-		}
-		images = append(images, img)
-	}
-
-	images, missing := selectImages(images, req.ImageIds)
-	if missing != nil {
-		// Same rule as describeImagesTyped: only a sweep can establish that an
-		// image is absent, so without one this is a ServerException.
-		if sweep == sweepUnavailable {
-			protocol.WriteJSONError(w, r, s.errRegistryUnavailable(req.RepositoryName))
-			return
-		}
-		protocol.WriteJSONError(w, r, s.errImageNotFound(req.RepositoryName, *missing))
-		return
-	}
-
-	sort.Slice(images, func(i, j int) bool {
-		return images[i].ImageId.ImageDigest < images[j].ImageId.ImageDigest
-	})
-
-	type imageDetail struct {
-		RegistryId             string   `json:"registryId"`
-		RepositoryName         string   `json:"repositoryName"`
-		ImageDigest            string   `json:"imageDigest"`
-		ImageTags              []string `json:"imageTags,omitempty"`
-		ImageManifestMediaType string   `json:"imageManifestMediaType,omitempty"`
-	}
-	details := make([]imageDetail, 0, len(images))
-	for _, img := range images {
-		d := imageDetail{
-			RegistryId:             img.RegistryId,
-			RepositoryName:         img.RepositoryName,
-			ImageDigest:            img.ImageId.ImageDigest,
-			ImageManifestMediaType: img.ImageManifestMediaType,
-		}
-		if img.ImageId.ImageTag != "" {
-			d.ImageTags = []string{img.ImageId.ImageTag}
-		}
-		details = append(details, d)
-	}
-
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{"imageDetails": details})
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
 }
 
 func (s *Service) putImage(w http.ResponseWriter, r *http.Request) {
@@ -1665,45 +1534,16 @@ func (s *Service) getRepositoryPolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) deleteRepositoryPolicy(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RepositoryName string `json:"repositoryName"`
-		RegistryId     string `json:"registryId"`
-	}
+	var req repoRefRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	region := s.region(r)
-	ctx := r.Context()
-	_, found, err := s.getRepo(ctx, region, req.RepositoryName)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
+	resp, aerr := s.deleteRepositoryPolicyTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	if !found {
-		s.errRepoNotFound(w, r, req.RepositoryName)
-		return
-	}
-
-	key := serviceutil.RegionKey(region, req.RepositoryName)
-	_, hasPolicy, err := s.store.Get(ctx, policyNamespace, key)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	if !hasPolicy {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "RepositoryPolicyNotFoundException",
-			Message:    fmt.Sprintf("Repository policy does not exist for the repository with name '%s'", req.RepositoryName),
-			HTTPStatus: http.StatusBadRequest,
-		})
-		return
-	}
-	_ = s.store.Delete(ctx, policyNamespace, key)
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"registryId":     s.accountID(),
-		"repositoryName": req.RepositoryName,
-	})
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
 }
 
 func (s *Service) putLifecyclePolicy(w http.ResponseWriter, r *http.Request) {
@@ -1783,46 +1623,16 @@ func (s *Service) getLifecyclePolicy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) deleteLifecyclePolicy(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		RepositoryName string `json:"repositoryName"`
-		RegistryId     string `json:"registryId"`
-	}
+	var req repoRefRequest
 	if !serviceutil.DecodeJSON(w, r, &req) {
 		return
 	}
-
-	region := s.region(r)
-	ctx := r.Context()
-	_, found, err := s.getRepo(ctx, region, req.RepositoryName)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
+	resp, aerr := s.deleteLifecyclePolicyTyped(r.Context(), &req)
+	if aerr != nil {
+		protocol.WriteJSONError(w, r, aerr)
 		return
 	}
-	if !found {
-		s.errRepoNotFound(w, r, req.RepositoryName)
-		return
-	}
-
-	key := serviceutil.RegionKey(region, req.RepositoryName)
-	_, found, err = s.store.Get(ctx, lifecycleNS, key)
-	if err != nil {
-		protocol.WriteJSONError(w, r, protocol.ErrInternalError)
-		return
-	}
-	if !found {
-		protocol.WriteJSONError(w, r, &protocol.AWSError{
-			Code:       "LifecyclePolicyNotFoundException",
-			Message:    fmt.Sprintf("Lifecycle policy does not exist for the repository with name '%s'", req.RepositoryName),
-			HTTPStatus: http.StatusBadRequest,
-		})
-		return
-	}
-
-	_ = s.store.Delete(ctx, lifecycleNS, key)
-	protocol.WriteJSON(w, r, http.StatusOK, map[string]any{
-		"registryId":     s.accountID(),
-		"repositoryName": req.RepositoryName,
-	})
+	protocol.WriteJSON(w, r, http.StatusOK, resp)
 }
 
 // ─── Tag operations ───────────────────────────────────────────────────────────

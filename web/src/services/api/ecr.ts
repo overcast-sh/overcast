@@ -2,9 +2,11 @@ import {
   BatchGetImageCommand,
   CreateRepositoryCommand,
   DeleteRepositoryCommand,
-  DescribeImagesCommand,
   DescribeRepositoriesCommand,
   GetAuthorizationTokenCommand,
+  type ImageDetail,
+  paginateDescribeImages,
+  paginateDescribeRepositories,
 } from "@aws-sdk/client-ecr"
 import { awsClients } from "../aws-clients"
 import type {
@@ -56,19 +58,32 @@ function mapImage(detail: {
   }
 }
 
+async function listImageDetails(repositoryName: string) {
+  const out: ImageDetail[] = []
+  for await (const page of paginateDescribeImages(
+    { client: awsClients.ecr() },
+    { repositoryName },
+  )) {
+    out.push(...(page.imageDetails ?? []))
+  }
+  return out
+}
+
 export const ecr = {
   listRepositories: async (): Promise<EcrRepository[]> => {
-    const res = await awsClients.ecr().send(new DescribeRepositoriesCommand({}))
-    return (res.repositories ?? []).map(mapRepository)
+    // DescribeRepositories returns at most 100 repositories per page, as on AWS.
+    const repos: EcrRepository[] = []
+    for await (const page of paginateDescribeRepositories({ client: awsClients.ecr() }, {})) {
+      repos.push(...(page.repositories ?? []).map(mapRepository))
+    }
+    return repos
   },
 
   getRepository: async (name: string): Promise<EcrRepositoryDetail> => {
     const client = awsClients.ecr()
     const [reposRes, imagesRes, authRes] = await Promise.all([
       client.send(new DescribeRepositoriesCommand({ repositoryNames: [name] })),
-      client
-        .send(new DescribeImagesCommand({ repositoryName: name }))
-        .catch(() => ({ imageDetails: [] })),
+      listImageDetails(name).catch(() => []),
       client.send(new GetAuthorizationTokenCommand({})).catch(() => ({ authorizationData: [] })),
     ])
     const repo = reposRes.repositories?.[0]
@@ -77,7 +92,7 @@ export const ecr = {
     const decoded = decodeToken(authEntry?.authorizationToken)
     return {
       ...mapRepository(repo),
-      images: (imagesRes.imageDetails ?? []).map(mapImage),
+      images: imagesRes.map(mapImage),
       login:
         authEntry?.proxyEndpoint && decoded
           ? {

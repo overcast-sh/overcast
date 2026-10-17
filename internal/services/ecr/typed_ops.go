@@ -22,10 +22,10 @@ func (s *Service) typedOps() map[string]op.Operation {
 		"DescribeRegistry": op.NewTyped[struct{}, describeRegistryResponse](
 			"DescribeRegistry", s.describeRegistryTyped,
 		),
-		"ListImages": op.NewTyped[repoRefRequest, listImagesResponse](
+		"ListImages": op.NewTyped[listImagesRequest, listImagesResponse](
 			"ListImages", s.listImagesTyped,
 		),
-		"DescribeImages": op.NewTyped[imageIDSetRequest, describeImagesResponse](
+		"DescribeImages": op.NewTyped[describeImagesRequest, describeImagesResponse](
 			"DescribeImages", s.describeImagesTyped,
 		),
 		"PutImage": op.NewTyped[putImageRequest, putImageResponse](
