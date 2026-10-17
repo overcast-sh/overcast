@@ -78,6 +78,22 @@
               "kind": "listContains",
               "itemsPath": "$.QueueUrls",
               "where": { "$": { "$ref": "queue.url" } }
+            },
+            {
+              "$comment": "Walks ListQueues to its last page at a page size of one (compat/model/README.md § Paginating a list). None of the natives paged ListQueues; this is the first clause to use `paginate`, and it is what puts the typed emitters' paginated path under CI. It sets no minPages: Overcast's ListQueues parses MaxResults and ignores it (#1094, the class-B pagination audit), so the whole list comes back as one page and a floor of two would fail on the emulator. Add `minPages: 2` once SQS honours MaxResults; the prefix then needs to cover a second queue, which this group does not yet have.",
+              "kind": "listContains",
+              "call": {
+                "op": "ListQueues",
+                "params": { "QueueNamePrefix": { "$name": "q" } }
+              },
+              "itemsPath": "$.QueueUrls",
+              "where": { "$": { "$ref": "queue.url" } },
+              "paginate": {
+                "pageSize": 1,
+                "inputToken": "NextToken",
+                "outputToken": "NextToken",
+                "pageSizeMember": "MaxResults"
+              }
             }
           ],
           "depends": ["CreateQueue"]
