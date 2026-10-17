@@ -7,6 +7,7 @@ package sqs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -59,10 +60,12 @@ type deleteQueueRequest struct {
 
 type listQueuesRequest struct {
 	QueueNamePrefix string `json:"QueueNamePrefix,omitempty"`
-	MaxResults      int    `json:"MaxResults,omitempty"`
+	MaxResults      *int   `json:"MaxResults,omitempty"`
+	NextToken       string `json:"NextToken,omitempty"`
 }
 
 type listQueuesResponse struct {
+	NextToken string   `json:"NextToken,omitempty"`
 	QueueUrls []string `json:"QueueUrls"`
 }
 
@@ -266,7 +269,53 @@ func (h *Handler) listQueuesTyped(ctx context.Context, in *listQueuesRequest) (*
 	for i, q := range queues {
 		urls[i] = h.queueURL(ctx, q.Name)
 	}
-	return &listQueuesResponse{QueueUrls: urls}, nil
+	urls, token, aerr := paginateQueueURLs(urls, in.MaxResults, in.NextToken)
+	if aerr != nil {
+		return nil, aerr
+	}
+	return &listQueuesResponse{QueueUrls: urls, NextToken: token}, nil
+}
+
+// maxListResults is the documented ceiling for MaxResults, and the page size
+// when MaxResults is omitted, on ListQueues and ListDeadLetterSourceQueues.
+const maxListResults = 1000
+
+// paginateQueueURLs pages a queue-URL list the way ListQueues and
+// ListDeadLetterSourceQueues do. The input is sorted first so a token keeps
+// meaning the same position from one page to the next.
+//
+// Per AWS docs (API_ListQueues.html, API_ListDeadLetterSourceQueues.html,
+// checked 2026-10-17): MaxResults is 1 to 1000; without it the response holds
+// up to 1,000 results and NextToken is null ("Token value is null if ... you
+// did not set MaxResults"); with it, NextToken appears while results remain.
+// A NextToken sent without MaxResults is not an error. The docs and the pinned
+// model name no error for a malformed token or an out-of-range MaxResults, so
+// both answer InvalidParameterValue, SQS's generic bad-argument code.
+func paginateQueueURLs(urls []string, maxResults *int, nextToken string) ([]string, string, *protocol.AWSError) {
+	size := 0
+	if maxResults != nil {
+		size = *maxResults
+		if size < 1 || size > maxListResults {
+			return nil, "", &protocol.AWSError{
+				Code:       "InvalidParameterValue",
+				Message:    fmt.Sprintf("Value %d for parameter MaxResults is invalid. Reason: MaxResults must be an integer between 1 and %d.", size, maxListResults),
+				HTTPStatus: http.StatusBadRequest,
+			}
+		}
+	}
+	slices.Sort(urls)
+	page, err := serviceutil.Paginate(urls, size, nextToken, serviceutil.PaginateOptions{DefaultLimit: maxListResults, MaxLimit: maxListResults})
+	if err != nil {
+		return nil, "", &protocol.AWSError{
+			Code:       "InvalidParameterValue",
+			Message:    "Value for parameter NextToken is invalid. Reason: the token is not valid.",
+			HTTPStatus: http.StatusBadRequest,
+		}
+	}
+	if maxResults == nil {
+		return page.Items, "", nil
+	}
+	return page.Items, page.NextToken, nil
 }
 
 func (h *Handler) purgeQueueTyped(ctx context.Context, in *purgeQueueRequest) (*struct{}, *protocol.AWSError) {
@@ -488,8 +537,13 @@ func (h *Handler) ListQueues(w http.ResponseWriter, r *http.Request) {
 	for i, q := range queues {
 		urls[i] = h.queueURL(r.Context(), q.Name)
 	}
+	urls, token, aerr := paginateQueueURLs(urls, req.MaxResults, req.NextToken)
+	if aerr != nil {
+		writeJSONError(w, r, aerr)
+		return
+	}
 
-	protocol.WriteJSON(w, r, http.StatusOK, &listQueuesResponse{QueueUrls: urls})
+	protocol.WriteJSON(w, r, http.StatusOK, &listQueuesResponse{QueueUrls: urls, NextToken: token})
 }
 
 func (h *Handler) PurgeQueue(w http.ResponseWriter, r *http.Request) {

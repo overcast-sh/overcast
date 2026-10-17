@@ -76,6 +76,21 @@ func (g *authoredSqsQueuesScenarios) setupSqsQueues(ctx context.Context, t *harn
 				"queue.url": "$.QueueUrl",
 			},
 		},
+		scenario.Call{
+			Op:     "CreateQueue",
+			Params: `{"QueueName":{"$name":"q-second"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &sqs.CreateQueueInput{}
+				in.QueueName = aws.String(scenario.Bind[string](b, "QueueName", scenario.Name("q-second")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().CreateQueue(ctx, in.(*sqs.CreateQueueInput))
+			},
+			Export: map[string]string{
+				"queue.secondUrl": "$.QueueUrl",
+			},
+		},
 	)
 }
 
@@ -87,6 +102,18 @@ func (g *authoredSqsQueuesScenarios) teardownSqsQueues(ctx context.Context, t *h
 			Build: func(b *scenario.Binder) any {
 				in := &sqs.DeleteQueueInput{}
 				in.QueueUrl = aws.String(scenario.Bind[string](b, "QueueUrl", scenario.Ref("queue.createdUrl")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().DeleteQueue(ctx, in.(*sqs.DeleteQueueInput))
+			},
+		},
+		scenario.Call{
+			Op:     "DeleteQueue",
+			Params: `{"QueueUrl":{"$ref":"queue.secondUrl"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &sqs.DeleteQueueInput{}
+				in.QueueUrl = aws.String(scenario.Bind[string](b, "QueueUrl", scenario.Ref("queue.secondUrl")))
 				return in
 			},
 			Send: func(ctx context.Context, in any) (any, error) {
@@ -211,7 +238,7 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesListQueues(ctx context.Context
 				),
 				scenario.Page{
 					Size:        1,
-					MinPages:    0,
+					MinPages:    2,
 					OutputToken: "NextToken",
 					Next: scenario.Call{
 						Op:     "ListQueues",

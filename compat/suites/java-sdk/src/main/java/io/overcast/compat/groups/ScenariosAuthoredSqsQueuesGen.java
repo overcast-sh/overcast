@@ -98,7 +98,13 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                                 .queueName(b.string("QueueName", Values.name("q")))
                                 .build(),
                         r -> cl().createQueue((CreateQueueRequest) r))
-                        .export("queue.url", "$.QueueUrl"));
+                        .export("queue.url", "$.QueueUrl"),
+                new Call("CreateQueue", "{\"QueueName\":{\"$name\":\"q-second\"}}",
+                        b -> CreateQueueRequest.builder()
+                                .queueName(b.string("QueueName", Values.name("q-second")))
+                                .build(),
+                        r -> cl().createQueue((CreateQueueRequest) r))
+                        .export("queue.secondUrl", "$.QueueUrl"));
     }
 
     private void teardownSqsQueues(TestContext t) {
@@ -106,6 +112,11 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                 new Call("DeleteQueue", "{\"QueueUrl\":{\"$ref\":\"queue.createdUrl\"}}",
                         b -> DeleteQueueRequest.builder()
                                 .queueUrl(b.string("QueueUrl", Values.ref("queue.createdUrl")))
+                                .build(),
+                        r -> cl().deleteQueue((DeleteQueueRequest) r)),
+                new Call("DeleteQueue", "{\"QueueUrl\":{\"$ref\":\"queue.secondUrl\"}}",
+                        b -> DeleteQueueRequest.builder()
+                                .queueUrl(b.string("QueueUrl", Values.ref("queue.secondUrl")))
                                 .build(),
                         r -> cl().deleteQueue((DeleteQueueRequest) r)),
                 new Call("DeleteQueue", "{\"QueueUrl\":{\"$ref\":\"queue.url\"}}",
@@ -175,7 +186,7 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                                         r -> cl().listQueues((ListQueuesRequest) r)),
                                 "$.QueueUrls",
                                 Where.of("$", Values.ref("queue.url"))
-                        ).paged(Page.of(1, 0, "NextToken",
+                        ).paged(Page.of(1, 2, "NextToken",
                                 new Call("ListQueues", "{\"MaxResults\":1,\"NextToken\":{\"$ref\":\"$pageToken\"},\"QueueNamePrefix\":{\"$name\":\"q\"}}",
                                         b -> ListQueuesRequest.builder()
                                                 .maxResults(1)

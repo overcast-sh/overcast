@@ -13,7 +13,7 @@
   },
   "groups": [
     {
-      "$comment": "Two queues: the group's own (created in setup, read and mutated by every test) and an ephemeral one the CreateQueue test creates and the DeleteQueue test removes. That split is what four of the seven natives already do, and it is what lets DeleteQueue prove a delete without destroying the queue the earlier tests read.",
+      "$comment": "Three queues: the group's own (created in setup, read and mutated by every test), a second one in setup that shares the first's name prefix (so a ListQueues page of one cannot hold both; see the paginated clause on ListQueues), and an ephemeral one the CreateQueue test creates and the DeleteQueue test removes. The own/ephemeral split is what four of the seven natives already do, and it is what lets DeleteQueue prove a delete without destroying the queue the earlier tests read.",
       "name": "sqs-queues",
       "kind": "lifecycle",
       "setup": [
@@ -21,6 +21,11 @@
           "op": "CreateQueue",
           "params": { "QueueName": { "$name": "q" } },
           "export": { "queue.url": "$.QueueUrl" }
+        },
+        {
+          "op": "CreateQueue",
+          "params": { "QueueName": { "$name": "q-second" } },
+          "export": { "queue.secondUrl": "$.QueueUrl" }
         }
       ],
       "tests": [
@@ -80,7 +85,7 @@
               "where": { "$": { "$ref": "queue.url" } }
             },
             {
-              "$comment": "Walks ListQueues to its last page at a page size of one (compat/model/README.md § Paginating a list). None of the natives paged ListQueues; this is the first clause to use `paginate`, and it is what puts the typed emitters' paginated path under CI. It sets no minPages: Overcast's ListQueues parses MaxResults and ignores it (#1094, the class-B pagination audit), so the whole list comes back as one page and a floor of two would fail on the emulator. Add `minPages: 2` once SQS honours MaxResults; the prefix then needs to cover a second queue, which this group does not yet have.",
+              "$comment": "Walks ListQueues to its last page at a page size of one (compat/model/README.md § Paginating a list). None of the natives paged ListQueues; this is the first clause to use `paginate`, and it is what puts the typed emitters' paginated path under CI. minPages 2 proves the service really paged: the group's two queues (q and q-second) both begin with the q prefix, so a page of one cannot hold them both. Overcast honours MaxResults since #1094.",
               "kind": "listContains",
               "call": {
                 "op": "ListQueues",
@@ -90,6 +95,7 @@
               "where": { "$": { "$ref": "queue.url" } },
               "paginate": {
                 "pageSize": 1,
+                "minPages": 2,
                 "inputToken": "NextToken",
                 "outputToken": "NextToken",
                 "pageSizeMember": "MaxResults"
@@ -225,6 +231,10 @@
         {
           "op": "DeleteQueue",
           "params": { "QueueUrl": { "$ref": "queue.createdUrl" } }
+        },
+        {
+          "op": "DeleteQueue",
+          "params": { "QueueUrl": { "$ref": "queue.secondUrl" } }
         },
         {
           "op": "DeleteQueue",

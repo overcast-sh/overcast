@@ -189,6 +189,7 @@ var schemas = map[string][]field{
 	"ListQueues": {
 		{form: "QueueNamePrefix", json: "QueueNamePrefix", kind: kString},
 		{form: "MaxResults", json: "MaxResults", kind: kInt},
+		{form: "NextToken", json: "NextToken", kind: kString},
 	},
 	"PurgeQueue": {
 		{form: "QueueUrl", json: "QueueUrl", kind: kString},
@@ -211,6 +212,8 @@ var schemas = map[string][]field{
 	},
 	"ListDeadLetterSourceQueues": {
 		{form: "QueueUrl", json: "QueueUrl", kind: kString},
+		{form: "MaxResults", json: "MaxResults", kind: kInt},
+		{form: "NextToken", json: "NextToken", kind: kString},
 	},
 	"SendMessageBatch": {
 		{form: "QueueUrl", json: "QueueUrl", kind: kString},
