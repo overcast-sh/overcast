@@ -1,0 +1,76 @@
+{
+  "$comment": "Authored port of the hand-written registry group appconfig-experiments (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116, #2244). The group has one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 3 rows each, which the flip closes. It is the port that needed the java-sdk BOM bump (#2244): ListExperimentDefinitions, ListExperimentRuns and ListExperimentRunEvents first appear in AWS SDK for Java v2 2.46.18. Nothing is flipped here: the group registers as appconfig-experiments-shadow beside the cli native and gates nothing. The experiment surface is not implemented by Overcast and its definitions cannot be created (there is no CreateExperimentDefinition in the registry group), so, as the native does, the three tests only exercise the collection URIs with the deliberately nonexistent identifier zzzzzzz; an unimplemented operation reaches the harness as `unimplemented`, not `fail`. The group has no setup and no teardown: it creates nothing. The native asserts only that the response carries an Items member; there is no documented effect to read back, since every operation is a read of a collection nothing here creates. Every scenario backend signs with AppConfig's own credential scope, as the cli native does.",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Three independent list calls with no shared state, in the registry's order. Like every authored port it is a lifecycle group, and with no setup and no teardown it creates nothing.",
+      "name": "appconfig-experiments-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "The native lists the experiment definitions of the nonexistent application zzzzzzz and asserts the response has an Items member (a page, empty or not). `isList` is the nearest clause: it holds for a list, empty or not, and it also holds when the member is absent, which the native's presence check does not, so the port is marginally weaker on an omitted Items. The IR has no 'present' check and nonEmpty would fail the empty page the native accepts.",
+          "name": "ListExperimentDefinitions",
+          "op": "ListExperimentDefinitions",
+          "call": {
+            "op": "ListExperimentDefinitions",
+            "params": { "ApplicationIdentifier": "zzzzzzz" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "isList": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "The native lists the runs of experiment definition zzzzzzz in application zzzzzzz and asserts an Items member, carried as isList for the reason ListExperimentDefinitions states.",
+          "name": "ListExperimentRuns",
+          "op": "ListExperimentRuns",
+          "call": {
+            "op": "ListExperimentRuns",
+            "params": {
+              "ApplicationIdentifier": "zzzzzzz",
+              "ExperimentDefinitionIdentifier": "zzzzzzz"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "isList": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "The native lists the events of run 1 of experiment definition zzzzzzz in application zzzzzzz and asserts an Items member, carried as isList for the reason ListExperimentDefinitions states. Run is the model's PositiveInteger, so it is the number 1 where the native's CLI flag is the string \"1\".",
+          "name": "ListExperimentRunEvents",
+          "op": "ListExperimentRunEvents",
+          "call": {
+            "op": "ListExperimentRunEvents",
+            "params": {
+              "ApplicationIdentifier": "zzzzzzz",
+              "ExperimentDefinitionIdentifier": "zzzzzzz",
+              "Run": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "isList": true } }
+            }
+          ]
+        }
+      ],
+      "teardown": []
+    }
+  ]
+}

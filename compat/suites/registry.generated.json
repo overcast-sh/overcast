@@ -391,6 +391,33 @@
     },
     {
       "service": "appconfig",
+      "name": "appconfig-experiments-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-experiments.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-experiments",
+      "suites": [
+        "cli",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "ListExperimentDefinitions"
+        },
+        {
+          "name": "ListExperimentRuns"
+        },
+        {
+          "name": "ListExperimentRunEvents"
+        }
+      ]
+    },
+    {
+      "service": "appconfig",
       "name": "appconfig-extensions-shadow",
       "generated": true,
       "scenario": "compat/model/authored/appconfig-extensions.json",
