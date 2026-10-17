@@ -118,8 +118,11 @@ class ListWidgetsAndCogsResponse
   Widgets List<class:Widget>
 class ListWidgetsRequest
   CreatedAfter DateTime?
+  MaxResults int?
   NamePrefix string
+  NextToken string
 class ListWidgetsResponse
+  NextToken string
   Widgets List<class:Widget>
 class PingWidgetsRequest
 class PingWidgetsResponse

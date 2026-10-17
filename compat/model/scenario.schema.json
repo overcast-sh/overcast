@@ -145,7 +145,8 @@
             "kind": { "const": "listContains" },
             "call": { "$ref": "#/definitions/Call" },
             "itemsPath": { "$ref": "#/definitions/Path" },
-            "where": { "$ref": "#/definitions/Where" }
+            "where": { "$ref": "#/definitions/Where" },
+            "paginate": { "$ref": "#/definitions/Paginate" }
           }
         },
         {
@@ -157,7 +158,8 @@
             "kind": { "const": "absent" },
             "call": { "$ref": "#/definitions/Call" },
             "itemsPath": { "$ref": "#/definitions/Path" },
-            "where": { "$ref": "#/definitions/Where" }
+            "where": { "$ref": "#/definitions/Where" },
+            "paginate": { "$ref": "#/definitions/Paginate" }
           }
         },
         {
@@ -219,6 +221,19 @@
           "matches": { "type": "string", "description": "The path resolves to a string matching this RE2-compatible regular expression." },
           "missing": { "const": true, "description": "The path does not resolve (any segment absent)." }
         }
+      }
+    },
+    "Paginate": {
+      "type": "object",
+      "description": "Walk every page of the list: the clause's call is repeated, the previous page's `outputToken` member sent back as `inputToken`, until the service returns none, and the items of all the pages are searched as one list. `inputToken`, `outputToken` and `pageSizeMember` are the operation's own @paginated members; the generator holds them to the trait. Needs a `call`, which must not export and must not set either input member.",
+      "required": ["pageSize", "inputToken", "outputToken", "pageSizeMember"],
+      "additionalProperties": false,
+      "properties": {
+        "pageSize": { "type": "integer", "minimum": 1, "description": "Sent as `pageSizeMember` on every page." },
+        "minPages": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Fail unless the service answered in at least this many pages." },
+        "inputToken": { "type": "string", "minLength": 1 },
+        "outputToken": { "type": "string", "minLength": 1 },
+        "pageSizeMember": { "type": "string", "minLength": 1 }
       }
     },
     "Where": {

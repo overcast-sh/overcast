@@ -79,6 +79,8 @@ mod errorfixtures;
 #[cfg(test)]
 mod nowfixtures;
 #[cfg(test)]
+mod paginate_tests;
+#[cfg(test)]
 mod tests;
 
 use std::collections::HashMap;
@@ -146,6 +148,7 @@ pub enum Clause {
         call: Option<Call>,
         items_path: &'static str,
         criteria: Vec<WhereEntry>,
+        page: Option<Page>,
     },
     /// The list at `items_path` holds no matching item; a missing list counts
     /// as empty.
@@ -153,6 +156,7 @@ pub enum Clause {
         call: Option<Call>,
         items_path: &'static str,
         criteria: Vec<WhereEntry>,
+        page: Option<Page>,
     },
     /// The call fails with the named error.
     AbsentByError { call: Call, error: ErrorSpec },
@@ -179,6 +183,34 @@ impl Clause {
             Clause::Eventually { .. } => "eventually",
         }
     }
+}
+
+/// The most pages a paginated clause walks. A service that still returns a
+/// token after this many fails the clause instead of hanging the suite. Every
+/// backend uses the same number (compat/model/README.md § Paginating a list).
+pub const MAX_PAGES: usize = 50;
+
+/// The context path [`Page::next`] reads the token from. It is not a valid
+/// context path, so no scenario can export over it.
+pub const PAGE_TOKEN_KEY: &str = "$pageToken";
+
+/// The settings for walking a list to its last page.
+///
+/// The clause's own [`Call`] makes page one, with the page size already set;
+/// `next` is the same call with the input token bound to [`PAGE_TOKEN_KEY`],
+/// which the walk sets to the previous page's token before each later page.
+// Built only by emitted groups, so the build is warning-free whether or not the
+// current corpus has a paginated clause.
+#[allow(dead_code)]
+pub struct Page {
+    /// The page size the emitted calls send, for the failure message only.
+    pub size: u32,
+    /// The fewest pages the service may answer in; 0 for no floor.
+    pub min_pages: u32,
+    /// The top-level response member holding the next-page token.
+    pub output_token: &'static str,
+    /// Makes every page after the first.
+    pub next: Call,
 }
 
 /// The closed set of checks a clause may make on one path.
@@ -257,6 +289,7 @@ pub fn list_contains(
         call,
         items_path,
         criteria,
+        page: None,
     }
 }
 
@@ -271,6 +304,39 @@ pub fn absent_from_list(
         call,
         items_path,
         criteria,
+        page: None,
+    }
+}
+
+/// Makes a list clause with a call walk every page of its list: the clause's
+/// call is page one, `page.next` every later page, and the items of all the
+/// pages are searched as one list. Any other clause is returned as it is.
+#[allow(dead_code)]
+pub fn paginated(clause: Clause, page: Page) -> Clause {
+    match clause {
+        Clause::ListContains {
+            call,
+            items_path,
+            criteria,
+            ..
+        } => Clause::ListContains {
+            call,
+            items_path,
+            criteria,
+            page: Some(page),
+        },
+        Clause::AbsentFromList {
+            call,
+            items_path,
+            criteria,
+            ..
+        } => Clause::AbsentFromList {
+            call,
+            items_path,
+            criteria,
+            page: Some(page),
+        },
+        other => other,
     }
 }
 

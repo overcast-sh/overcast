@@ -189,8 +189,8 @@ The set is closed. `kind` selects the fields.
 | --- | --- | --- |
 | `responseField` | `checks` | every check holds against the test's own response |
 | `readback` | `call`, `checks` | `call` succeeds and every check holds against *its* response; the call's `export`s are applied |
-| `listContains` | `itemsPath`, `where`, optional `call` | the list at `itemsPath` (of `call`'s response, else the test's own) is non-empty and contains an item matching every `where` entry |
-| `absent` (list form) | `itemsPath`, `where`, optional `call` | no item of the list at `itemsPath` matches every `where` entry; a missing list counts as empty |
+| `listContains` | `itemsPath`, `where`, optional `call`, optional `paginate` | the list at `itemsPath` (of `call`'s response, else the test's own) is non-empty and contains an item matching every `where` entry. With `paginate`, the list is every page of it — see [Paginating a list](#paginating-a-list) |
+| `absent` (list form) | `itemsPath`, `where`, optional `call`, optional `paginate` | no item of the list at `itemsPath` matches every `where` entry; a missing list counts as empty. With `paginate`, none on any page |
 | `absent` (error form) | `call`, `error` | `call` fails with `error` |
 | `errorCode` | `error` | the test's own call fails with `error` |
 | `eventually` | `maxAttempts`, `delayMs`, `assert` | the inner clause (`readback`, `listContains` or `absent`) holds on some attempt: evaluate it, and on failure wait `delayMs` and try again, at most `maxAttempts` times in all. Exports from a `readback` inside are applied when the attempt passes |
@@ -323,6 +323,72 @@ an object. Otherwise it is `not a JSON document: <the value>`, or `<missing>`.
 `testdata/equalsjson/equalsjson.json` is the shared fixture every suite's unit
 tests run. It pins the percent-decoding, the documents that are equal and the
 ones that are not, and the operands every reader refuses.
+
+### Paginating a list
+
+A list clause with a `call` of its own may walk the list to its last page
+instead of reading one response:
+
+```jsonc
+{ "kind": "listContains",
+  "call": { "op": "ListQueues", "params": { "QueueNamePrefix": { "$name": "q" } } },
+  "itemsPath": "$.QueueUrls",
+  "where": { "$": { "$ref": "queue.url" } },
+  "paginate": { "pageSize": 1, "minPages": 2,
+                "inputToken": "NextToken", "outputToken": "NextToken", "pageSizeMember": "MaxResults" } }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `pageSize` | sent as `pageSizeMember` on every page. At least 1 |
+| `minPages` | optional, 1 to 50. The clause fails unless the service answered in at least this many pages. It is how a test proves the service really paginated: a single page that happens to hold everything fails it |
+| `pageSizeMember` | the input member `pageSize` is sent as |
+| `inputToken` | the input member the previous page's token is sent as |
+| `outputToken` | the **top-level** response member holding the next-page token |
+
+The three member names are the operation's own `@paginated` trait
+(`pageSize`, `inputToken`, `outputToken`) in the pinned shape snapshot, copied
+into the clause so that an interpreter needs no model. They are never guessed:
+an authored scenario that names anything else is an error naming what the trait
+says, and a recipe leaves them out and has the generator fill them in.
+
+The walk, which every backend implements the same way:
+
+1. Page one is `call` with `pageSizeMember` set to `pageSize`. The call's own
+   `params` must set neither `pageSizeMember` nor `inputToken`.
+2. The list at `itemsPath` of each page is read as for a single response — a
+   missing list is empty, a present non-list fails — and the pages' items are
+   concatenated in order.
+3. A page whose `outputToken` member is absent, `null` or `""` is the last. A
+   token that is not a string fails the clause.
+4. Otherwise the next page is the same call again with `inputToken` set to that
+   token (and `pageSizeMember` still set).
+5. After **50 pages** that all returned a token, the clause fails instead of
+   fetching a 51st: a service that never stops cannot hang the suite.
+6. Then `minPages`, if set, is checked against the pages walked, and then
+   `where` is matched against the **union** of every page's items: `listContains`
+   needs one match anywhere, `absent` needs none anywhere.
+
+A call that fails on any page fails the clause as a `call` failure, with that
+page's params. Every other failure quotes the **first** page's params, and field
+5 says how far the walk got — `walked <P> page(s), <N> item(s)` — before what
+it found: the items searched for `listContains`, the matching item for
+`absent`; for the cap, that the last page still returned its token; for
+`minPages`, `expected at least <M> page(s) at a page size of <S>`.
+
+A paginated clause may sit inside `eventually`; each attempt walks the whole
+list again. The call may not `export`: it is made once per page, and no one
+page is its response. A probe group cannot paginate (its tests run
+concurrently, and a typed backend passes the token to the next page through the
+group's context). The generator refuses the cases the model cannot answer; see
+[Refusals](#refusals).
+
+The typed backends are given the walk as data: the emitted clause carries the
+call for page one and a second call, identical but for the input token being
+`{"$ref": "$pageToken"}`, which the runtime sets before each later page. That
+keeps every member's spelling (a field the pinned SDK lacks, an unusual type)
+the decision of the one code path that already makes it, and a member a
+backend cannot express refuses the group as it would anywhere else.
 
 ### Errors
 
@@ -1106,6 +1172,9 @@ human wrote the names:
 - **Every call is the model's.** An unknown operation, or a member the
   operation does not take, is an error rather than a refusal: a refusal is the
   generator declining to write something, and nobody wrote this but a human.
+  So is a `paginate` whose three members are not the operation's `@paginated`
+  trait (or on an operation with none) — an authored file is never rewritten,
+  so it carries them itself and the generator holds them to the trait.
 
 ### Porting a hand-written group — two PRs and a soak between them
 
@@ -1220,6 +1289,9 @@ service and operation, with a stable reason:
 | `probe-binds-live-resource:<Member>` | a probe would have bound that member to a value exported from a resource the run owns. Add a curated literal to `values.json` — deliberately nonexistent, so the call misses — or leave the operation refused |
 | `never-probe` | the operation is not a `Describe*`, `List*` or `Get*` and no `allowProbe` entry says it is safe, or the recipe's `neverProbe` names it. The detail is the recipe's curated sentence where it has one, and a generated one where it does not |
 | `ambiguous-list-page` | a `list` with no `itemsPath`, whose operation's output holds two lists with no `@paginated` `items` trait to choose between them, or no list at all. Give the resource an explicit `list.itemsPath` |
+| `not-paginated` | a recipe `operations` clause carries `paginate` and the operation has no `@paginated` trait, so the model does not say which members hold the page size and the tokens. They are not guessed from names |
+| `paginated-trait-incomplete:<field>` | the same, and the operation's `@paginated` trait names no `inputToken`, `outputToken` or `pageSize` (`<field>`) |
+| `unsupported-pagination-token:<field>` | the trait names a member a walk cannot use: a path rather than a top-level member, a member the shape does not have, a token that is not a string, or a page size that is not an integer |
 | `no-output-to-assert` | a probe of an operation that returns nothing a probe can assert: no output at all, or no identity member and no single list to check the shape of. Reading back the resource it names would assert something that was already true before the call, so there is nothing honest to assert |
 | `setup-refused:<resource>` | a required resource could not be bound |
 | `no-portable-value:<Member>` | binding rule 1 or 2 would have bound a timestamp, document or union member to an export, and the IR has no value of that kind every backend can send. Refused here so the gap is recorded, rather than left to the source emitters, whose refusal would silently scope the whole group away from their suites |

@@ -219,7 +219,7 @@
           "type": "object",
           "required": ["kind", "itemsPath", "where"],
           "additionalProperties": false,
-          "properties": { "$comment": { "type": "string" }, "kind": { "enum": ["listContains", "absent"] }, "call": { "$ref": "#/definitions/AuthoredCall" }, "itemsPath": { "$ref": "scenario.schema.json#/definitions/Path" }, "where": { "$ref": "scenario.schema.json#/definitions/Where" } }
+          "properties": { "$comment": { "type": "string" }, "kind": { "enum": ["listContains", "absent"] }, "call": { "$ref": "#/definitions/AuthoredCall" }, "itemsPath": { "$ref": "scenario.schema.json#/definitions/Path" }, "where": { "$ref": "scenario.schema.json#/definitions/Where" }, "paginate": { "$ref": "#/definitions/AuthoredPaginate" } }
         },
         {
           "type": "object",
@@ -251,6 +251,16 @@
           }
         }
       ]
+    },
+    "AuthoredPaginate": {
+      "type": "object",
+      "description": "Walk every page of the list. A recipe gives the page size and, optionally, the floor on how many pages must come back; the token and page-size members come from the operation's @paginated trait, and an operation without one is refused (`not-paginated`).",
+      "required": ["pageSize"],
+      "additionalProperties": false,
+      "properties": {
+        "pageSize": { "type": "integer", "minimum": 1 },
+        "minPages": { "type": "integer", "minimum": 1, "maximum": 50 }
+      }
     },
     "AuthoredCall": {
       "type": "object",

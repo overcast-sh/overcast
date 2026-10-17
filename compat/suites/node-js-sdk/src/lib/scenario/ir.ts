@@ -107,11 +107,29 @@ export interface ReadbackAssertion {
   checks: Checks;
 }
 
+/**
+ * Walk every page of the list instead of reading one response (README
+ * § Paginating a list). `call` repeats with `pageSize` sent as
+ * `pageSizeMember` and the previous page's `outputToken` sent back as
+ * `inputToken`, until a page returns no token; the items of every page are
+ * searched as one list.
+ */
+export interface Paginate {
+  pageSize: number;
+  /** Fail unless the service answered in at least this many pages. */
+  minPages?: number;
+  inputToken: string;
+  outputToken: string;
+  pageSizeMember: string;
+}
+
 export interface ListContainsAssertion {
   kind: "listContains";
   call?: Call;
   itemsPath: Path;
   where: Where;
+  /** Needs a `call`. */
+  paginate?: Paginate;
 }
 
 /** `absent`, list form: no item of the list matches every `where` entry. */
@@ -120,6 +138,8 @@ export interface AbsentListAssertion {
   call?: Call;
   itemsPath: Path;
   where: Where;
+  /** Needs a `call`. */
+  paginate?: Paginate;
 }
 
 /** `absent`, error form: the call fails with `error`. */

@@ -440,7 +440,15 @@ func checkAuthoredAssertion(model *serviceModel, a assertion) error {
 	if a.Call == nil {
 		return nil
 	}
-	return checkAuthoredCall(model, *a.Call)
+	if err := checkAuthoredCall(model, *a.Call); err != nil {
+		return err
+	}
+	if a.Paginate != nil {
+		if err := checkAuthoredPagination(model, a); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkAuthoredPath parses a response path and, where the shape is known,

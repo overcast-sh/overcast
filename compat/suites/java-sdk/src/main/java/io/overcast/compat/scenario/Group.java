@@ -266,16 +266,31 @@ public final class Group {
                 throw fail(obs, step, kind, a.itemsPath(), "a response to read the list from", "<no response>");
             }
 
-            Paths.Resolved resolved = resolve(obs, a.itemsPath(), step, kind);
+            // walked prefixes the "actual" half of a failure with how far a
+            // paginated clause got; a single-call clause has no pages to count.
+            String walked = "";
             List<Object> list = List.of();
-            if (resolved.ok()) {
-                if (!(resolved.value() instanceof List<?> items)) {
-                    throw fail(obs, step, kind, a.itemsPath(), "a list", Json.render(resolved.value()));
+            if (a.page() != null && a.call() != null) {
+                Walk walk = walkPages(a, obs, step);
+                list = walk.items();
+                walked = "walked " + walk.pages() + " page(s), " + list.size() + " item(s)";
+                if (a.page().minPages() > walk.pages()) {
+                    throw fail(obs, step, kind, a.itemsPath(),
+                            "at least " + a.page().minPages() + " page(s) at a page size of " + a.page().size(),
+                            walked);
                 }
-                list = new ArrayList<>(items);
+                walked += ": ";
+            } else {
+                Paths.Resolved resolved = resolve(obs, a.itemsPath(), step, kind);
+                if (resolved.ok()) {
+                    if (!(resolved.value() instanceof List<?> items)) {
+                        throw fail(obs, step, kind, a.itemsPath(), "a list", Json.render(resolved.value()));
+                    }
+                    list = new ArrayList<>(items);
+                }
+                // A missing list counts as empty: several AWS services omit an
+                // empty list member rather than serializing [].
             }
-            // A missing list counts as empty: several AWS services omit an empty
-            // list member rather than serializing [].
 
             List<Object> wanted = new ArrayList<>(a.where().size());
             Binder b = binder();
@@ -304,18 +319,73 @@ public final class Group {
                 if (matched < 0) {
                     throw fail(obs, step, kind, a.itemsPath(),
                             "an item matching " + Failure.renderWhere(a.where(), wanted),
-                            Failure.renderList(list));
+                            walked + Failure.renderList(list));
                 }
             } else if (matched >= 0) {
                 throw fail(obs, step, kind, a.itemsPath(),
                         "no item matching " + Failure.renderWhere(a.where(), wanted),
-                        Json.render(list.get(matched)));
+                        walked + Json.render(list.get(matched)));
             }
 
             // The clause held. A list clause may carry a call with exports of its
             // own, and they are applied on the same terms as a read-back's.
             if (a.call() != null) {
                 applyExports(a.call(), obs, step);
+            }
+        }
+
+        /** The items of every page of a walk, and how many pages that took. */
+        private record Walk(List<Object> items, int pages) {}
+
+        /**
+         * Follows a paginated list clause to its last page and returns the items
+         * of every page as one list. {@code first} is page one, already fetched;
+         * every failure quotes its params, so a message names the clause's own
+         * call rather than whichever page it stopped on.
+         *
+         * <p>A page whose items are missing counts as empty. The walk ends at the
+         * first page that carries no token — absent, null or {@code ""} — and
+         * fails the clause, rather than looping, once {@link Page#MAX_PAGES} pages
+         * have all carried one. Each later page is the clause's {@code next} call
+         * with {@link Page#TOKEN_KEY} set to the token the previous page returned.
+         */
+        private Walk walkPages(Clause a, Observed first, String step) {
+            String kind = a.kind().label();
+            Page page = a.page();
+            String tokenPath = "$." + page.outputToken();
+            List<Object> all = new ArrayList<>();
+            Observed cur = first;
+            for (int pages = 1; ; pages++) {
+                Paths.Resolved items = resolve(cur, a.itemsPath(), step, kind);
+                if (items.ok()) {
+                    if (!(items.value() instanceof List<?> list)) {
+                        throw fail(first, step, kind, a.itemsPath(), "a list",
+                                "walked " + pages + " page(s): " + Json.render(items.value()));
+                    }
+                    all.addAll(list);
+                }
+
+                Paths.Resolved raw = resolve(cur, tokenPath, step, kind);
+                String token = "";
+                if (raw.ok() && raw.value() != null) {
+                    if (!(raw.value() instanceof String s)) {
+                        throw fail(first, step, kind, tokenPath, "a string token, or none",
+                                "walked " + pages + " page(s): " + Json.render(raw.value()));
+                    }
+                    token = s;
+                }
+                if (token.isEmpty()) {
+                    return new Walk(all, pages);
+                }
+                if (pages >= Page.MAX_PAGES) {
+                    throw fail(first, step, kind, tokenPath,
+                            "no " + page.outputToken() + " on a page within " + Page.MAX_PAGES + " pages",
+                            "walked " + pages + " page(s), " + all.size() + " item(s), and the last still returned a "
+                                    + page.outputToken());
+                }
+
+                bag.set(Page.TOKEN_KEY, token);
+                cur = call(page.next(), step);
             }
         }
 

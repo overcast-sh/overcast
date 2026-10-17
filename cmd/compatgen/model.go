@@ -491,13 +491,19 @@ func (m *serviceModel) ErrorCode(shape string) string {
 
 // paginationTrait is smithy.api#paginated, as far as the generator reads it:
 // which output member carries the next-page token, and which carries the page
-// of items. cmd/awsmodelgen already allowlists the trait, so the committed
+// of items, and which input members take the token back and set the page
+// size. cmd/awsmodelgen already allowlists the trait, so the committed
 // snapshots carry it and nothing has to be regenerated to consult it.
-// `inputToken` and `pageSize` are deliberately absent: nothing generated
-// pages, so decoding them would be two fields written and never read.
 type paginationTrait struct {
+	InputToken  string `json:"inputToken"`
 	OutputToken string `json:"outputToken"`
 	Items       string `json:"items"`
+	PageSize    string `json:"pageSize"`
+}
+
+// IsPaginated reports whether the operation declares @paginated at all.
+func (m *serviceModel) IsPaginated(op string) bool {
+	return hasTrait(m.Shapes[op].Traits, "smithy.api#paginated")
 }
 
 // Pagination returns an operation's @paginated trait, zero-valued where the

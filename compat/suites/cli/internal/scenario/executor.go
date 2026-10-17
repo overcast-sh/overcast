@@ -251,6 +251,14 @@ func (e *execution) runTest(ctx context.Context, t *Test) error {
 // The returned observed carries the exact params JSON sent, so every failure
 // downstream of it quotes what went on the wire.
 func (e *execution) callRaw(ctx context.Context, c *Call, step string) (obs observed, cliErr, err error) {
+	return e.callRawWith(ctx, c, step)
+}
+
+// callRawWith is callRaw with extra arguments for the `aws` invocation, after
+// the ones every call carries. A paginated clause passes --no-paginate: the CLI
+// otherwise follows the token itself and hands back every page merged in one
+// response, which is the one thing a walk that counts pages cannot use.
+func (e *execution) callRawWith(ctx context.Context, c *Call, step string, extra ...string) (obs observed, cliErr, err error) {
 	obs = observed{op: c.Op}
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return obs, nil, fmt.Errorf("%s/%s: %s: %w", e.group.Name, e.test, c.Op, ctxErr)
@@ -278,7 +286,8 @@ func (e *execution) callRaw(ctx context.Context, c *Call, step string) (obs obse
 	}
 	obs.params = sent
 
-	body, runErr := e.b.run.run(ctx, e.tc, []string{awsCommand(e.file.Client.EndpointPrefix), kebabOp(c.Op), "--cli-input-json", sent})
+	args := append([]string{awsCommand(e.file.Client.EndpointPrefix), kebabOp(c.Op), "--cli-input-json", sent}, extra...)
+	body, runErr := e.b.run.run(ctx, e.tc, args)
 	if runErr != nil {
 		return obs, runErr, nil
 	}

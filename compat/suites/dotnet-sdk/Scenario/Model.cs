@@ -114,6 +114,27 @@ internal sealed class Clause
 
     public Clause? Inner { get; private init; }
 
+    /// <summary>listContains and absent (list form) with a call: walk every page.</summary>
+    public PageWalk? Page { get; private init; }
+
+    /// <summary>
+    /// Makes a list clause with a call walk every page of its list: the
+    /// clause's call is page one, <c>page.Next</c> every later page, and the
+    /// items of all the pages are searched as one list.
+    /// </summary>
+    public Clause Paginated(PageWalk page) => new(Kind)
+    {
+        Call = Call,
+        Checks = Checks,
+        ItemsPath = ItemsPath,
+        Where = Where,
+        Error = Error,
+        MaxAttempts = MaxAttempts,
+        DelayMs = DelayMs,
+        Inner = Inner,
+        Page = page,
+    };
+
     /// <summary>Checks the test's own response.</summary>
     public static Clause ResponseField(params Check[] checks) =>
         new(ClauseKind.ResponseField) { Checks = checks };
@@ -151,6 +172,35 @@ internal sealed class Clause
     /// </summary>
     public static Clause Eventually(int maxAttempts, int delayMs, Clause inner) =>
         new(ClauseKind.Eventually) { MaxAttempts = maxAttempts, DelayMs = delayMs, Inner = inner };
+}
+
+/// <summary>
+/// The settings for walking a list to its last page (compat/model/README.md
+/// § Paginating a list).
+/// </summary>
+/// <remarks>
+/// The clause's own call makes page one, with the page size already set;
+/// <see cref="Next"/> is the same call with the input token bound to
+/// <see cref="TokenKey"/>, which the walk sets to the previous page's token
+/// before each later page.
+/// </remarks>
+/// <param name="Size">The page size the emitted calls send, for the failure message only.</param>
+/// <param name="MinPages">The fewest pages the service may answer in; 0 for no floor.</param>
+/// <param name="OutputToken">The top-level response member holding the next-page token.</param>
+/// <param name="Next">Makes every page after the first.</param>
+internal sealed record PageWalk(int Size, int MinPages, string OutputToken, ScenarioCall Next)
+{
+    /// <summary>
+    /// The most pages a paginated clause walks. A service that still returns a
+    /// token after this many fails the clause instead of hanging the suite.
+    /// </summary>
+    public const int MaxPages = 50;
+
+    /// <summary>
+    /// The context path <see cref="Next"/> reads the token from. It is not a
+    /// valid context path, so no scenario can export over it.
+    /// </summary>
+    public const string TokenKey = "$pageToken";
 }
 
 /// <summary>

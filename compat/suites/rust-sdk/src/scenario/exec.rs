@@ -26,7 +26,9 @@ use super::errors;
 use super::failure::{self, Failure};
 use super::json;
 use super::value::{clock_millis, Bag, EvalError};
-use super::{Call, Check, CheckKind, Clause, Group, Test, WhereEntry};
+use super::{
+    Call, Check, CheckKind, Clause, Group, Page, Test, WhereEntry, MAX_PAGES, PAGE_TOKEN_KEY,
+};
 use crate::harness::TestContext;
 
 impl Group {
@@ -343,11 +345,13 @@ impl Execution<'_> {
                     call,
                     items_path,
                     criteria,
+                    page,
                 }
                 | Clause::AbsentFromList {
                     call,
                     items_path,
                     criteria,
+                    page,
                 } => {
                     self.assert_list(
                         clause.kind(),
@@ -355,6 +359,7 @@ impl Execution<'_> {
                         call,
                         items_path,
                         criteria,
+                        page,
                         primary,
                         step,
                     )
@@ -389,6 +394,7 @@ impl Execution<'_> {
         call: &Option<Call>,
         items_path: &str,
         criteria: &[WhereEntry],
+        page: &Option<Page>,
         primary: &Observed,
         step: &str,
     ) -> Result<(), Failure> {
@@ -415,33 +421,61 @@ impl Execution<'_> {
             ));
         };
 
-        let resolved = match json::resolve(&document.value, items_path) {
-            Ok(resolved) => resolved,
-            Err(err) => {
-                return Err(self.fail(
-                    observed,
-                    step,
-                    kind,
-                    items_path,
-                    "a well-formed items path",
-                    &failure::quote(&err),
-                ))
+        // `walked` prefixes the "actual" half of a failure with how far a
+        // paginated clause got; a single-call clause has no pages to count.
+        let mut walked = String::new();
+        let items: Vec<Json> = match (page, call) {
+            (Some(page), Some(_)) => {
+                let (items, pages) = self
+                    .walk_pages(page, observed, items_path, kind, step)
+                    .await?;
+                walked = format!("walked {pages} page(s), {} item(s)", items.len());
+                if (page.min_pages as usize) > pages {
+                    return Err(self.fail(
+                        observed,
+                        step,
+                        kind,
+                        items_path,
+                        &format!(
+                            "at least {} page(s) at a page size of {}",
+                            page.min_pages, page.size
+                        ),
+                        &walked,
+                    ));
+                }
+                walked.push_str(": ");
+                items
             }
-        };
-        // A missing list counts as empty: several AWS services omit an empty
-        // list member rather than serializing [].
-        let items: Vec<Json> = match resolved {
-            None => Vec::new(),
-            Some(Json::Array(items)) => items.clone(),
-            Some(other) => {
-                return Err(self.fail(
-                    observed,
-                    step,
-                    kind,
-                    items_path,
-                    "a list",
-                    &json::render(other),
-                ))
+            _ => {
+                let resolved = match json::resolve(&document.value, items_path) {
+                    Ok(resolved) => resolved,
+                    Err(err) => {
+                        return Err(self.fail(
+                            observed,
+                            step,
+                            kind,
+                            items_path,
+                            "a well-formed items path",
+                            &failure::quote(&err),
+                        ))
+                    }
+                };
+                // A missing list counts as empty: several AWS services omit an
+                // empty list member rather than serializing [].
+                match resolved {
+                    None => Vec::new(),
+                    Some(Json::Array(items)) => items.clone(),
+                    Some(other) => {
+                        return Err(self.fail(
+                            observed,
+                            step,
+                            kind,
+                            items_path,
+                            "a list",
+                            &json::render(other),
+                        ))
+                    }
+                }
             }
         };
 
@@ -458,7 +492,7 @@ impl Execution<'_> {
                         "an item matching {}",
                         failure::render_where(criteria, &wanted)
                     ),
-                    &failure::render_list(&items),
+                    &format!("{walked}{}", failure::render_list(&items)),
                 ));
             }
         } else if let Some(i) = matched {
@@ -471,7 +505,7 @@ impl Execution<'_> {
                     "no item matching {}",
                     failure::render_where(criteria, &wanted)
                 ),
-                &json::render(&items[i]),
+                &format!("{walked}{}", json::render(&items[i])),
             ));
         }
         // The clause held. A list clause may carry a call with exports of its
@@ -480,6 +514,116 @@ impl Execution<'_> {
         match call {
             Some(call) => self.apply_exports(call, observed, step),
             None => Ok(()),
+        }
+    }
+
+    /// Follows a paginated list clause to its last page and returns the items of
+    /// every page as one list, and how many pages that took.
+    ///
+    /// `first` is page one, already fetched; every failure quotes its params,
+    /// so a message names the clause's own call rather than whichever page it
+    /// stopped on. A page whose items are missing counts as empty. The walk ends
+    /// at the first page that carries no token — absent, null or `""` — and
+    /// fails the clause, rather than looping, once [`MAX_PAGES`] pages have all
+    /// carried one. Each later page is the clause's `next` call with
+    /// [`PAGE_TOKEN_KEY`] set to the token the previous page returned.
+    async fn walk_pages(
+        &self,
+        page: &Page,
+        first: &Observed,
+        items_path: &str,
+        kind: &str,
+        step: &str,
+    ) -> Result<(Vec<Json>, usize), Failure> {
+        let token_path = format!("$.{}", page.output_token);
+        let mut all: Vec<Json> = Vec::new();
+        let mut later: Option<Observed> = None;
+        let mut pages = 0usize;
+        loop {
+            pages += 1;
+            let current = later.as_ref().unwrap_or(first);
+            let Some(document) = current.body.as_ref() else {
+                return Err(self.fail(
+                    first,
+                    step,
+                    kind,
+                    items_path,
+                    "a response to read the list from",
+                    "<no response>",
+                ));
+            };
+            match json::resolve(&document.value, items_path) {
+                Err(err) => {
+                    return Err(self.fail(
+                        first,
+                        step,
+                        kind,
+                        items_path,
+                        "a well-formed items path",
+                        &failure::quote(&err),
+                    ))
+                }
+                Ok(None) => {}
+                Ok(Some(Json::Array(items))) => all.extend(items.iter().cloned()),
+                Ok(Some(other)) => {
+                    return Err(self.fail(
+                        first,
+                        step,
+                        kind,
+                        items_path,
+                        "a list",
+                        &format!("walked {pages} page(s): {}", json::render(other)),
+                    ))
+                }
+            }
+
+            let token = match json::resolve(&document.value, &token_path) {
+                Err(err) => {
+                    return Err(self.fail(
+                        first,
+                        step,
+                        kind,
+                        &token_path,
+                        "a well-formed token path",
+                        &failure::quote(&err),
+                    ))
+                }
+                Ok(None) | Ok(Some(Json::Null)) => String::new(),
+                Ok(Some(Json::String(token))) => token.clone(),
+                Ok(Some(other)) => {
+                    return Err(self.fail(
+                        first,
+                        step,
+                        kind,
+                        &token_path,
+                        "a string token, or none",
+                        &format!("walked {pages} page(s): {}", json::render(other)),
+                    ))
+                }
+            };
+            if token.is_empty() {
+                return Ok((all, pages));
+            }
+            if pages >= MAX_PAGES {
+                return Err(self.fail(
+                    first,
+                    step,
+                    kind,
+                    &token_path,
+                    &format!(
+                        "no {} on a page within {MAX_PAGES} pages",
+                        page.output_token
+                    ),
+                    &format!(
+                        "walked {pages} page(s), {} item(s), and the last still returned a {}",
+                        all.len(),
+                        page.output_token
+                    ),
+                ));
+            }
+
+            self.bag().set(PAGE_TOKEN_KEY, &Json::String(token));
+            later = Some(self.call(&page.next, step).await?);
         }
     }
 

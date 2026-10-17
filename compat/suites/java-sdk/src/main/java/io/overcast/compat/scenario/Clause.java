@@ -40,9 +40,16 @@ public final class Clause {
     private final int maxAttempts;
     private final int delayMs;
     private final Clause inner;
+    private final Page page;
 
     private Clause(Kind kind, Call call, List<Check> checks, String itemsPath, List<Where> where,
                    ErrorSpec error, int maxAttempts, int delayMs, Clause inner) {
+        this(kind, call, checks, itemsPath, where, error, maxAttempts, delayMs, inner, null);
+    }
+
+    private Clause(Kind kind, Call call, List<Check> checks, String itemsPath, List<Where> where,
+                   ErrorSpec error, int maxAttempts, int delayMs, Clause inner, Page page) {
+        this.page = page;
         this.kind = kind;
         this.call = call;
         this.checks = checks;
@@ -96,6 +103,19 @@ public final class Clause {
      */
     public static Clause eventually(int maxAttempts, int delayMs, Clause inner) {
         return new Clause(Kind.EVENTUALLY, null, List.of(), null, List.of(), null, maxAttempts, delayMs, inner);
+    }
+
+    /**
+     * Makes a list clause with a call walk every page of its list: the clause's
+     * call is page one, {@code page.next()} every later page, and the items of
+     * all the pages are searched as one list.
+     */
+    public Clause paged(Page page) {
+        return new Clause(kind, call, checks, itemsPath, where, error, maxAttempts, delayMs, inner, page);
+    }
+
+    Page page() {
+        return page;
     }
 
     Kind kind() {

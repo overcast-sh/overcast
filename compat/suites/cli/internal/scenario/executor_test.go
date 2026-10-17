@@ -23,6 +23,8 @@ type fakeCall struct {
 	command string
 	op      string
 	input   string
+	// extra is whatever follows the input JSON, such as --no-paginate.
+	extra []string
 }
 
 // fakeResult is one scripted answer.
@@ -45,6 +47,9 @@ func (f *fakeRunner) run(_ context.Context, _ *harness.TestContext, args []strin
 	call := fakeCall{command: args[0], op: args[1]}
 	if len(args) > 3 {
 		call.input = args[3]
+	}
+	if len(args) > 4 {
+		call.extra = args[4:]
 	}
 	f.calls = append(f.calls, call)
 

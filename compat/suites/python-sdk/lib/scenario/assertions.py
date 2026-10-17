@@ -27,6 +27,12 @@ from .expressions import (
 from .failures import MISSING, ScenarioError, ScenarioFailure, clip, render, render_clipped
 
 
+# The most pages a paginated clause walks. A service that still returns a token
+# after this many fails the clause instead of hanging the suite. Every backend
+# uses the same number (compat/model/README.md § Paginating a list).
+MAX_PAGES = 50
+
+
 @dataclass
 class Primary:
     """The test's own call: what a clause with no ``call`` of its own reads,
@@ -96,20 +102,49 @@ def _list_membership(ex: Executor, clause: dict, ref: StepRef, primary: Primary,
                      *, want_member: bool) -> None:
     kind = "listContains" if want_member else "absent"
     call = clause.get("call")
-    if call is not None:
-        params, response = ex.perform(call, ref, kind, apply_exports=False)
-        op = call["op"]
-    else:
-        if primary.response is None:
-            raise ex.fail(
-                ref=ref, op=primary.op, params=primary.params, assertion=kind,
-                expected="the test's own response, to read the list from",
-                actual=describe_error(primary.error),
-            )
-        params, response, op = primary.params, primary.response, primary.op
-
+    paginate = clause.get("paginate")
     items_path = clause["itemsPath"]
-    items = resolve_path(response, items_path)
+    # `walked` prefixes the "actual" half of a failure with how far a paginated
+    # clause got; a single-call clause has no pages to count.
+    walked = ""
+    response: Optional[dict] = None
+    if call is not None and paginate is not None:
+        params, items, pages = _walk_pages(ex, clause, ref, kind)
+        op = call["op"]
+        walked = f"walked {pages} page(s), {len(items)} item(s)"
+        if pages < paginate.get("minPages", 0):
+            raise ex.fail(
+                ref=ref, op=op, params=params, assertion=kind, path=items_path,
+                expected=(f"at least {paginate['minPages']} page(s) at a page size "
+                          f"of {paginate['pageSize']}"),
+                actual=walked,
+            )
+        walked += ": "
+    else:
+        if call is not None:
+            params, response = ex.perform(call, ref, kind, apply_exports=False)
+            op = call["op"]
+        else:
+            if primary.response is None:
+                raise ex.fail(
+                    ref=ref, op=primary.op, params=primary.params, assertion=kind,
+                    expected="the test's own response, to read the list from",
+                    actual=describe_error(primary.error),
+                )
+            params, response, op = primary.params, primary.response, primary.op
+        items = resolve_path(response, items_path)
+        if items is MISSING:
+            # A missing list counts as empty: several AWS services omit the
+            # member rather than serialize []. Empty satisfies `absent` and
+            # fails `listContains`, which needs a non-empty list containing the
+            # item.
+            items = []
+        elif not isinstance(items, list):
+            raise ex.fail(
+                ref=ref, op=op, params=params, assertion=kind, path=items_path,
+                expected="a list", actual=render_clipped(items),
+            )
+
     try:
         where = {path: ex.evaluate(expected)
                  for path, expected in clause["where"].items()}
@@ -121,35 +156,88 @@ def _list_membership(ex: Executor, clause: dict, ref: StepRef, primary: Primary,
         ) from exc
     criteria = ", ".join(f"{path}={render(value)}" for path, value in where.items())
 
-    if items is MISSING:
-        # A missing list counts as empty: several AWS services omit the member
-        # rather than serialize []. Empty satisfies `absent` and fails
-        # `listContains`, which needs a non-empty list containing the item.
-        items = []
-    elif not isinstance(items, list):
-        raise ex.fail(
-            ref=ref, op=op, params=params, assertion=kind, path=items_path,
-            expected="a list", actual=render_clipped(items),
-        )
-
     matched = [item for item in items if _matches(item, where)]
 
     if want_member and not matched:
         raise ex.fail(
             ref=ref, op=op, params=params, assertion=kind, path=items_path,
             expected=f"a non-empty list containing an item where {criteria}",
-            actual=(f"{len(items)} item(s): {render_clipped(items)}" if items
-                    else "an empty or absent list"),
+            actual=walked + (f"{len(items)} item(s): {render_clipped(items)}" if items
+                             else "an empty or absent list"),
         )
     if not want_member and matched:
         raise ex.fail(
             ref=ref, op=op, params=params, assertion=kind, path=items_path,
             expected=f"no item where {criteria}",
-            actual=f"{len(matched)} matching item(s): {render_clipped(matched)}",
+            actual=walked + f"{len(matched)} matching item(s): {render_clipped(matched)}",
         )
 
-    if call is not None:
+    if call is not None and paginate is None:
         ex.apply_export(call, params, response, ref, kind)
+
+
+def _walk_pages(ex: Executor, clause: dict, ref: StepRef, kind: str
+                ) -> tuple[dict, list, int]:
+    """Follow a paginated list clause to its last page.
+
+    Returns ``(params, items, pages)``: the params of page one, which every
+    failure that is not a failed call quotes (so a message names the clause's
+    own call rather than whichever page it stopped on), the items of every page
+    as one list, and how many pages that took.
+
+    A page whose items are missing counts as empty. The walk ends at the first
+    page that carries no token (absent, null or ``""``) and fails the clause,
+    rather than looping, once :data:`MAX_PAGES` pages have all carried one.
+    Each later page is the clause's call again with the input token set to the
+    token the previous page returned."""
+    call = clause["call"]
+    paginate = clause["paginate"]
+    items_path = clause["itemsPath"]
+    out_token = paginate["outputToken"]
+    token_path = f"$.{out_token}"
+    first_params: Optional[dict] = None
+    items: list = []
+    token: Optional[str] = None
+    pages = 0
+    while True:
+        page_params = dict(call.get("params") or {})
+        page_params[paginate["pageSizeMember"]] = paginate["pageSize"]
+        if token is not None:
+            page_params[paginate["inputToken"]] = token
+        params, response = ex.perform({**call, "params": page_params}, ref, kind,
+                                      apply_exports=False)
+        pages += 1
+        if first_params is None:
+            first_params = params
+
+        page = resolve_path(response, items_path)
+        if page is not MISSING:
+            if not isinstance(page, list):
+                raise ex.fail(
+                    ref=ref, op=call["op"], params=first_params, assertion=kind,
+                    path=items_path, expected="a list",
+                    actual=f"walked {pages} page(s): {render_clipped(page)}",
+                )
+            items.extend(page)
+
+        raw = resolve_path(response, token_path)
+        if raw is MISSING or raw is None or raw == "":
+            return first_params, items, pages
+        if not isinstance(raw, str):
+            raise ex.fail(
+                ref=ref, op=call["op"], params=first_params, assertion=kind,
+                path=token_path, expected="a string token, or none",
+                actual=f"walked {pages} page(s): {render_clipped(raw)}",
+            )
+        if pages >= MAX_PAGES:
+            raise ex.fail(
+                ref=ref, op=call["op"], params=first_params, assertion=kind,
+                path=token_path,
+                expected=f"no {out_token} on a page within {MAX_PAGES} pages",
+                actual=(f"walked {pages} page(s), {len(items)} item(s), and the "
+                        f"last still returned a {out_token}"),
+            )
+        token = raw
 
 
 def _matches(item: Any, where: dict[str, Any]) -> bool:

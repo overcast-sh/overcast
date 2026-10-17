@@ -385,28 +385,50 @@ func rustWriteClause(w *rustWriter, gen *generation, crate string, a assertion, 
 		if a.Kind == assertAbsent {
 			name = "absent_from_list"
 		}
-		w.linef("%sscenario::%s(", indent, name)
-		if a.Call == nil {
-			w.linef("%s    None,", indent)
+		// A paginated clause is written as its first page, wrapped with the
+		// settings for the walk and the call that makes every later page.
+		var next call
+		first := a.Call
+		inner := indent
+		if a.Paginate != nil {
+			f, n := pageCalls(a)
+			first, next = &f, n
+			w.linef("%sscenario::paginated(", indent)
+			inner = indent + "    "
+		}
+		w.linef("%sscenario::%s(", inner, name)
+		if first == nil {
+			w.linef("%s    None,", inner)
 		} else {
-			if err := rustWriteCall(w, gen, crate, *a.Call, indent+"    ", "Some("); err != nil {
+			if err := rustWriteCall(w, gen, crate, *first, inner+"    ", "Some("); err != nil {
 				return err
 			}
 			// rustWriteCall closed the struct with "}," — reopen it as the
 			// Some(...) argument it is.
-			w.closeSome(indent + "    ")
+			w.closeSome(inner + "    ")
 		}
-		w.linef("%s    %s,", indent, rustString(a.ItemsPath))
-		w.linef("%s    vec![", indent)
+		w.linef("%s    %s,", inner, rustString(a.ItemsPath))
+		w.linef("%s    vec![", inner)
 		for _, path := range sortedValueKeys(a.Where) {
-			value, err := rustValue(a.Where[path], indent+"        ")
+			value, err := rustValue(a.Where[path], inner+"        ")
 			if err != nil {
 				return err
 			}
-			w.linef("%s        scenario::where_entry(%s, %s),", indent, rustString(path), value)
+			w.linef("%s        scenario::where_entry(%s, %s),", inner, rustString(path), value)
 		}
-		w.linef("%s    ],", indent)
-		w.linef("%s),", indent)
+		w.linef("%s    ],", inner)
+		w.linef("%s),", inner)
+		if a.Paginate != nil {
+			w.linef("%s    scenario::Page {", indent)
+			w.linef("%s        size: %d,", indent, a.Paginate.PageSize)
+			w.linef("%s        min_pages: %d,", indent, a.Paginate.MinPages)
+			w.linef("%s        output_token: %s,", indent, rustString(a.Paginate.OutputToken))
+			if err := rustWriteCall(w, gen, crate, next, indent+"        ", "next: "); err != nil {
+				return err
+			}
+			w.linef("%s    },", indent)
+			w.linef("%s),", indent)
+		}
 	case assertErrorCode:
 		w.linef("%sscenario::error_code(scenario::error(%s, %s)),", indent, rustString(a.Error.Shape), rustString(a.Error.Code))
 	case assertEventually:

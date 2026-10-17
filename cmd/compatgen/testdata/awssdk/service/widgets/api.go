@@ -70,7 +70,9 @@ type PolishWidgetInput struct {
 
 type ListWidgetsInput struct {
 	CreatedAfter *time.Time
+	MaxResults   *int32
 	NamePrefix   *string
+	NextToken    *string
 }
 
 type DeleteWidgetInput struct {

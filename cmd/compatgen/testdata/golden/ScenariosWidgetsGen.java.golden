@@ -10,6 +10,7 @@ import io.overcast.compat.scenario.Check;
 import io.overcast.compat.scenario.Clause;
 import io.overcast.compat.scenario.ErrorSpec;
 import io.overcast.compat.scenario.Group;
+import io.overcast.compat.scenario.Page;
 import io.overcast.compat.scenario.Values;
 import io.overcast.compat.scenario.Where;
 import java.util.List;
@@ -96,6 +97,7 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                 Map.entry("widgets-gen-widget:ListWidgetTags", this::testWidgetsGenWidgetListWidgetTags),
                 Map.entry("widgets-gen-widget:UntagWidget", this::testWidgetsGenWidgetUntagWidget),
                 Map.entry("widgets-gen-widget:PolishWidget", this::testWidgetsGenWidgetPolishWidget),
+                Map.entry("widgets-gen-widget:PolishWidgetListed", this::testWidgetsGenWidgetPolishWidgetListed),
                 Map.entry("widgets-gen-widget:ListWidgets", this::testWidgetsGenWidgetListWidgets),
                 Map.entry("widgets-gen-widget:DeleteWidget", this::testWidgetsGenWidgetDeleteWidget),
                 Map.entry("widgets-gen-gauge:DescribeGauge", this::testWidgetsGenGaugeDescribeGauge),
@@ -330,6 +332,34 @@ public final class ScenariosWidgetsGen implements ServiceGroup {
                                         r -> cl().getWidget((GetWidgetRequest) r)),
                                 Check.equalTo("$.Widget.WidgetId", Values.ref("widget.id"))
                         )
+                ));
+    }
+
+    private void testWidgetsGenWidgetPolishWidgetListed(TestContext t) {
+        GROUP_WIDGETS_GEN_WIDGET.runTest(t, "PolishWidgetListed",
+                new Call("PolishWidget", "{\"WidgetId\":{\"$ref\":\"widget.id\"}}",
+                        b -> PolishWidgetRequest.builder()
+                                .widgetId(b.string("WidgetId", Values.ref("widget.id")))
+                                .build(),
+                        r -> cl().polishWidget((PolishWidgetRequest) r)),
+                List.of(
+                        Clause.listContains(
+                                new Call("ListWidgets", "{\"MaxResults\":1,\"NamePrefix\":{\"$name\":\"w\"}}",
+                                        b -> ListWidgetsRequest.builder()
+                                                .maxResults(1)
+                                                .namePrefix(b.string("NamePrefix", Values.name("w")))
+                                                .build(),
+                                        r -> cl().listWidgets((ListWidgetsRequest) r)),
+                                "$.Widgets",
+                                Where.of("$.WidgetId", Values.ref("widget.id"))
+                        ).paged(Page.of(1, 1, "NextToken",
+                                new Call("ListWidgets", "{\"MaxResults\":1,\"NamePrefix\":{\"$name\":\"w\"},\"NextToken\":{\"$ref\":\"$pageToken\"}}",
+                                        b -> ListWidgetsRequest.builder()
+                                                .maxResults(1)
+                                                .namePrefix(b.string("NamePrefix", Values.name("w")))
+                                                .nextToken(b.string("NextToken", Values.ref("$pageToken")))
+                                                .build(),
+                                        r -> cl().listWidgets((ListWidgetsRequest) r))))
                 ));
     }
 

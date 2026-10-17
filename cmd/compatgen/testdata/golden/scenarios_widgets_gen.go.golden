@@ -32,6 +32,7 @@ func ScenariosWidgets(c *clients.Clients) ServiceGroup {
 			"widgets-gen-widget:ListWidgetTags":     g.testWidgetsGenWidgetListWidgetTags,
 			"widgets-gen-widget:UntagWidget":        g.testWidgetsGenWidgetUntagWidget,
 			"widgets-gen-widget:PolishWidget":       g.testWidgetsGenWidgetPolishWidget,
+			"widgets-gen-widget:PolishWidgetListed": g.testWidgetsGenWidgetPolishWidgetListed,
 			"widgets-gen-widget:ListWidgets":        g.testWidgetsGenWidgetListWidgets,
 			"widgets-gen-widget:DeleteWidget":       g.testWidgetsGenWidgetDeleteWidget,
 			"widgets-gen-gauge:DescribeGauge":       g.testWidgetsGenGaugeDescribeGauge,
@@ -376,6 +377,63 @@ func (g *widgetsScenarios) testWidgetsGenWidgetPolishWidget(ctx context.Context,
 					},
 				},
 				scenario.Equals("$.Widget.WidgetId", scenario.Ref("widget.id")),
+			),
+		},
+	})
+}
+
+func (g *widgetsScenarios) testWidgetsGenWidgetPolishWidgetListed(ctx context.Context, t *harness.TestContext) error {
+	return groupWidgetsGenWidget.RunTest(ctx, t, "PolishWidgetListed", scenario.Test{
+		Call: scenario.Call{
+			Op:     "PolishWidget",
+			Params: `{"WidgetId":{"$ref":"widget.id"}}`,
+			Build: func(b *scenario.Binder) any {
+				in := &widgets.PolishWidgetInput{}
+				in.WidgetId = aws.String(scenario.Bind[string](b, "WidgetId", scenario.Ref("widget.id")))
+				return in
+			},
+			Send: func(ctx context.Context, in any) (any, error) {
+				return g.cl().PolishWidget(ctx, in.(*widgets.PolishWidgetInput))
+			},
+		},
+		Assert: []scenario.Clause{
+			scenario.Paginated(
+				scenario.ListContains(
+					&scenario.Call{
+						Op:     "ListWidgets",
+						Params: `{"MaxResults":1,"NamePrefix":{"$name":"w"}}`,
+						Build: func(b *scenario.Binder) any {
+							in := &widgets.ListWidgetsInput{}
+							in.MaxResults = aws.Int32(1)
+							in.NamePrefix = aws.String(scenario.Bind[string](b, "NamePrefix", scenario.Name("w")))
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().ListWidgets(ctx, in.(*widgets.ListWidgetsInput))
+						},
+					},
+					"$.Widgets",
+					scenario.Where("$.WidgetId", scenario.Ref("widget.id")),
+				),
+				scenario.Page{
+					Size:        1,
+					MinPages:    1,
+					OutputToken: "NextToken",
+					Next: scenario.Call{
+						Op:     "ListWidgets",
+						Params: `{"MaxResults":1,"NamePrefix":{"$name":"w"},"NextToken":{"$ref":"$pageToken"}}`,
+						Build: func(b *scenario.Binder) any {
+							in := &widgets.ListWidgetsInput{}
+							in.MaxResults = aws.Int32(1)
+							in.NamePrefix = aws.String(scenario.Bind[string](b, "NamePrefix", scenario.Name("w")))
+							in.NextToken = aws.String(scenario.Bind[string](b, "NextToken", scenario.Ref("$pageToken")))
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().ListWidgets(ctx, in.(*widgets.ListWidgetsInput))
+						},
+					},
+				},
 			),
 		},
 	})

@@ -84,12 +84,42 @@ type Clause struct {
 	// listContains / absent (list form).
 	ItemsPath string
 	Where     []WhereEntry
+	// Page, on a list clause with a Call, walks every page of the list.
+	Page *Page
 	// errorCode, and absent (error form).
 	Error *ErrorSpec
 	// eventually.
 	MaxAttempts int
 	DelayMs     int
 	Assert      *Clause
+}
+
+// MaxPages is the most pages a paginated clause walks. A service that still
+// returns a token after this many fails the clause instead of hanging the
+// suite. Every backend uses the same number (compat/model/README.md
+// § Paginating a list).
+const MaxPages = 50
+
+// PageTokenKey is the context path Page.Next reads the token from. It is not a
+// valid context path, so no scenario can export over it.
+const PageTokenKey = "$pageToken"
+
+// A Page is the settings for walking a list to its last page. The clause's own
+// Call makes page one, with the page size already set; Next is the same call
+// with the input token bound to PageTokenKey, which the walk sets to the
+// previous page's token before each later page.
+type Page struct {
+	// Size is the page size the emitted calls send; it is here for the
+	// failure message only.
+	Size int
+	// MinPages, when above zero, is the fewest pages the service may answer
+	// in.
+	MinPages int
+	// OutputToken is the top-level response member holding the next-page
+	// token.
+	OutputToken string
+	// Next makes every page after the first.
+	Next Call
 }
 
 // CheckKind is the closed set of checks a clause may make on one path.
@@ -157,6 +187,14 @@ func ListContains(c *Call, itemsPath string, where ...WhereEntry) Clause {
 // missing list counts as empty.
 func AbsentFromList(c *Call, itemsPath string, where ...WhereEntry) Clause {
 	return Clause{Kind: KindAbsent, Call: c, ItemsPath: itemsPath, Where: where}
+}
+
+// Paginated makes a list clause with a call walk every page of its list: the
+// clause's call is page one, p.Next every later page, and the items of all
+// the pages are searched as one list.
+func Paginated(c Clause, p Page) Clause {
+	c.Page = &p
+	return c
 }
 
 // AbsentByError requires c to fail with the named error.

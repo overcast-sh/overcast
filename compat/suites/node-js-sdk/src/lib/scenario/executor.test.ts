@@ -14,12 +14,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  MAX_PAGES,
   runScenarioTest,
   runSetup,
   runTeardown,
   type ExecEnv,
 } from "./executor.ts";
-import type { Call, ScenarioTest } from "./ir.ts";
+import type { Assertion, Call, ScenarioTest } from "./ir.ts";
 
 const SCENARIO_FILE = "compat/model/scenarios/sqs.json";
 
@@ -374,6 +375,192 @@ describe("list clauses on the test's own response", () => {
     );
     assert.ok(err.message.includes("listContains at $.QueueUrls"));
     assert.ok(err.message.includes("<missing>"));
+  });
+});
+
+describe("paginating a list", () => {
+  const paginate = (extra: Record<string, unknown> = {}) => ({
+    pageSize: 1,
+    inputToken: "NextToken",
+    outputToken: "NextToken",
+    pageSizeMember: "MaxResults",
+    ...extra,
+  });
+  const testOf = (
+    kind: "listContains" | "absent",
+    extra: Record<string, unknown> = {},
+    wrap?: { maxAttempts: number },
+  ): ScenarioTest => {
+    const clause = {
+      kind,
+      call: { op: "ListQueues", params: { QueueNamePrefix: "oc-" } },
+      itemsPath: "$.QueueUrls",
+      where: { $: "http://q" },
+      paginate: paginate(),
+      ...extra,
+    } as unknown as Assertion;
+    return {
+      name: "ListQueues",
+      op: "DeleteQueue",
+      call: { op: "DeleteQueue", params: {} },
+      assert: [
+        wrap === undefined
+          ? clause
+          : ({ kind: "eventually", maxAttempts: wrap.maxAttempts, delayMs: 0, assert: clause } as Assertion),
+      ],
+    };
+  };
+  const pages = (...answers: unknown[]): Handler => (_params, attempt) => {
+    const answer = answers[Math.min(attempt, answers.length - 1)];
+    if (answer instanceof Error) throw answer;
+    return answer;
+  };
+  const page = (urls: string[] | undefined, token?: unknown) => ({
+    ...(urls === undefined ? {} : { QueueUrls: urls }),
+    ...(token === undefined ? {} : { NextToken: token }),
+  });
+  const listCalls = (h: Harness) => h.calls.filter((c) => c.op === "ListQueues").map((c) => c.params);
+
+  it("walks every page, feeding the token back with the page size on each", async () => {
+    const h = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(["http://a"], "t1"), page(["http://b"], "t2"), page(["http://q"])),
+    });
+    await runScenarioTest(h.env, testOf("listContains"));
+    assert.deepEqual(listCalls(h), [
+      { QueueNamePrefix: "oc-", MaxResults: 1 },
+      { QueueNamePrefix: "oc-", MaxResults: 1, NextToken: "t1" },
+      { QueueNamePrefix: "oc-", MaxResults: 1, NextToken: "t2" },
+    ]);
+  });
+
+  it("stops at a page with no token: absent, null or empty", async () => {
+    for (const last of [page(["http://q"]), page(["http://q"], null), page(["http://q"], "")]) {
+      const h = harness({ DeleteQueue: () => ({}), ListQueues: pages(last) });
+      await runScenarioTest(h.env, testOf("listContains"));
+      assert.equal(listCalls(h).length, 1);
+    }
+  });
+
+  it("matches where against the union, every entry on one item", async () => {
+    const items = (...pairs: Array<[string, string]>) => ({
+      Items: pairs.map(([Id, Kind]) => ({ Id, Kind })),
+    });
+    const test = testOf("listContains", { itemsPath: "$.Items", where: { "$.Id": "b", "$.Kind": "x" } });
+    const split = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages({ ...items(["a", "x"]), NextToken: "t" }, items(["b", "y"])),
+    });
+    await failureOf(() => runScenarioTest(split.env, test));
+    const together = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages({ ...items(["a", "x"]), NextToken: "t" }, items(["b", "x"])),
+    });
+    await runScenarioTest(together.env, test);
+  });
+
+  it("a miss says how many pages were walked and what was found, quoting page one's params", async () => {
+    const h = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(["http://a"], "t1"), page(["http://b"], "t2"), page(["http://c"])),
+    });
+    const err = await failureOf(() => runScenarioTest(h.env, testOf("listContains")));
+    assert.ok(err.message.includes("walked 3 page(s), 3 item(s): "));
+    assert.ok(err.message.includes('["http://a","http://b","http://c"]'));
+    assert.ok(err.message.includes("listContains at $.QueueUrls"));
+    assert.ok(err.message.includes('"MaxResults":1'));
+    assert.ok(!err.message.includes("NextToken"), "page one's params carry no token");
+  });
+
+  it("listContains still needs a non-empty list; a page without the list is empty", async () => {
+    for (const answers of [[page([])], [page(undefined)], [page(undefined, "t"), page([])]]) {
+      const h = harness({ DeleteQueue: () => ({}), ListQueues: pages(...answers) });
+      await failureOf(() => runScenarioTest(h.env, testOf("listContains")));
+    }
+    const h = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(undefined, "t1"), page(["http://q"])),
+    });
+    await runScenarioTest(h.env, testOf("listContains"));
+  });
+
+  it("minPages fails a single page that happens to hold everything", async () => {
+    const test = testOf("listContains", { paginate: paginate({ minPages: 2 }) });
+    const single = harness({ DeleteQueue: () => ({}), ListQueues: pages(page(["http://q"])) });
+    const err = await failureOf(() => runScenarioTest(single.env, test));
+    assert.ok(err.message.includes("expected at least 2 page(s) at a page size of 1"));
+    assert.ok(err.message.includes("walked 1 page(s), 1 item(s)"));
+    const split = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(["http://a"], "t"), page(["http://q"])),
+    });
+    await runScenarioTest(split.env, test);
+  });
+
+  it("a service that never stops fails at the page cap instead of hanging", async () => {
+    const h = harness({ DeleteQueue: () => ({}), ListQueues: pages(page(["http://a"], "again")) });
+    const err = await failureOf(() => runScenarioTest(h.env, testOf("listContains")));
+    assert.equal(listCalls(h).length, MAX_PAGES);
+    assert.ok(err.message.includes(`no NextToken on a page within ${MAX_PAGES} pages`));
+    assert.ok(
+      err.message.includes(
+        `walked ${MAX_PAGES} page(s), ${MAX_PAGES} item(s), and the last still returned a NextToken`,
+      ),
+    );
+  });
+
+  it("walks to the end even once the item is found", async () => {
+    const h = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(["http://q"], "t1"), page(["http://b"])),
+    });
+    await runScenarioTest(h.env, testOf("listContains"));
+    assert.equal(listCalls(h).length, 2);
+  });
+
+  it("absent looks at every page", async () => {
+    const clean = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(["http://a"], "t"), page(["http://b"])),
+    });
+    await runScenarioTest(clean.env, testOf("absent"));
+    const dirty = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(["http://a"], "t"), page(["http://q"])),
+    });
+    const err = await failureOf(() => runScenarioTest(dirty.env, testOf("absent")));
+    assert.ok(err.message.includes("walked 2 page(s), 2 item(s): "));
+    assert.ok(err.message.includes("no item matching"));
+  });
+
+  it("a token that is not a string fails the clause", async () => {
+    const h = harness({ DeleteQueue: () => ({}), ListQueues: pages(page(["http://q"], 7)) });
+    const err = await failureOf(() => runScenarioTest(h.env, testOf("listContains")));
+    assert.ok(err.message.includes("expected a string token, or none"));
+  });
+
+  it("a call failing on a later page is a call failure carrying that page's params", async () => {
+    const h = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(page(["http://a"], "t1"), sdkError("Boom")),
+    });
+    const err = await failureOf(() => runScenarioTest(h.env, testOf("listContains")));
+    assert.ok(err.message.includes("call:"));
+    assert.ok(err.message.includes('"NextToken":"t1"'));
+  });
+
+  it("inside eventually every attempt walks again from the first page", async () => {
+    const h = harness({
+      DeleteQueue: () => ({}),
+      ListQueues: pages(
+        page(["http://a"], "t1"), page(["http://b"]), // attempt 1: no match
+        page(["http://a"], "t1"), page(["http://q"]), // attempt 2: match
+      ),
+    });
+    await runScenarioTest(h.env, testOf("listContains", {}, { maxAttempts: 3 }));
+    const sent = listCalls(h);
+    assert.equal(sent.length, 4);
+    assert.ok(!("NextToken" in sent[2]!));
   });
 });
 

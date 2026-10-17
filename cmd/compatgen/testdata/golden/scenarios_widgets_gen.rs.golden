@@ -188,6 +188,20 @@ impl ServiceGroup for ScenariosWidgets {
         {
             let client = self.client.clone();
             impls.insert(
+                "widgets-gen-widget:PolishWidgetListed".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_WIDGETS_GEN_WIDGET
+                            .run_test(&ctx, "PolishWidgetListed", test_widgets_gen_widget_polish_widget_listed(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
                 "widgets-gen-widget:ListWidgets".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
@@ -1126,6 +1140,98 @@ fn test_widgets_gen_widget_polish_widget(client: &aws_sdk_widgets::Client) -> Te
                 vec![
                     scenario::equals("$.Widget.WidgetId", scenario::context("widget.id")),
                 ],
+            ),
+        ],
+    }
+}
+
+fn test_widgets_gen_widget_polish_widget_listed(client: &aws_sdk_widgets::Client) -> Test {
+    Test {
+        call: Call {
+            op: "PolishWidget",
+            params: scenario::map(vec![
+                ("WidgetId", scenario::context("widget.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .polish_widget()
+                            .widget_id(b.string("WidgetId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::paginated(
+                scenario::list_contains(
+                    Some(Call {
+                        op: "ListWidgets",
+                        params: scenario::map(vec![
+                            ("MaxResults", scenario::lit(::serde_json::json!(1))),
+                            ("NamePrefix", scenario::name("w")),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .list_widgets()
+                                        .max_results(1)
+                                        .name_prefix(b.string("NamePrefix")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    }),
+                    "$.Widgets",
+                    vec![
+                        scenario::where_entry("$.WidgetId", scenario::context("widget.id")),
+                    ],
+                ),
+                scenario::Page {
+                    size: 1,
+                    min_pages: 1,
+                    output_token: "NextToken",
+                    next: Call {
+                        op: "ListWidgets",
+                        params: scenario::map(vec![
+                            ("MaxResults", scenario::lit(::serde_json::json!(1))),
+                            ("NamePrefix", scenario::name("w")),
+                            ("NextToken", scenario::context("$pageToken")),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .list_widgets()
+                                        .max_results(1)
+                                        .name_prefix(b.string("NamePrefix")?)
+                                        .next_token(b.string("NextToken")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    },
+                },
             ),
         ],
     }

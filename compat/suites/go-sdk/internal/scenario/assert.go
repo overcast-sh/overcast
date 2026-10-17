@@ -101,20 +101,40 @@ func (e *execution) assertList(ctx context.Context, a *Clause, primary observed,
 		return e.fail(obs, step, a.Kind, a.ItemsPath, "a response to read the list from", "<no response>")
 	}
 
-	items, resolved, err := resolvePath(obs.body, a.ItemsPath)
-	if err != nil {
-		return e.fail(obs, step, a.Kind, a.ItemsPath, "a well-formed items path", quote(err.Error()))
-	}
+	// walked prefixes the "actual" half of a failure with how far a paginated
+	// clause got; a single-call clause has no pages to count.
+	walked := func(rest string) string { return rest }
 	var list []any
-	if resolved {
-		l, ok := items.([]any)
-		if !ok {
-			return e.fail(obs, step, a.Kind, a.ItemsPath, "a list", render(items))
+	if a.Page != nil && a.Call != nil {
+		var pages int
+		var err error
+		list, pages, err = e.walkPages(ctx, a, obs, step)
+		if err != nil {
+			return err
 		}
-		list = l
+		walked = func(rest string) string {
+			return fmt.Sprintf("walked %d page(s), %d item(s): %s", pages, len(list), rest)
+		}
+		if a.Page.MinPages > pages {
+			return e.fail(obs, step, a.Kind, a.ItemsPath,
+				fmt.Sprintf("at least %d page(s) at a page size of %d", a.Page.MinPages, a.Page.Size),
+				fmt.Sprintf("walked %d page(s), %d item(s)", pages, len(list)))
+		}
+	} else {
+		items, resolved, err := resolvePath(obs.body, a.ItemsPath)
+		if err != nil {
+			return e.fail(obs, step, a.Kind, a.ItemsPath, "a well-formed items path", quote(err.Error()))
+		}
+		if resolved {
+			l, ok := items.([]any)
+			if !ok {
+				return e.fail(obs, step, a.Kind, a.ItemsPath, "a list", render(items))
+			}
+			list = l
+		}
+		// A missing list counts as empty: several AWS services omit an empty
+		// list member rather than serializing [].
 	}
-	// A missing list counts as empty: several AWS services omit an empty list
-	// member rather than serializing [].
 
 	matched, wanted, err := e.matchItem(obs, list, a.Where, a.Kind, step)
 	if err != nil {
@@ -124,11 +144,11 @@ func (e *execution) assertList(ctx context.Context, a *Clause, primary observed,
 	if a.Kind == KindListContains {
 		if matched < 0 {
 			return e.fail(obs, step, KindListContains, a.ItemsPath,
-				fmt.Sprintf("an item matching %s", renderWhereExpected(a.Where, wanted)), renderList(list))
+				fmt.Sprintf("an item matching %s", renderWhereExpected(a.Where, wanted)), walked(renderList(list)))
 		}
 	} else if matched >= 0 {
 		return e.fail(obs, step, KindAbsent, a.ItemsPath,
-			fmt.Sprintf("no item matching %s", renderWhereExpected(a.Where, wanted)), render(list[matched]))
+			fmt.Sprintf("no item matching %s", renderWhereExpected(a.Where, wanted)), walked(render(list[matched])))
 	}
 	// The clause held. A list clause may carry a call with exports of its own,
 	// and they are applied on the same terms as a read-back's: only once the
@@ -137,6 +157,64 @@ func (e *execution) assertList(ctx context.Context, a *Clause, primary observed,
 		return e.applyExports(a.Call, obs, step)
 	}
 	return nil
+}
+
+// walkPages follows a paginated list clause to its last page and returns the
+// items of every page as one list, and how many pages that took. first is
+// page one, already fetched; every failure quotes its params, so a message
+// names the clause's own call rather than whichever page it stopped on.
+//
+// A page whose items are missing counts as empty. The walk ends at the first
+// page that carries no token — absent, null or "" — and fails the clause,
+// rather than looping, once MaxPages pages have all carried one. Each later
+// page is the clause's Next call with PageTokenKey set to the token the
+// previous page returned.
+func (e *execution) walkPages(ctx context.Context, a *Clause, first observed, step string) ([]any, int, error) {
+	var all []any
+	cur := first
+	for pages := 1; ; pages++ {
+		items, resolved, err := resolvePath(cur.body, a.ItemsPath)
+		if err != nil {
+			return nil, pages, e.fail(first, step, a.Kind, a.ItemsPath, "a well-formed items path", quote(err.Error()))
+		}
+		if resolved {
+			l, ok := items.([]any)
+			if !ok {
+				return nil, pages, e.fail(first, step, a.Kind, a.ItemsPath, "a list",
+					fmt.Sprintf("walked %d page(s): %s", pages, render(items)))
+			}
+			all = append(all, l...)
+		}
+
+		tokenPath := "$." + a.Page.OutputToken
+		raw, has, err := resolvePath(cur.body, tokenPath)
+		if err != nil {
+			return nil, pages, e.fail(first, step, a.Kind, tokenPath, "a well-formed token path", quote(err.Error()))
+		}
+		token := ""
+		if has && raw != nil {
+			s, ok := raw.(string)
+			if !ok {
+				return nil, pages, e.fail(first, step, a.Kind, tokenPath, "a string token, or none",
+					fmt.Sprintf("walked %d page(s): %s", pages, render(raw)))
+			}
+			token = s
+		}
+		if token == "" {
+			return all, pages, nil
+		}
+		if pages >= MaxPages {
+			return nil, pages, e.fail(first, step, a.Kind, tokenPath,
+				fmt.Sprintf("no %s on a page within %d pages", a.Page.OutputToken, MaxPages),
+				fmt.Sprintf("walked %d page(s), %d item(s), and the last still returned a %s", pages, len(all), a.Page.OutputToken))
+		}
+
+		e.bag.set(PageTokenKey, token)
+		cur, err = e.call(ctx, &a.Page.Next, step)
+		if err != nil {
+			return nil, pages, err
+		}
+	}
 }
 
 // matchItem returns the index of the first item satisfying every where entry,

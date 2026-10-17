@@ -164,6 +164,37 @@ describe("parseScenario", () => {
     assert.equal(scenario.groups[0].tests[0].assert[0].kind, "absent");
   });
 
+  it("carries a list clause's paginate, and refuses one without a call or with a missing member", () => {
+    const paginate = {
+      pageSize: 1,
+      minPages: 2,
+      inputToken: "NextToken",
+      outputToken: "NextToken",
+      pageSizeMember: "MaxResults",
+    };
+    const withClause = (clause: Record<string, unknown>) => {
+      const raw = clone() as { groups: Array<{ tests: Array<{ assert: unknown[] }> }> };
+      raw.groups[0].tests[0].assert = [{ kind: "listContains", itemsPath: "$.QueueUrls", where: { $: "u" }, ...clause }];
+      return raw;
+    };
+    const call = { op: "ListQueues", params: {} };
+    const parsed = parseScenario(withClause({ call, paginate }), "test.json");
+    assert.deepEqual((parsed.groups[0].tests[0].assert[0] as { paginate: unknown }).paginate, paginate);
+    assert.throws(
+      () => parseScenario(withClause({ paginate }), "test.json"),
+      /assert\/0\/paginate: paginate needs a call of its own/,
+    );
+    const { outputToken: _dropped, ...partial } = paginate;
+    assert.throws(
+      () => parseScenario(withClause({ call, paginate: partial }), "test.json"),
+      /assert\/0\/paginate\/outputToken/,
+    );
+    assert.throws(
+      () => parseScenario(withClause({ call, paginate: { ...paginate, pageSize: 0 } }), "test.json"),
+      /assert\/0\/paginate\/pageSize/,
+    );
+  });
+
   it("takes a $lit payload verbatim, `$`-keys and all", () => {
     const raw = clone() as {
       groups: Array<{ tests: Array<{ call: { params: Record<string, unknown> } }> }>;

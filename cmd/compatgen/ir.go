@@ -116,6 +116,10 @@ type assertion struct {
 	// / must not contain an item matching every Where entry.
 	ItemsPath string         `json:"itemsPath,omitempty"`
 	Where     map[string]any `json:"where,omitempty"`
+	// Paginate (list form only) makes the clause walk every page of the list:
+	// Call is repeated, the output token fed back as the input token, and the
+	// items of all the pages are searched as one list. It needs a Call.
+	Paginate *paginate `json:"paginate,omitempty"`
 	// errorCode: the test's own call must fail with Error.
 	// absent (error form): Call must fail with Error.
 	Error *errorSpec `json:"error,omitempty"`
@@ -125,6 +129,39 @@ type assertion struct {
 	DelayMs     int        `json:"delayMs,omitempty"`
 	Assert      *assertion `json:"assert,omitempty"`
 }
+
+// paginate is how a list clause walks a paginated list to its last page. The
+// operation's Smithy @paginated trait names the three members; they are
+// carried in the IR so that no interpreter needs the model, and the generator
+// holds them to the trait (resolvePagination) rather than trusting them.
+//
+// A recipe writes only PageSize and MinPages and the generator fills the rest
+// in from the trait; an authored scenario, which the generator never rewrites,
+// writes all five. validateScenario requires all five.
+type paginate struct {
+	// PageSize is sent as PageSizeMember on every page. At least 1.
+	PageSize int `json:"pageSize"`
+	// MinPages, when set, fails the clause unless the service answered in at
+	// least that many pages: the proof that it really paginated, which a
+	// single page that happens to hold everything cannot give.
+	MinPages int `json:"minPages,omitempty"`
+	// InputToken is the input member the previous page's OutputToken is sent
+	// as, OutputToken the top-level response member holding the next-page
+	// token, PageSizeMember the input member PageSize is sent as.
+	InputToken     string `json:"inputToken,omitempty"`
+	OutputToken    string `json:"outputToken,omitempty"`
+	PageSizeMember string `json:"pageSizeMember,omitempty"`
+}
+
+// maxPages is the most pages a paginated clause walks. A service that still
+// returns a token after this many pages fails the clause instead of hanging
+// the suite. The number is part of the contract: every backend uses it.
+const maxPages = 50
+
+// pageTokenRef is the context path a typed backend's next-page call reads the
+// token from. It is not a valid context path (validContextPath refuses the
+// `$`), so no scenario can export over it.
+const pageTokenRef = "$pageToken"
 
 // check is exactly one of: nonEmpty, isList, equals, equalsJSON, matches,
 // missing.
@@ -180,6 +217,12 @@ func readback(c call, checks map[string]check) assertion {
 
 func listContains(c *call, itemsPath string, where map[string]any) assertion {
 	return assertion{Kind: assertListContains, Call: c, ItemsPath: itemsPath, Where: where}
+}
+
+// paginated makes a list clause walk every page of its list.
+func paginated(a assertion, p paginate) assertion {
+	a.Paginate = &p
+	return a
 }
 
 func absentFromList(c *call, itemsPath string, where map[string]any) assertion {
@@ -249,6 +292,15 @@ func validateScenario(s *scenario) error {
 				if err := validateAssertion(a); err != nil {
 					return fmt.Errorf("group %s: test %s: assert[%d]: %w", g.Name, t.Name, i, err)
 				}
+				if err := validatePaginateComplete(a); err != nil {
+					return fmt.Errorf("group %s: test %s: assert[%d]: %w", g.Name, t.Name, i, err)
+				}
+				// A typed backend hands the token to the next page through the
+				// group's context, which a probe group's concurrent tests
+				// would share.
+				if g.Parallel && hasPaginate(a) {
+					return fmt.Errorf("group %s: test %s: assert[%d]: a probe group runs its tests concurrently and cannot paginate", g.Name, t.Name, i)
+				}
 				if a.Kind == assertErrorCode {
 					errorCodes++
 				}
@@ -274,6 +326,9 @@ func validateScenario(s *scenario) error {
 }
 
 func validateAssertion(a assertion) error {
+	if a.Paginate != nil && a.Kind != assertListContains && a.Kind != assertAbsent {
+		return fmt.Errorf("%s cannot paginate; only listContains and the list form of absent walk pages", a.Kind)
+	}
 	switch a.Kind {
 	case assertResponseField:
 		if a.Call != nil || len(a.Checks) == 0 || a.ItemsPath != "" || a.Where != nil || a.Error != nil || a.Assert != nil {
@@ -285,13 +340,19 @@ func validateAssertion(a assertion) error {
 		}
 	case assertListContains:
 		if a.ItemsPath == "" || len(a.Where) == 0 || len(a.Checks) > 0 || a.Error != nil || a.Assert != nil {
-			return fmt.Errorf("listContains carries itemsPath and where (and optionally a call) only")
+			return fmt.Errorf("listContains carries itemsPath and where (and optionally a call and paginate) only")
+		}
+		if err := validatePaginate(a); err != nil {
+			return err
 		}
 	case assertAbsent:
 		listForm := a.ItemsPath != "" && len(a.Where) > 0 && a.Error == nil
 		errorForm := a.ItemsPath == "" && a.Where == nil && a.Error != nil && a.Call != nil
 		if (!listForm && !errorForm) || len(a.Checks) > 0 || a.Assert != nil {
 			return fmt.Errorf("absent is either itemsPath+where or call+error")
+		}
+		if err := validatePaginate(a); err != nil {
+			return err
 		}
 	case assertErrorCode:
 		if a.Error == nil || a.Call != nil || len(a.Checks) > 0 || a.ItemsPath != "" || a.Where != nil || a.Assert != nil {
@@ -338,6 +399,57 @@ func validateAssertion(a assertion) error {
 		}
 	}
 	return nil
+}
+
+// validatePaginate holds a list clause's paginate to the structural rules.
+// The model-dependent half, that the members are the operation's own, is
+// resolvePagination's.
+func validatePaginate(a assertion) error {
+	p := a.Paginate
+	if p == nil {
+		return nil
+	}
+	if a.Error != nil {
+		return fmt.Errorf("paginate belongs to the list form of absent, not the error form")
+	}
+	if a.Call == nil {
+		return fmt.Errorf("paginate needs a call of its own: a test's own response is a single page")
+	}
+	if len(a.Call.Export) > 0 {
+		return fmt.Errorf("a paginated call cannot export: it is made once per page and no one page is its response")
+	}
+	if p.PageSize < 1 {
+		return fmt.Errorf("paginate.pageSize %d, want at least 1", p.PageSize)
+	}
+	if p.MinPages < 0 || p.MinPages > maxPages {
+		return fmt.Errorf("paginate.minPages %d, want 1 to %d", p.MinPages, maxPages)
+	}
+	for _, member := range []string{p.PageSizeMember, p.InputToken} {
+		if member == "" {
+			continue
+		}
+		if _, set := a.Call.Params[member]; set {
+			return fmt.Errorf("paginate sends %s itself; the call's params must not set it", member)
+		}
+	}
+	return nil
+}
+
+// validatePaginateComplete is the finished-scenario half of validatePaginate:
+// the three members must all be named.
+func validatePaginateComplete(a assertion) error {
+	if a.Paginate != nil && (a.Paginate.InputToken == "" || a.Paginate.OutputToken == "" || a.Paginate.PageSizeMember == "") {
+		return fmt.Errorf("paginate names inputToken, outputToken and pageSizeMember; they come from the operation's @paginated trait")
+	}
+	if a.Assert != nil {
+		return validatePaginateComplete(*a.Assert)
+	}
+	return nil
+}
+
+// hasPaginate reports whether a clause, or the clause it retries, paginates.
+func hasPaginate(a assertion) bool {
+	return a.Paginate != nil || (a.Assert != nil && hasPaginate(*a.Assert))
 }
 
 // findTest locates a test by group/name.

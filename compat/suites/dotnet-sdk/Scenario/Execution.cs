@@ -227,27 +227,45 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
             throw Fail(observed, step, kind, clause.ItemsPath, "a response to read the list from", "<no response>");
         }
 
-        bool resolved;
-        object? items;
-        try
-        {
-            resolved = Paths.TryResolve(observed.Body, clause.ItemsPath, out items);
-        }
-        catch (ScenarioPathException ex)
-        {
-            throw Fail(observed, step, kind, clause.ItemsPath, "a well-formed items path", Failures.Quote(ex.Message));
-        }
+        // walked prefixes the "actual" half of a failure with how far a
+        // paginated clause got; a single-call clause has no pages to count.
+        var walked = "";
         var list = new List<object?>();
-        if (resolved)
+        if (clause.Page is not null && clause.Call is not null)
         {
-            if (items is not List<object?> found)
+            var (all, pages) = await WalkPagesAsync(clause, observed, step);
+            list = all;
+            walked = $"walked {pages} page(s), {list.Count} item(s)";
+            if (clause.Page.MinPages > pages)
             {
-                throw Fail(observed, step, kind, clause.ItemsPath, "a list", Documents.Render(items));
+                throw Fail(observed, step, kind, clause.ItemsPath,
+                    $"at least {clause.Page.MinPages} page(s) at a page size of {clause.Page.Size}", walked);
             }
-            list = found;
+            walked += ": ";
         }
-        // A missing list counts as empty: several AWS services omit an empty
-        // list member rather than serializing [].
+        else
+        {
+            bool resolved;
+            object? items;
+            try
+            {
+                resolved = Paths.TryResolve(observed.Body, clause.ItemsPath, out items);
+            }
+            catch (ScenarioPathException ex)
+            {
+                throw Fail(observed, step, kind, clause.ItemsPath, "a well-formed items path", Failures.Quote(ex.Message));
+            }
+            if (resolved)
+            {
+                if (items is not List<object?> found)
+                {
+                    throw Fail(observed, step, kind, clause.ItemsPath, "a list", Documents.Render(items));
+                }
+                list = found;
+            }
+            // A missing list counts as empty: several AWS services omit an
+            // empty list member rather than serializing [].
+        }
 
         var (matched, wanted) = MatchItem(observed, list, clause.Where, kind, step);
 
@@ -256,13 +274,13 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
             if (matched < 0)
             {
                 throw Fail(observed, step, kind, clause.ItemsPath,
-                    $"an item matching {Failures.RenderWhere(clause.Where, wanted)}", Failures.RenderList(list));
+                    $"an item matching {Failures.RenderWhere(clause.Where, wanted)}", walked + Failures.RenderList(list));
             }
         }
         else if (matched >= 0)
         {
             throw Fail(observed, step, kind, clause.ItemsPath,
-                $"no item matching {Failures.RenderWhere(clause.Where, wanted)}", Documents.Render(list[matched]));
+                $"no item matching {Failures.RenderWhere(clause.Where, wanted)}", walked + Documents.Render(list[matched]));
         }
 
         // The clause held. A list clause may carry a call with exports of its
@@ -271,6 +289,83 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
         if (clause.Call is not null)
         {
             ApplyExports(clause.Call, observed, step);
+        }
+    }
+
+    /// <summary>
+    /// Follows a paginated list clause to its last page and returns the items
+    /// of every page as one list, and how many pages that took.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="first"/> is page one, already fetched; every failure
+    /// quotes its params, so a message names the clause's own call rather than
+    /// whichever page it stopped on. A page whose items are missing counts as
+    /// empty. The walk ends at the first page that carries no token — absent,
+    /// null or "" — and fails the clause, rather than looping, once
+    /// <see cref="PageWalk.MaxPages"/> pages have all carried one. Each later
+    /// page is the clause's Next call with <see cref="PageWalk.TokenKey"/> set
+    /// to the token the previous page returned.
+    /// </remarks>
+    private async Task<(List<object?> Items, int Pages)> WalkPagesAsync(Clause clause, Observed first, string step)
+    {
+        var kind = ClauseNames[clause.Kind];
+        var page = clause.Page!;
+        var tokenPath = "$." + page.OutputToken;
+        var all = new List<object?>();
+        var current = first;
+        for (var pages = 1; ; pages++)
+        {
+            bool resolved;
+            object? items;
+            try
+            {
+                resolved = Paths.TryResolve(current.Body, clause.ItemsPath, out items);
+            }
+            catch (ScenarioPathException ex)
+            {
+                throw Fail(first, step, kind, clause.ItemsPath, "a well-formed items path", Failures.Quote(ex.Message));
+            }
+            if (resolved)
+            {
+                if (items is not List<object?> found)
+                {
+                    throw Fail(first, step, kind, clause.ItemsPath, "a list", $"walked {pages} page(s): {Documents.Render(items)}");
+                }
+                all.AddRange(found);
+            }
+
+            bool hasToken;
+            object? raw;
+            try
+            {
+                hasToken = Paths.TryResolve(current.Body, tokenPath, out raw);
+            }
+            catch (ScenarioPathException ex)
+            {
+                throw Fail(first, step, kind, tokenPath, "a well-formed token path", Failures.Quote(ex.Message));
+            }
+            var token = "";
+            if (hasToken && raw is not null)
+            {
+                if (raw is not string text)
+                {
+                    throw Fail(first, step, kind, tokenPath, "a string token, or none", $"walked {pages} page(s): {Documents.Render(raw)}");
+                }
+                token = text;
+            }
+            if (token.Length == 0)
+            {
+                return (all, pages);
+            }
+            if (pages >= PageWalk.MaxPages)
+            {
+                throw Fail(first, step, kind, tokenPath,
+                    $"no {page.OutputToken} on a page within {PageWalk.MaxPages} pages",
+                    $"walked {pages} page(s), {all.Count} item(s), and the last still returned a {page.OutputToken}");
+            }
+
+            bag.Set(PageWalk.TokenKey, token);
+            current = await CallAsync(page.Next, step);
         }
     }
 
