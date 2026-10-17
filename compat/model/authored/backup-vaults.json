@@ -1,0 +1,388 @@
+{
+  "$comment": "Authored shadow port of the hand-written registry group backup-vaults (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/backup.go); the other six suites never implemented it and carry it as parity debt, which the port closes once it is flipped. This is step 1 of the two-PR migration: the group is named backup-vaults-shadow and runs beside the native, gating nothing. It was left out of the wave 3 ports (#2238) because the IR could neither walk the pages of a list nor embed a $name or $ref in an ARN check; both exist now (#2315, #2322). The clauses are what the cli native asserted, plus read-backs of documented effects where it asserted only success, each choice stated on its test - see compat/model/README.md § Authored scenarios. Signing: the cli native makes every call of this group UNSIGNED, deliberately, because unsigned is where #963 hid (an unsigned request for a Backup collection fell through to S3's wildcard and came back HTTP 200 with a ListBucketResult). The IR has no unsigned call (README § client and § A call: every backend signs), and no test of this group asserts anything about signing - each asserts the response content, so a collection answered by S3 still fails the same contains/equals checks. Every scenario call is therefore signed, as a real Backup client's always is. What the port cannot carry is the unsigned request itself, which stays covered by the cli native until it is deleted at the flip; the flip must keep an unsigned guard for the Backup collections elsewhere. The cli native also asserts the HTTP status (400) of every error it provokes beside its code. The IR's error clause has no status, so only the code is carried: the model binds none of these errors to a status other than the restJson1 default for a client error (only ConflictException carries an httpError trait), and the code is what a caller branches on - the same choice every earlier port made.",
+  "version": 1,
+  "service": "backup",
+  "client": {
+    "sdkId": "Backup",
+    "endpointPrefix": "backup",
+    "signingName": "backup",
+    "protocol": "restJson1",
+    "apiVersion": "2018-11-15",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Setup creates the second vault the native's ListBackupVaultsPaginated creates inside the test (an IR test has one primary call), so the paginated walk has two vaults to find; the first is CreateBackupVault's own. Both are named by $name, never shared with another Backup group (the groups run in parallel, which is why the native gives each its own Namer). Teardown mirrors the native's: the second vault, then the first; DeleteBackupVault has already removed the first, so that call errors and teardown ignores it (each teardown call is individually wrapped, and the native discards the same errors). The registry declares depends on the tests that read a created vault, and the tests run in order. No clause is wrapped in `eventually` except the paginated walks, which say why: the native polls nothing else.",
+      "name": "backup-vaults-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateBackupVault",
+          "params": {
+            "BackupVaultName": {
+              "$name": "vault2"
+            }
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "Native: BackupVaultName is the name sent, BackupVaultArn ends in :backup-vault:<name>, CreationDate is present. The ARN check is an endsWith on a $concat of the literal and the vault's $name, so the region and account the emulator picked are not hard-coded. CreationDate is nonEmpty (a timestamp is a number, never empty, so this is presence). The vault is {runId}-backup-vaults-shadow-vault.",
+          "name": "CreateBackupVault",
+          "op": "CreateBackupVault",
+          "call": {
+            "op": "CreateBackupVault",
+            "params": {
+              "BackupVaultName": {
+                "$name": "vault"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupVaultName": {
+                  "equals": {
+                    "$name": "vault"
+                  }
+                },
+                "$.BackupVaultArn": {
+                  "endsWith": {
+                    "$concat": [
+                      ":backup-vault:",
+                      {
+                        "$name": "vault"
+                      }
+                    ]
+                  }
+                },
+                "$.CreationDate": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Native: name and ARN suffix as for the create, VaultType BACKUP_VAULT, VaultState AVAILABLE (a vault created through this API is a standard, available vault), NumberOfRecoveryPoints 0 (no backup job runs behind the control plane, so it holds none) and Locked false. All carried; the number and boolean literals are of the member's modeled kind.",
+          "name": "DescribeBackupVault",
+          "op": "DescribeBackupVault",
+          "call": {
+            "op": "DescribeBackupVault",
+            "params": {
+              "BackupVaultName": {
+                "$name": "vault"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupVaultName": {
+                  "equals": {
+                    "$name": "vault"
+                  }
+                },
+                "$.BackupVaultArn": {
+                  "endsWith": {
+                    "$concat": [
+                      ":backup-vault:",
+                      {
+                        "$name": "vault"
+                      }
+                    ]
+                  }
+                },
+                "$.VaultType": {
+                  "equals": "BACKUP_VAULT"
+                },
+                "$.VaultState": {
+                  "equals": "AVAILABLE"
+                },
+                "$.NumberOfRecoveryPoints": {
+                  "equals": 0
+                },
+                "$.Locked": {
+                  "equals": false
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "$comment": "Native: the response carries a BackupVaultList (an absent member is what an answer from another service looked like) and the created vault's name is in it. listContains requires the list to be present and non-empty and to hold the vault, which states both. The unpaginated call: the native's CLI follows NextToken to the end, but the default page holds every vault a suite's emulator has, so the first page is enough (the paginated test below walks).",
+          "name": "ListBackupVaults",
+          "op": "ListBackupVaults",
+          "call": {
+            "op": "ListBackupVaults",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.BackupVaultList",
+              "where": {
+                "$.BackupVaultName": {
+                  "$name": "vault"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "$comment": "Native: create a second vault, list at --page-size 1 (the CLI follows NextToken to the end) and require both vaults in the union of the pages, failing with 'NextToken did not carry the caller past page one'. The second vault ({runId}-backup-vaults-shadow-vault2) is created in setup because an IR test has one primary call; its teardown is the native's. The primary call is the first page at MaxResults 1 and must hold a vault. Two listContains clauses, one per vault, each walk every page at a page size of 1 (member names from ListBackupVaults' @paginated trait: MaxResults, NextToken, NextToken). minPages 2 is the native's own claim: its failure message says NextToken did not carry the caller past page one, and with two vaults at one per page a service that ignored MaxResults, or stopped after page one, fails it. Scoping: ListBackupVaults has no name filter, so the walk is the whole account, as the native's is; other Backup groups' vaults only add pages. Backup pages by offset and a vault created or deleted by a parallel Backup group mid-walk can skip one of ours, so each walk sits in `eventually` and is repeated whole, up to three times; a service that never returns the vault fails all three.",
+          "name": "ListBackupVaultsPaginated",
+          "op": "ListBackupVaults",
+          "call": {
+            "op": "ListBackupVaults",
+            "params": {
+              "MaxResults": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupVaultList": {
+                  "nonEmpty": true
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 3,
+              "delayMs": 250,
+              "assert": {
+                "kind": "listContains",
+                "itemsPath": "$.BackupVaultList",
+                "where": {
+                  "$.BackupVaultName": {
+                    "$name": "vault"
+                  }
+                },
+                "call": {
+                  "op": "ListBackupVaults",
+                  "params": {}
+                },
+                "paginate": {
+                  "pageSize": 1,
+                  "minPages": 2,
+                  "inputToken": "NextToken",
+                  "outputToken": "NextToken",
+                  "pageSizeMember": "MaxResults"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 3,
+              "delayMs": 250,
+              "assert": {
+                "kind": "listContains",
+                "itemsPath": "$.BackupVaultList",
+                "where": {
+                  "$.BackupVaultName": {
+                    "$name": "vault2"
+                  }
+                },
+                "call": {
+                  "op": "ListBackupVaults",
+                  "params": {}
+                },
+                "paginate": {
+                  "pageSize": 1,
+                  "minPages": 2,
+                  "inputToken": "NextToken",
+                  "outputToken": "NextToken",
+                  "pageSizeMember": "MaxResults"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "$comment": "Native: --by-shared must answer with a list that excludes the unshared vault rather than ignoring the filter, and fails if the response has no BackupVaultList. The primary call sends ByShared true and the `absent` clause says the vault is not in it. One narrowing: the IR's list form treats an absent list as empty, so a response with no BackupVaultList at all passes here where the native failed it. That was the native's guard against the unsigned S3 fall-through of #963, which a signed call cannot meet and which the cli native keeps covering until the flip.",
+          "name": "ListBackupVaultsByShared",
+          "op": "ListBackupVaults",
+          "call": {
+            "op": "ListBackupVaults",
+            "params": {
+              "ByShared": true
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "itemsPath": "$.BackupVaultList",
+              "where": {
+                "$.BackupVaultName": {
+                  "$name": "vault"
+                }
+              },
+              "call": {
+                "op": "ListBackupVaults",
+                "params": {
+                  "ByShared": true
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "$comment": "Native: describing a vault that was never created fails with ResourceNotFoundException (and status 400, not carried). The name is {runId}-backup-vaults-shadow-absent.",
+          "name": "DescribeBackupVaultNotFound",
+          "op": "DescribeBackupVault",
+          "call": {
+            "op": "DescribeBackupVault",
+            "params": {
+              "BackupVaultName": {
+                "$name": "absent"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Native: creating the vault a second time fails with AlreadyExistsException.",
+          "name": "CreateBackupVaultAlreadyExists",
+          "op": "CreateBackupVault",
+          "call": {
+            "op": "CreateBackupVault",
+            "params": {
+              "BackupVaultName": {
+                "$name": "vault"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "AlreadyExistsException",
+                "code": "AlreadyExistsException"
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "$comment": "Native: a name outside BackupVaultName's modeled pattern (^[a-zA-Z0-9\\-\\_]{2,50}$) reaches the server, because the clients do not enforce pattern traits, and the server must reject it with InvalidParameterValueException. The literal is the native's, oc.invalid.vault.name.",
+          "name": "CreateBackupVaultInvalidName",
+          "op": "CreateBackupVault",
+          "call": {
+            "op": "CreateBackupVault",
+            "params": {
+              "BackupVaultName": "oc.invalid.vault.name"
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "InvalidParameterValueException",
+                "code": "InvalidParameterValueException"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "DeleteBackupVault's modeled output is Unit, so the native proves the delete by the vault no longer being describable: DescribeBackupVault must fail with ResourceNotFoundException. That is the `absent` error form. Teardown deletes the vault again and ignores the error.",
+          "name": "DeleteBackupVault",
+          "op": "DeleteBackupVault",
+          "call": {
+            "op": "DeleteBackupVault",
+            "params": {
+              "BackupVaultName": {
+                "$name": "vault"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeBackupVault",
+                "params": {
+                  "BackupVaultName": {
+                    "$name": "vault"
+                  }
+                }
+              },
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ],
+          "depends": [
+            "CreateBackupVault"
+          ]
+        },
+        {
+          "$comment": "Native: deleting a vault that does not exist fails with ResourceNotFoundException. The name is the one DescribeBackupVaultNotFound uses.",
+          "name": "DeleteBackupVaultNotFound",
+          "op": "DeleteBackupVault",
+          "call": {
+            "op": "DeleteBackupVault",
+            "params": {
+              "BackupVaultName": {
+                "$name": "absent"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteBackupVault",
+          "params": {
+            "BackupVaultName": {
+              "$name": "vault2"
+            }
+          }
+        },
+        {
+          "op": "DeleteBackupVault",
+          "params": {
+            "BackupVaultName": {
+              "$name": "vault"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
