@@ -127,7 +127,7 @@ Shorter overview: the [service reference index](./services/README.md).
 | Glue                 | [glue.md](./services/glue.md)                       | 34  | Minimal / targeted support    |
 | OpenSearch           | [opensearch.md](./services/opensearch.md)           | 8   | Minimal / targeted support    |
 | AppRegistry          | [appregistry.md](./services/appregistry.md)         | 24  | IaC/discovery-oriented stub   |
-| Backup               | [backup.md](./services/backup.md)                   | 18  | IaC/discovery-oriented stub   |
+| Backup               | [backup.md](./services/backup.md)                   | 22  | IaC/discovery-oriented stub   |
 | CloudTrail           | [cloudtrail.md](./services/cloudtrail.md)           | 12  | IaC/discovery-oriented stub   |
 | EKS                  | [eks.md](./services/eks.md)                         | 49  | IaC/discovery-oriented stub   |
 | ELBv2                | [elb.md](./services/elb.md)                         | 22  | IaC/discovery-oriented stub   |

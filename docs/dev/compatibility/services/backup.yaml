@@ -30,6 +30,9 @@ current_support_level: >-
 operations: {}
 findings:
   fixed:
+    - "#2308 added CreateBackupSelection, GetBackupSelection, ListBackupSelections and
+      DeleteBackupSelection (22 tracked operations now; Create is Partial, the rest Supported), and
+      DeleteBackupPlan now refuses with InvalidRequestException while selections remain."
     - "#815 (tracked via PR referencing #904, fix(backup): serve AWS Backup at the paths AWS
       models) fixed the actual routing bug the old 'inert' framing was hiding: AWS Backup was
       dispatched off `X-Amz-Target: AWSBackup.<Operation>`, a target prefix AWS Backup does not
@@ -66,5 +69,5 @@ findings:
       carry Protocols: ProtocolsRESTJSON and an empty target prefix')."
 handoff:
   start_with: []
-  do_not_redo: [CreateBackupVault, DeleteBackupVault, DescribeBackupVault, ListBackupVaults, CreateBackupPlan, DeleteBackupPlan, GetBackupPlan, ListBackupPlans, UpdateBackupPlan, CreateBackupAccessPoint, DeleteBackupAccessPoint, DescribeBackupAccessPoint, ListBackupAccessPoints, ListBackupAccessPointsByRecoveryPoint, ListBackupAccessPointsByResource, TagResource, ListTags, UntagResource]
+  do_not_redo: [CreateBackupSelection, GetBackupSelection, ListBackupSelections, DeleteBackupSelection, CreateBackupVault, DeleteBackupVault, DescribeBackupVault, ListBackupVaults, CreateBackupPlan, DeleteBackupPlan, GetBackupPlan, ListBackupPlans, UpdateBackupPlan, CreateBackupAccessPoint, DeleteBackupAccessPoint, DescribeBackupAccessPoint, ListBackupAccessPoints, ListBackupAccessPointsByRecoveryPoint, ListBackupAccessPointsByResource, TagResource, ListTags, UntagResource]
   commands: [go test -count=1 ./internal/services/backup/... ./tests/integration/backup/...]

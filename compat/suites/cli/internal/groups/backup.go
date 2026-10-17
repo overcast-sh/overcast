@@ -639,8 +639,12 @@ func backupPlanMembers(out map[string]any, op string) (map[string]map[string]any
 
 // ─── backup-selections and backup-jobs ────────────────────────────────────────
 //
-// Neither feature is emulated: Backup implements nine of the 115 operations AWS
-// models, and everything below is outside that nine. The tests exist anyway —
+// Backup selections are emulated (#2308) and backup-selections is a live group:
+// its Get and Delete tests `depend` on CreateBackupSelection in the registry, so
+// they run against the selection it minted.
+//
+// Backup jobs are not: Backup implements a fraction of the 115 operations AWS
+// models, and the job operations are outside it. Those tests exist anyway —
 // compat/AGENTS.md § Core principles 3, tests cover all services, not just
 // implemented ones — and each records `unimplemented` against the 501 the
 // emulator answers. That is the coverage metric, and it is what makes the day
@@ -657,20 +661,16 @@ func backupPlanMembers(out map[string]any, op string) (map[string]map[string]any
 // #963 hid, and a signed call would have turned that fault into a tidy 501
 // rather than the silent 200 it actually was.
 //
-// No test here declares `depends`. With nothing implemented, a chain would turn
-// three honest `unimplemented` results into one `unimplemented` and two
-// `dependency failed` skips, which reads as a cascade rather than as the gap it
-// is. When the feature lands, wire the dependencies up then.
+// The backup-jobs tests declare no `depends`. With nothing implemented, a chain
+// would turn three honest `unimplemented` results into one `unimplemented` and
+// two `dependency failed` skips, which reads as a cascade rather than as the gap
+// it is. When the feature lands, wire the dependencies up then.
 //
 // Every assertion a working implementation would have to satisfy is already
 // written below, so the tests measure the gap today and the behaviour later.
 
-// backupMissingSelectionID and backupMissingJobID stand in for identifiers the
-// create operations cannot yet mint.
-const (
-	backupMissingSelectionID = "11111111-1111-1111-1111-111111111111"
-	backupMissingJobID       = "22222222-2222-2222-2222-222222222222"
-)
+// backupMissingJobID stands in for an identifier StartBackupJob cannot yet mint.
+const backupMissingJobID = "22222222-2222-2222-2222-222222222222"
 
 // setupSelections creates the plan a selection hangs off, and the vault its
 // rule targets. A selection is a child of a plan in AWS, so a test that did not
@@ -696,8 +696,8 @@ func (g *backupCliGroup) setupSelections(_ context.Context, t *harness.TestConte
 }
 
 func (g *backupCliGroup) teardownSelections(_ context.Context, t *harness.TestContext) error {
-	// Reverse creation order: the selection (if one was ever minted), then the
-	// plan, then the vault.
+	// Reverse creation order: the selection (if DeleteBackupSelection did not
+	// already remove it), then the plan, then the vault.
 	planID := t.GetString("selection_plan_id")
 	if id := t.GetString("selection_id"); id != "" && planID != "" {
 		awscli.RunSigned(t.Endpoint, t.Region, "backup", "delete-backup-selection", //nolint:errcheck
@@ -766,10 +766,7 @@ func (g *backupCliGroup) GetBackupSelection(_ context.Context, t *harness.TestCo
 	}
 	id := t.GetString("selection_id")
 	if id == "" {
-		// CreateBackupSelection could not mint one, so ask for an id that does
-		// not exist: the modeled answer is ResourceNotFoundException, and the
-		// point of the call is that Backup answers it at all.
-		id = backupMissingSelectionID
+		return fmt.Errorf("backup GetBackupSelection: no selection_id from CreateBackupSelection")
 	}
 	out, err := awscli.RunOutputSigned(t.Endpoint, t.Region, "backup", "get-backup-selection",
 		"--backup-plan-id", planID, "--selection-id", id)
@@ -792,7 +789,7 @@ func (g *backupCliGroup) DeleteBackupSelection(_ context.Context, t *harness.Tes
 	}
 	id := t.GetString("selection_id")
 	if id == "" {
-		id = backupMissingSelectionID
+		return fmt.Errorf("backup DeleteBackupSelection: no selection_id from CreateBackupSelection")
 	}
 	if err := awscli.RunSigned(t.Endpoint, t.Region, "backup", "delete-backup-selection",
 		"--backup-plan-id", planID, "--selection-id", id); err != nil {

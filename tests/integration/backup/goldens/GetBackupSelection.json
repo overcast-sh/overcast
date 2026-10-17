@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/x-amz-json-1.0"
+  },
+  "body": "{\"BackupPlanId\":\"00000000-0000-0000-0000-000000000000\",\"BackupSelection\":{\"SelectionName\":\"golden-selection\",\"IamRoleArn\":\"arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole\",\"Resources\":[\"arn:aws:dynamodb:us-east-1:000000000000:table/golden\"],\"ListOfTags\":[{\"ConditionKey\":\"backup\",\"ConditionType\":\"STRINGEQUALS\",\"ConditionValue\":\"true\"}]},\"CreationDate\":0,\"SelectionId\":\"00000000-0000-0000-0000-000000000000\"}"
+}
