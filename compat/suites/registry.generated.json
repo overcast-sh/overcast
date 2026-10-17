@@ -30,6 +30,19 @@
       ]
     },
     {
+      "group": "appconfig-deployment-strategies",
+      "scenario": "compat/model/authored/appconfig-deployment-strategies.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "appconfig-deployments",
       "scenario": "compat/model/authored/appconfig-deployments.json",
       "suites": [
@@ -56,8 +69,46 @@
       ]
     },
     {
+      "group": "appconfig-experiments",
+      "scenario": "compat/model/authored/appconfig-experiments.json",
+      "suites": [
+        "cli",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "appconfig-extensions",
+      "scenario": "compat/model/authored/appconfig-extensions.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
       "group": "appconfig-tags",
       "scenario": "compat/model/authored/appconfig-tags.json",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ]
+    },
+    {
+      "group": "backup-selections",
+      "scenario": "compat/model/authored/backup-selections.json",
       "suites": [
         "cli",
         "dotnet-sdk",
@@ -344,152 +395,6 @@
   ],
   "groups": [
     {
-      "service": "appconfig",
-      "name": "appconfig-deployment-strategies-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/appconfig-deployment-strategies.json",
-      "state": "candidate",
-      "shadowOf": "appconfig-deployment-strategies",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateDeploymentStrategy"
-        },
-        {
-          "name": "GetDeploymentStrategy",
-          "depends": [
-            "CreateDeploymentStrategy"
-          ]
-        },
-        {
-          "name": "ListDeploymentStrategies",
-          "depends": [
-            "CreateDeploymentStrategy"
-          ]
-        },
-        {
-          "name": "UpdateDeploymentStrategy",
-          "depends": [
-            "CreateDeploymentStrategy"
-          ]
-        },
-        {
-          "name": "DeleteDeploymentStrategy",
-          "depends": [
-            "CreateDeploymentStrategy"
-          ]
-        }
-      ]
-    },
-    {
-      "service": "appconfig",
-      "name": "appconfig-experiments-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/appconfig-experiments.json",
-      "state": "candidate",
-      "shadowOf": "appconfig-experiments",
-      "suites": [
-        "cli",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "ListExperimentDefinitions"
-        },
-        {
-          "name": "ListExperimentRuns"
-        },
-        {
-          "name": "ListExperimentRunEvents"
-        }
-      ]
-    },
-    {
-      "service": "appconfig",
-      "name": "appconfig-extensions-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/appconfig-extensions.json",
-      "state": "candidate",
-      "shadowOf": "appconfig-extensions",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateExtension"
-        },
-        {
-          "name": "GetExtension",
-          "depends": [
-            "CreateExtension"
-          ]
-        },
-        {
-          "name": "ListExtensions",
-          "depends": [
-            "CreateExtension"
-          ]
-        },
-        {
-          "name": "UpdateExtension",
-          "depends": [
-            "CreateExtension"
-          ]
-        },
-        {
-          "name": "CreateExtensionAssociation",
-          "depends": [
-            "CreateExtension"
-          ]
-        },
-        {
-          "name": "GetExtensionAssociation",
-          "depends": [
-            "CreateExtensionAssociation"
-          ]
-        },
-        {
-          "name": "ListExtensionAssociations"
-        },
-        {
-          "name": "UpdateExtensionAssociation",
-          "depends": [
-            "CreateExtensionAssociation"
-          ]
-        },
-        {
-          "name": "DeleteExtensionAssociation",
-          "depends": [
-            "CreateExtensionAssociation"
-          ]
-        },
-        {
-          "name": "DeleteExtension",
-          "depends": [
-            "CreateExtension"
-          ]
-        }
-      ]
-    },
-    {
       "service": "backup",
       "name": "backup-plans-shadow",
       "generated": true,
@@ -558,43 +463,6 @@
         {
           "name": "DeleteBackupPlanNotFound",
           "op": "DeleteBackupPlan"
-        }
-      ]
-    },
-    {
-      "service": "backup",
-      "name": "backup-selections-shadow",
-      "generated": true,
-      "scenario": "compat/model/authored/backup-selections.json",
-      "state": "candidate",
-      "shadowOf": "backup-selections",
-      "suites": [
-        "cli",
-        "dotnet-sdk",
-        "go-sdk",
-        "java-sdk",
-        "node-js-sdk",
-        "python-sdk",
-        "rust-sdk"
-      ],
-      "tests": [
-        {
-          "name": "CreateBackupSelection"
-        },
-        {
-          "name": "ListBackupSelections"
-        },
-        {
-          "name": "GetBackupSelection",
-          "depends": [
-            "CreateBackupSelection"
-          ]
-        },
-        {
-          "name": "DeleteBackupSelection",
-          "depends": [
-            "CreateBackupSelection"
-          ]
         }
       ]
     },

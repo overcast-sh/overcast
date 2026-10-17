@@ -15,7 +15,7 @@ namespace OvercastCompat.Groups;
 /// </remarks>
 internal sealed class ScenariosAuthoredAppconfigDeploymentStrategies : IServiceGroup
 {
-    private static readonly ScenarioGroup GroupAppconfigDeploymentStrategiesShadow = new("appconfig-deployment-strategies-shadow", "compat/model/authored/appconfig-deployment-strategies.json");
+    private static readonly ScenarioGroup GroupAppconfigDeploymentStrategies = new("appconfig-deployment-strategies", "compat/model/authored/appconfig-deployment-strategies.json");
 
     private readonly Lazy<AmazonAppConfigClient> _client;
 
@@ -35,31 +35,31 @@ internal sealed class ScenariosAuthoredAppconfigDeploymentStrategies : IServiceG
 
     public IReadOnlyDictionary<string, TestFn> Impls() => new Dictionary<string, TestFn>(StringComparer.Ordinal)
     {
-        ["appconfig-deployment-strategies-shadow:CreateDeploymentStrategy"] = TestAppconfigDeploymentStrategiesShadowCreateDeploymentStrategy,
-        ["appconfig-deployment-strategies-shadow:GetDeploymentStrategy"] = TestAppconfigDeploymentStrategiesShadowGetDeploymentStrategy,
-        ["appconfig-deployment-strategies-shadow:ListDeploymentStrategies"] = TestAppconfigDeploymentStrategiesShadowListDeploymentStrategies,
-        ["appconfig-deployment-strategies-shadow:UpdateDeploymentStrategy"] = TestAppconfigDeploymentStrategiesShadowUpdateDeploymentStrategy,
-        ["appconfig-deployment-strategies-shadow:DeleteDeploymentStrategy"] = TestAppconfigDeploymentStrategiesShadowDeleteDeploymentStrategy,
+        ["appconfig-deployment-strategies:CreateDeploymentStrategy"] = TestAppconfigDeploymentStrategiesCreateDeploymentStrategy,
+        ["appconfig-deployment-strategies:GetDeploymentStrategy"] = TestAppconfigDeploymentStrategiesGetDeploymentStrategy,
+        ["appconfig-deployment-strategies:ListDeploymentStrategies"] = TestAppconfigDeploymentStrategiesListDeploymentStrategies,
+        ["appconfig-deployment-strategies:UpdateDeploymentStrategy"] = TestAppconfigDeploymentStrategiesUpdateDeploymentStrategy,
+        ["appconfig-deployment-strategies:DeleteDeploymentStrategy"] = TestAppconfigDeploymentStrategiesDeleteDeploymentStrategy,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Setups() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-deployment-strategies-shadow"] = SetupAppconfigDeploymentStrategiesShadow,
+        ["appconfig-deployment-strategies"] = SetupAppconfigDeploymentStrategies,
     };
 
     public IReadOnlyDictionary<string, SetupFn> Teardowns() => new Dictionary<string, SetupFn>(StringComparer.Ordinal)
     {
-        ["appconfig-deployment-strategies-shadow"] = TeardownAppconfigDeploymentStrategiesShadow,
+        ["appconfig-deployment-strategies"] = TeardownAppconfigDeploymentStrategies,
     };
 
     private AmazonAppConfigClient Cl() => _client.Value;
 
-    private Task SetupAppconfigDeploymentStrategiesShadow(TestContext t) =>
+    private Task SetupAppconfigDeploymentStrategies(TestContext t) =>
         // No setup steps: an empty phase is a no-op, not a missing one.
-        GroupAppconfigDeploymentStrategiesShadow.RunSetupAsync(t);
+        GroupAppconfigDeploymentStrategies.RunSetupAsync(t);
 
-    private Task TeardownAppconfigDeploymentStrategiesShadow(TestContext t) =>
-        GroupAppconfigDeploymentStrategiesShadow.RunTeardownAsync(t,
+    private Task TeardownAppconfigDeploymentStrategies(TestContext t) =>
+        GroupAppconfigDeploymentStrategies.RunTeardownAsync(t,
             new ScenarioCall
             {
                 Op = "DeleteDeploymentStrategy",
@@ -75,7 +75,7 @@ internal sealed class ScenariosAuthoredAppconfigDeploymentStrategies : IServiceG
             }
         );
 
-    private Task TestAppconfigDeploymentStrategiesShadowCreateDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategiesShadow.RunTestAsync(t, "CreateDeploymentStrategy", new ScenarioTest
+    private Task TestAppconfigDeploymentStrategiesCreateDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategies.RunTestAsync(t, "CreateDeploymentStrategy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -125,7 +125,7 @@ internal sealed class ScenariosAuthoredAppconfigDeploymentStrategies : IServiceG
         ],
     });
 
-    private Task TestAppconfigDeploymentStrategiesShadowGetDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategiesShadow.RunTestAsync(t, "GetDeploymentStrategy", new ScenarioTest
+    private Task TestAppconfigDeploymentStrategiesGetDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategies.RunTestAsync(t, "GetDeploymentStrategy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -149,7 +149,7 @@ internal sealed class ScenariosAuthoredAppconfigDeploymentStrategies : IServiceG
         ],
     });
 
-    private Task TestAppconfigDeploymentStrategiesShadowListDeploymentStrategies(TestContext t) => GroupAppconfigDeploymentStrategiesShadow.RunTestAsync(t, "ListDeploymentStrategies", new ScenarioTest
+    private Task TestAppconfigDeploymentStrategiesListDeploymentStrategies(TestContext t) => GroupAppconfigDeploymentStrategies.RunTestAsync(t, "ListDeploymentStrategies", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -173,7 +173,7 @@ internal sealed class ScenariosAuthoredAppconfigDeploymentStrategies : IServiceG
         ],
     });
 
-    private Task TestAppconfigDeploymentStrategiesShadowUpdateDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategiesShadow.RunTestAsync(t, "UpdateDeploymentStrategy", new ScenarioTest
+    private Task TestAppconfigDeploymentStrategiesUpdateDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategies.RunTestAsync(t, "UpdateDeploymentStrategy", new ScenarioTest
     {
         Call = new ScenarioCall
         {
@@ -214,7 +214,7 @@ internal sealed class ScenariosAuthoredAppconfigDeploymentStrategies : IServiceG
         ],
     });
 
-    private Task TestAppconfigDeploymentStrategiesShadowDeleteDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategiesShadow.RunTestAsync(t, "DeleteDeploymentStrategy", new ScenarioTest
+    private Task TestAppconfigDeploymentStrategiesDeleteDeploymentStrategy(TestContext t) => GroupAppconfigDeploymentStrategies.RunTestAsync(t, "DeleteDeploymentStrategy", new ScenarioTest
     {
         Call = new ScenarioCall
         {

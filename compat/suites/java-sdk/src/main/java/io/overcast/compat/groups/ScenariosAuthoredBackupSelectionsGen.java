@@ -36,8 +36,8 @@ import software.amazon.awssdk.services.backup.model.ListBackupSelectionsRequest;
  */
 public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup {
 
-    private static final Group GROUP_BACKUP_SELECTIONS_SHADOW =
-            new Group("backup-selections-shadow", "compat/model/authored/backup-selections.json");
+    private static final Group GROUP_BACKUP_SELECTIONS =
+            new Group("backup-selections", "compat/model/authored/backup-selections.json");
 
     private final AwsClients clients;
     private volatile BackupClient client;
@@ -54,22 +54,22 @@ public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup 
     @Override
     public Map<String, TestFn> impls() {
         return Map.ofEntries(
-                Map.entry("backup-selections-shadow:CreateBackupSelection", this::testBackupSelectionsShadowCreateBackupSelection),
-                Map.entry("backup-selections-shadow:ListBackupSelections", this::testBackupSelectionsShadowListBackupSelections),
-                Map.entry("backup-selections-shadow:GetBackupSelection", this::testBackupSelectionsShadowGetBackupSelection),
-                Map.entry("backup-selections-shadow:DeleteBackupSelection", this::testBackupSelectionsShadowDeleteBackupSelection));
+                Map.entry("backup-selections:CreateBackupSelection", this::testBackupSelectionsCreateBackupSelection),
+                Map.entry("backup-selections:ListBackupSelections", this::testBackupSelectionsListBackupSelections),
+                Map.entry("backup-selections:GetBackupSelection", this::testBackupSelectionsGetBackupSelection),
+                Map.entry("backup-selections:DeleteBackupSelection", this::testBackupSelectionsDeleteBackupSelection));
     }
 
     @Override
     public Map<String, TestFn> setups() {
         return Map.ofEntries(
-                Map.entry("backup-selections-shadow", this::setupBackupSelectionsShadow));
+                Map.entry("backup-selections", this::setupBackupSelections));
     }
 
     @Override
     public Map<String, TestFn> teardowns() {
         return Map.ofEntries(
-                Map.entry("backup-selections-shadow", this::teardownBackupSelectionsShadow));
+                Map.entry("backup-selections", this::teardownBackupSelections));
     }
 
     /**
@@ -89,8 +89,8 @@ public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup 
         return client;
     }
 
-    private void setupBackupSelectionsShadow(TestContext t) {
-        GROUP_BACKUP_SELECTIONS_SHADOW.runSetup(t,
+    private void setupBackupSelections(TestContext t) {
+        GROUP_BACKUP_SELECTIONS.runSetup(t,
                 new Call("CreateBackupVault", "{\"BackupVaultName\":{\"$name\":\"vault\"}}",
                         b -> CreateBackupVaultRequest.builder()
                                 .backupVaultName(b.string("BackupVaultName", Values.name("vault")))
@@ -104,8 +104,8 @@ public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup 
                         .export("plan.id", "$.BackupPlanId"));
     }
 
-    private void teardownBackupSelectionsShadow(TestContext t) {
-        GROUP_BACKUP_SELECTIONS_SHADOW.runTeardown(t,
+    private void teardownBackupSelections(TestContext t) {
+        GROUP_BACKUP_SELECTIONS.runTeardown(t,
                 new Call("DeleteBackupSelection", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"},\"SelectionId\":{\"$ref\":\"selection.id\"}}",
                         b -> DeleteBackupSelectionRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))
@@ -124,8 +124,8 @@ public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup 
                         r -> cl().deleteBackupVault((DeleteBackupVaultRequest) r)));
     }
 
-    private void testBackupSelectionsShadowCreateBackupSelection(TestContext t) {
-        GROUP_BACKUP_SELECTIONS_SHADOW.runTest(t, "CreateBackupSelection",
+    private void testBackupSelectionsCreateBackupSelection(TestContext t) {
+        GROUP_BACKUP_SELECTIONS.runTest(t, "CreateBackupSelection",
                 new Call("CreateBackupSelection", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"},\"BackupSelection\":{\"IamRoleArn\":\"arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole\",\"Resources\":[\"*\"],\"SelectionName\":{\"$name\":\"sel\"}}}",
                         b -> CreateBackupSelectionRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))
@@ -152,8 +152,8 @@ public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup 
                 ));
     }
 
-    private void testBackupSelectionsShadowListBackupSelections(TestContext t) {
-        GROUP_BACKUP_SELECTIONS_SHADOW.runTest(t, "ListBackupSelections",
+    private void testBackupSelectionsListBackupSelections(TestContext t) {
+        GROUP_BACKUP_SELECTIONS.runTest(t, "ListBackupSelections",
                 new Call("ListBackupSelections", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"}}",
                         b -> ListBackupSelectionsRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))
@@ -172,8 +172,8 @@ public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup 
                 ));
     }
 
-    private void testBackupSelectionsShadowGetBackupSelection(TestContext t) {
-        GROUP_BACKUP_SELECTIONS_SHADOW.runTest(t, "GetBackupSelection",
+    private void testBackupSelectionsGetBackupSelection(TestContext t) {
+        GROUP_BACKUP_SELECTIONS.runTest(t, "GetBackupSelection",
                 new Call("GetBackupSelection", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"},\"SelectionId\":{\"$ref\":\"selection.id\"}}",
                         b -> GetBackupSelectionRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))
@@ -192,8 +192,8 @@ public final class ScenariosAuthoredBackupSelectionsGen implements ServiceGroup 
                 ));
     }
 
-    private void testBackupSelectionsShadowDeleteBackupSelection(TestContext t) {
-        GROUP_BACKUP_SELECTIONS_SHADOW.runTest(t, "DeleteBackupSelection",
+    private void testBackupSelectionsDeleteBackupSelection(TestContext t) {
+        GROUP_BACKUP_SELECTIONS.runTest(t, "DeleteBackupSelection",
                 new Call("DeleteBackupSelection", "{\"BackupPlanId\":{\"$ref\":\"plan.id\"},\"SelectionId\":{\"$ref\":\"selection.id\"}}",
                         b -> DeleteBackupSelectionRequest.builder()
                                 .backupPlanId(b.string("BackupPlanId", Values.ref("plan.id")))

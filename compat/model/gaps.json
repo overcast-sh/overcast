@@ -4,21 +4,21 @@
     {
       "service": "appconfig",
       "operation": "ListExperimentDefinitions",
-      "group": "appconfig-experiments-shadow",
+      "group": "appconfig-experiments",
       "reason": "dotnet-emit-unsupported:ListExperimentDefinitionsRequest",
       "detail": "AWSSDK.AppConfig 4.0.0 declares no Amazon.AppConfig.Model.ListExperimentDefinitionsRequest; the operation is newer than the pin in compat/suites/dotnet-sdk/OvercastCompat.csproj"
     },
     {
       "service": "appconfig",
       "operation": "ListExperimentRunEvents",
-      "group": "appconfig-experiments-shadow",
+      "group": "appconfig-experiments",
       "reason": "dotnet-emit-unsupported:ListExperimentRunEventsRequest",
       "detail": "AWSSDK.AppConfig 4.0.0 declares no Amazon.AppConfig.Model.ListExperimentRunEventsRequest; the operation is newer than the pin in compat/suites/dotnet-sdk/OvercastCompat.csproj"
     },
     {
       "service": "appconfig",
       "operation": "ListExperimentRuns",
-      "group": "appconfig-experiments-shadow",
+      "group": "appconfig-experiments",
       "reason": "dotnet-emit-unsupported:ListExperimentRunsRequest",
       "detail": "AWSSDK.AppConfig 4.0.0 declares no Amazon.AppConfig.Model.ListExperimentRunsRequest; the operation is newer than the pin in compat/suites/dotnet-sdk/OvercastCompat.csproj"
     },

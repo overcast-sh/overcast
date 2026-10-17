@@ -15,8 +15,8 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-deployment-strategies.json";
 
-const GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW: Group = Group {
-    name: "appconfig-deployment-strategies-shadow",
+const GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES: Group = Group {
+    name: "appconfig-deployment-strategies",
     file: SCENARIO_FILE,
 };
 
@@ -51,12 +51,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployment-strategies-shadow:CreateDeploymentStrategy".to_string(),
+                "appconfig-deployment-strategies:CreateDeploymentStrategy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW
-                            .run_test(&ctx, "CreateDeploymentStrategy", test_appconfig_deployment_strategies_shadow_create_deployment_strategy(&client))
+                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES
+                            .run_test(&ctx, "CreateDeploymentStrategy", test_appconfig_deployment_strategies_create_deployment_strategy(&client))
                             .await
                     })
                 }),
@@ -65,12 +65,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployment-strategies-shadow:GetDeploymentStrategy".to_string(),
+                "appconfig-deployment-strategies:GetDeploymentStrategy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW
-                            .run_test(&ctx, "GetDeploymentStrategy", test_appconfig_deployment_strategies_shadow_get_deployment_strategy(&client))
+                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES
+                            .run_test(&ctx, "GetDeploymentStrategy", test_appconfig_deployment_strategies_get_deployment_strategy(&client))
                             .await
                     })
                 }),
@@ -79,12 +79,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployment-strategies-shadow:ListDeploymentStrategies".to_string(),
+                "appconfig-deployment-strategies:ListDeploymentStrategies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW
-                            .run_test(&ctx, "ListDeploymentStrategies", test_appconfig_deployment_strategies_shadow_list_deployment_strategies(&client))
+                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES
+                            .run_test(&ctx, "ListDeploymentStrategies", test_appconfig_deployment_strategies_list_deployment_strategies(&client))
                             .await
                     })
                 }),
@@ -93,12 +93,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployment-strategies-shadow:UpdateDeploymentStrategy".to_string(),
+                "appconfig-deployment-strategies:UpdateDeploymentStrategy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW
-                            .run_test(&ctx, "UpdateDeploymentStrategy", test_appconfig_deployment_strategies_shadow_update_deployment_strategy(&client))
+                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES
+                            .run_test(&ctx, "UpdateDeploymentStrategy", test_appconfig_deployment_strategies_update_deployment_strategy(&client))
                             .await
                     })
                 }),
@@ -107,12 +107,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
         {
             let client = self.client.clone();
             impls.insert(
-                "appconfig-deployment-strategies-shadow:DeleteDeploymentStrategy".to_string(),
+                "appconfig-deployment-strategies:DeleteDeploymentStrategy".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW
-                            .run_test(&ctx, "DeleteDeploymentStrategy", test_appconfig_deployment_strategies_shadow_delete_deployment_strategy(&client))
+                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES
+                            .run_test(&ctx, "DeleteDeploymentStrategy", test_appconfig_deployment_strategies_delete_deployment_strategy(&client))
                             .await
                     })
                 }),
@@ -126,11 +126,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
         {
             let client = self.client.clone();
             setups.insert(
-                "appconfig-deployment-strategies-shadow".to_string(),
+                "appconfig-deployment-strategies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.run_setup(&ctx, setup_appconfig_deployment_strategies_shadow(&client)).await
+                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.run_setup(&ctx, setup_appconfig_deployment_strategies(&client)).await
                     })
                 }),
             );
@@ -143,11 +143,11 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
         {
             let client = self.client.clone();
             teardowns.insert(
-                "appconfig-deployment-strategies-shadow".to_string(),
+                "appconfig-deployment-strategies".to_string(),
                 Arc::new(move |ctx: TestContext| {
                     let client = client.clone();
                     Box::pin(async move {
-                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES_SHADOW.run_teardown(&ctx, teardown_appconfig_deployment_strategies_shadow(&client)).await
+                        GROUP_APPCONFIG_DEPLOYMENT_STRATEGIES.run_teardown(&ctx, teardown_appconfig_deployment_strategies(&client)).await
                     })
                 }),
             );
@@ -156,12 +156,12 @@ impl ServiceGroup for ScenariosAuthoredAppconfigDeploymentStrategies {
     }
 }
 
-fn setup_appconfig_deployment_strategies_shadow(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn setup_appconfig_deployment_strategies(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     // An empty phase is a no-op, not a missing one.
     Vec::new()
 }
 
-fn teardown_appconfig_deployment_strategies_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+fn teardown_appconfig_deployment_strategies(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
     vec![
         Call {
             op: "DeleteDeploymentStrategy",
@@ -188,7 +188,7 @@ fn teardown_appconfig_deployment_strategies_shadow(client: &aws_sdk_appconfig::C
     ]
 }
 
-fn test_appconfig_deployment_strategies_shadow_create_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployment_strategies_create_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "CreateDeploymentStrategy",
@@ -259,7 +259,7 @@ fn test_appconfig_deployment_strategies_shadow_create_deployment_strategy(client
     }
 }
 
-fn test_appconfig_deployment_strategies_shadow_get_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployment_strategies_get_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "GetDeploymentStrategy",
@@ -292,7 +292,7 @@ fn test_appconfig_deployment_strategies_shadow_get_deployment_strategy(client: &
     }
 }
 
-fn test_appconfig_deployment_strategies_shadow_list_deployment_strategies(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployment_strategies_list_deployment_strategies(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "ListDeploymentStrategies",
@@ -325,7 +325,7 @@ fn test_appconfig_deployment_strategies_shadow_list_deployment_strategies(client
     }
 }
 
-fn test_appconfig_deployment_strategies_shadow_update_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployment_strategies_update_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "UpdateDeploymentStrategy",
@@ -387,7 +387,7 @@ fn test_appconfig_deployment_strategies_shadow_update_deployment_strategy(client
     }
 }
 
-fn test_appconfig_deployment_strategies_shadow_delete_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
+fn test_appconfig_deployment_strategies_delete_deployment_strategy(client: &aws_sdk_appconfig::Client) -> Test {
     Test {
         call: Call {
             op: "DeleteDeploymentStrategy",

@@ -24,17 +24,17 @@ func ScenariosAuthoredAppconfigDeploymentStrategies(c *clients.Clients) ServiceG
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-deployment-strategies",
 		Impls: map[string]harness.TestFn{
-			"appconfig-deployment-strategies-shadow:CreateDeploymentStrategy": g.testAppconfigDeploymentStrategiesShadowCreateDeploymentStrategy,
-			"appconfig-deployment-strategies-shadow:GetDeploymentStrategy":    g.testAppconfigDeploymentStrategiesShadowGetDeploymentStrategy,
-			"appconfig-deployment-strategies-shadow:ListDeploymentStrategies": g.testAppconfigDeploymentStrategiesShadowListDeploymentStrategies,
-			"appconfig-deployment-strategies-shadow:UpdateDeploymentStrategy": g.testAppconfigDeploymentStrategiesShadowUpdateDeploymentStrategy,
-			"appconfig-deployment-strategies-shadow:DeleteDeploymentStrategy": g.testAppconfigDeploymentStrategiesShadowDeleteDeploymentStrategy,
+			"appconfig-deployment-strategies:CreateDeploymentStrategy": g.testAppconfigDeploymentStrategiesCreateDeploymentStrategy,
+			"appconfig-deployment-strategies:GetDeploymentStrategy":    g.testAppconfigDeploymentStrategiesGetDeploymentStrategy,
+			"appconfig-deployment-strategies:ListDeploymentStrategies": g.testAppconfigDeploymentStrategiesListDeploymentStrategies,
+			"appconfig-deployment-strategies:UpdateDeploymentStrategy": g.testAppconfigDeploymentStrategiesUpdateDeploymentStrategy,
+			"appconfig-deployment-strategies:DeleteDeploymentStrategy": g.testAppconfigDeploymentStrategiesDeleteDeploymentStrategy,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-deployment-strategies-shadow": g.setupAppconfigDeploymentStrategiesShadow,
+			"appconfig-deployment-strategies": g.setupAppconfigDeploymentStrategies,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-deployment-strategies-shadow": g.teardownAppconfigDeploymentStrategiesShadow,
+			"appconfig-deployment-strategies": g.teardownAppconfigDeploymentStrategies,
 		},
 	}
 }
@@ -54,15 +54,15 @@ func (g *authoredAppconfigDeploymentStrategiesScenarios) cl() *appconfig.Client 
 	return g.client
 }
 
-var groupAppconfigDeploymentStrategiesShadow = scenario.Group{Name: "appconfig-deployment-strategies-shadow", File: "compat/model/authored/appconfig-deployment-strategies.json"}
+var groupAppconfigDeploymentStrategies = scenario.Group{Name: "appconfig-deployment-strategies", File: "compat/model/authored/appconfig-deployment-strategies.json"}
 
-func (g *authoredAppconfigDeploymentStrategiesScenarios) setupAppconfigDeploymentStrategiesShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredAppconfigDeploymentStrategiesScenarios) setupAppconfigDeploymentStrategies(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupAppconfigDeploymentStrategiesShadow.RunSetup(ctx, t)
+	return groupAppconfigDeploymentStrategies.RunSetup(ctx, t)
 }
 
-func (g *authoredAppconfigDeploymentStrategiesScenarios) teardownAppconfigDeploymentStrategiesShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentStrategiesShadow.RunTeardown(ctx, t,
+func (g *authoredAppconfigDeploymentStrategiesScenarios) teardownAppconfigDeploymentStrategies(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeploymentStrategies.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteDeploymentStrategy",
 			Params: `{"DeploymentStrategyId":{"$ref":"ds.id"}}`,
@@ -78,8 +78,8 @@ func (g *authoredAppconfigDeploymentStrategiesScenarios) teardownAppconfigDeploy
 	)
 }
 
-func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesShadowCreateDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentStrategiesShadow.RunTest(ctx, t, "CreateDeploymentStrategy", scenario.Test{
+func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesCreateDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeploymentStrategies.RunTest(ctx, t, "CreateDeploymentStrategy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateDeploymentStrategy",
 			Params: `{"DeploymentDurationInMinutes":0,"GrowthFactor":100,"Name":{"$name":"ds"},"ReplicateTo":"NONE"}`,
@@ -125,8 +125,8 @@ func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeployment
 	})
 }
 
-func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesShadowGetDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentStrategiesShadow.RunTest(ctx, t, "GetDeploymentStrategy", scenario.Test{
+func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesGetDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeploymentStrategies.RunTest(ctx, t, "GetDeploymentStrategy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetDeploymentStrategy",
 			Params: `{"DeploymentStrategyId":{"$ref":"ds.id"}}`,
@@ -148,8 +148,8 @@ func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeployment
 	})
 }
 
-func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesShadowListDeploymentStrategies(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentStrategiesShadow.RunTest(ctx, t, "ListDeploymentStrategies", scenario.Test{
+func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesListDeploymentStrategies(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeploymentStrategies.RunTest(ctx, t, "ListDeploymentStrategies", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListDeploymentStrategies",
 			Params: `{}`,
@@ -171,8 +171,8 @@ func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeployment
 	})
 }
 
-func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesShadowUpdateDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentStrategiesShadow.RunTest(ctx, t, "UpdateDeploymentStrategy", scenario.Test{
+func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesUpdateDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeploymentStrategies.RunTest(ctx, t, "UpdateDeploymentStrategy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateDeploymentStrategy",
 			Params: `{"DeploymentStrategyId":{"$ref":"ds.id"},"Description":"updated by compat"}`,
@@ -210,8 +210,8 @@ func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeployment
 	})
 }
 
-func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesShadowDeleteDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigDeploymentStrategiesShadow.RunTest(ctx, t, "DeleteDeploymentStrategy", scenario.Test{
+func (g *authoredAppconfigDeploymentStrategiesScenarios) testAppconfigDeploymentStrategiesDeleteDeploymentStrategy(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigDeploymentStrategies.RunTest(ctx, t, "DeleteDeploymentStrategy", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteDeploymentStrategy",
 			Params: `{"DeploymentStrategyId":{"$ref":"ds.id"}}`,

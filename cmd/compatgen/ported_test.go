@@ -261,6 +261,10 @@ func TestCommittedRegistryPortedGroups(t *testing.T) {
 		"appconfig-configuration-profiles": "compat/model/authored/appconfig-configuration-profiles.json",
 		"s3tables-tables":                  "compat/model/authored/s3tables-tables.json",
 		"logs-metric-filters":              "compat/model/authored/logs-metric-filters.json",
+		"backup-selections":                "compat/model/authored/backup-selections.json",
+		"appconfig-experiments":            "compat/model/authored/appconfig-experiments.json",
+		"appconfig-deployment-strategies":  "compat/model/authored/appconfig-deployment-strategies.json",
+		"appconfig-extensions":             "compat/model/authored/appconfig-extensions.json",
 	}
 	if !reflect.DeepEqual(ported, want) {
 		t.Errorf("ported hand-written groups = %#v, want %#v", ported, want)

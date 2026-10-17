@@ -24,22 +24,22 @@ func ScenariosAuthoredAppconfigExtensions(c *clients.Clients) ServiceGroup {
 	return ServiceGroup{
 		Name: "scenarios/authored-appconfig-extensions",
 		Impls: map[string]harness.TestFn{
-			"appconfig-extensions-shadow:CreateExtension":            g.testAppconfigExtensionsShadowCreateExtension,
-			"appconfig-extensions-shadow:GetExtension":               g.testAppconfigExtensionsShadowGetExtension,
-			"appconfig-extensions-shadow:ListExtensions":             g.testAppconfigExtensionsShadowListExtensions,
-			"appconfig-extensions-shadow:UpdateExtension":            g.testAppconfigExtensionsShadowUpdateExtension,
-			"appconfig-extensions-shadow:CreateExtensionAssociation": g.testAppconfigExtensionsShadowCreateExtensionAssociation,
-			"appconfig-extensions-shadow:GetExtensionAssociation":    g.testAppconfigExtensionsShadowGetExtensionAssociation,
-			"appconfig-extensions-shadow:ListExtensionAssociations":  g.testAppconfigExtensionsShadowListExtensionAssociations,
-			"appconfig-extensions-shadow:UpdateExtensionAssociation": g.testAppconfigExtensionsShadowUpdateExtensionAssociation,
-			"appconfig-extensions-shadow:DeleteExtensionAssociation": g.testAppconfigExtensionsShadowDeleteExtensionAssociation,
-			"appconfig-extensions-shadow:DeleteExtension":            g.testAppconfigExtensionsShadowDeleteExtension,
+			"appconfig-extensions:CreateExtension":            g.testAppconfigExtensionsCreateExtension,
+			"appconfig-extensions:GetExtension":               g.testAppconfigExtensionsGetExtension,
+			"appconfig-extensions:ListExtensions":             g.testAppconfigExtensionsListExtensions,
+			"appconfig-extensions:UpdateExtension":            g.testAppconfigExtensionsUpdateExtension,
+			"appconfig-extensions:CreateExtensionAssociation": g.testAppconfigExtensionsCreateExtensionAssociation,
+			"appconfig-extensions:GetExtensionAssociation":    g.testAppconfigExtensionsGetExtensionAssociation,
+			"appconfig-extensions:ListExtensionAssociations":  g.testAppconfigExtensionsListExtensionAssociations,
+			"appconfig-extensions:UpdateExtensionAssociation": g.testAppconfigExtensionsUpdateExtensionAssociation,
+			"appconfig-extensions:DeleteExtensionAssociation": g.testAppconfigExtensionsDeleteExtensionAssociation,
+			"appconfig-extensions:DeleteExtension":            g.testAppconfigExtensionsDeleteExtension,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-extensions-shadow": g.setupAppconfigExtensionsShadow,
+			"appconfig-extensions": g.setupAppconfigExtensions,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-extensions-shadow": g.teardownAppconfigExtensionsShadow,
+			"appconfig-extensions": g.teardownAppconfigExtensions,
 		},
 	}
 }
@@ -59,15 +59,15 @@ func (g *authoredAppconfigExtensionsScenarios) cl() *appconfig.Client {
 	return g.client
 }
 
-var groupAppconfigExtensionsShadow = scenario.Group{Name: "appconfig-extensions-shadow", File: "compat/model/authored/appconfig-extensions.json"}
+var groupAppconfigExtensions = scenario.Group{Name: "appconfig-extensions", File: "compat/model/authored/appconfig-extensions.json"}
 
-func (g *authoredAppconfigExtensionsScenarios) setupAppconfigExtensionsShadow(ctx context.Context, t *harness.TestContext) error {
+func (g *authoredAppconfigExtensionsScenarios) setupAppconfigExtensions(ctx context.Context, t *harness.TestContext) error {
 	// No setup steps: an empty phase is a no-op, not a missing one.
-	return groupAppconfigExtensionsShadow.RunSetup(ctx, t)
+	return groupAppconfigExtensions.RunSetup(ctx, t)
 }
 
-func (g *authoredAppconfigExtensionsScenarios) teardownAppconfigExtensionsShadow(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTeardown(ctx, t,
+func (g *authoredAppconfigExtensionsScenarios) teardownAppconfigExtensions(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTeardown(ctx, t,
 		scenario.Call{
 			Op:     "DeleteExtensionAssociation",
 			Params: `{"ExtensionAssociationId":{"$ref":"assoc.id"}}`,
@@ -95,8 +95,8 @@ func (g *authoredAppconfigExtensionsScenarios) teardownAppconfigExtensionsShadow
 	)
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowCreateExtension(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "CreateExtension", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsCreateExtension(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "CreateExtension", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateExtension",
 			Params: `{"Actions":{"PRE_START_DEPLOYMENT":[{"Name":"compat","Uri":"arn:aws:sns:us-east-1:000000000000:compat"}]},"Name":{"$name":"ext"}}`,
@@ -145,8 +145,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowCrea
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowGetExtension(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "GetExtension", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsGetExtension(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "GetExtension", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetExtension",
 			Params: `{"ExtensionIdentifier":{"$ref":"ext.id"}}`,
@@ -168,8 +168,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowGetE
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowListExtensions(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "ListExtensions", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsListExtensions(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "ListExtensions", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListExtensions",
 			Params: `{}`,
@@ -191,8 +191,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowList
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowUpdateExtension(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "UpdateExtension", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsUpdateExtension(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "UpdateExtension", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateExtension",
 			Params: `{"Description":"updated by compat","ExtensionIdentifier":{"$ref":"ext.id"}}`,
@@ -230,8 +230,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowUpda
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowCreateExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "CreateExtensionAssociation", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsCreateExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "CreateExtensionAssociation", scenario.Test{
 		Call: scenario.Call{
 			Op:     "CreateExtensionAssociation",
 			Params: `{"ExtensionIdentifier":{"$ref":"ext.id"},"ResourceIdentifier":"arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz"}`,
@@ -271,8 +271,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowCrea
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowGetExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "GetExtensionAssociation", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsGetExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "GetExtensionAssociation", scenario.Test{
 		Call: scenario.Call{
 			Op:     "GetExtensionAssociation",
 			Params: `{"ExtensionAssociationId":{"$ref":"assoc.id"}}`,
@@ -293,8 +293,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowGetE
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowListExtensionAssociations(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "ListExtensionAssociations", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsListExtensionAssociations(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "ListExtensionAssociations", scenario.Test{
 		Call: scenario.Call{
 			Op:     "ListExtensionAssociations",
 			Params: `{}`,
@@ -314,8 +314,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowList
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowUpdateExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "UpdateExtensionAssociation", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsUpdateExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "UpdateExtensionAssociation", scenario.Test{
 		Call: scenario.Call{
 			Op:     "UpdateExtensionAssociation",
 			Params: `{"ExtensionAssociationId":{"$ref":"assoc.id"},"Parameters":{"compat":"true"}}`,
@@ -353,8 +353,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowUpda
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowDeleteExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "DeleteExtensionAssociation", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsDeleteExtensionAssociation(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "DeleteExtensionAssociation", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteExtensionAssociation",
 			Params: `{"ExtensionAssociationId":{"$ref":"assoc.id"}}`,
@@ -387,8 +387,8 @@ func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowDele
 	})
 }
 
-func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsShadowDeleteExtension(ctx context.Context, t *harness.TestContext) error {
-	return groupAppconfigExtensionsShadow.RunTest(ctx, t, "DeleteExtension", scenario.Test{
+func (g *authoredAppconfigExtensionsScenarios) testAppconfigExtensionsDeleteExtension(ctx context.Context, t *harness.TestContext) error {
+	return groupAppconfigExtensions.RunTest(ctx, t, "DeleteExtension", scenario.Test{
 		Call: scenario.Call{
 			Op:     "DeleteExtension",
 			Params: `{"ExtensionIdentifier":{"$ref":"ext.id"}}`,

@@ -10,13 +10,12 @@ import (
 	"github.com/overcast-sh/overcast-compat-cli/internal/harness"
 )
 
-// One Namer per Backup sub-group so the four groups, which run in parallel,
-// never share a vault, plan, selection or job name.
+// One Namer per Backup sub-group so the three groups, which run in parallel,
+// never share a vault, plan or job name.
 var (
-	backupVaultsNamer     = harness.NewNamer("bkv")
-	backupPlansNamer      = harness.NewNamer("bkp")
-	backupSelectionsNamer = harness.NewNamer("bks")
-	backupJobsNamer       = harness.NewNamer("bkj")
+	backupVaultsNamer = harness.NewNamer("bkv")
+	backupPlansNamer  = harness.NewNamer("bkp")
+	backupJobsNamer   = harness.NewNamer("bkj")
 )
 
 // backupMissingPlanID is a well-formed BackupPlanId that was never created. The
@@ -40,8 +39,9 @@ const backupMissingPlanID = "00000000-0000-0000-0000-000000000000"
 // resource it created is *in* the response, because "the call did not throw" is
 // exactly what that bug looked like.
 //
-// backup-tags has no native here: it resolves through its authored scenario
-// (compat/model/authored/backup-tags.json).
+// backup-tags and backup-selections have no native here: they resolve through
+// their authored scenarios (compat/model/authored/backup-tags.json,
+// compat/model/authored/backup-selections.json).
 func Backup() ServiceGroup {
 	g := &backupCliGroup{}
 	return ServiceGroup{
@@ -68,11 +68,6 @@ func Backup() ServiceGroup {
 			"backup-plans:UpdateBackupPlanNotFound":     g.UpdateBackupPlanNotFound,
 			"backup-plans:DeleteBackupPlan":             g.DeleteBackupPlan,
 			"backup-plans:DeleteBackupPlanNotFound":     g.DeleteBackupPlanNotFound,
-			// backup-selections
-			"backup-selections:CreateBackupSelection": g.CreateBackupSelection,
-			"backup-selections:ListBackupSelections":  g.ListBackupSelections,
-			"backup-selections:GetBackupSelection":    g.GetBackupSelection,
-			"backup-selections:DeleteBackupSelection": g.DeleteBackupSelection,
 			// backup-jobs
 			"backup-jobs:StartBackupJob":                  g.StartBackupJob,
 			"backup-jobs:ListBackupJobs":                  g.ListBackupJobs,
@@ -80,16 +75,14 @@ func Backup() ServiceGroup {
 			"backup-jobs:ListRecoveryPointsByBackupVault": g.ListRecoveryPointsByBackupVault,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-vaults":     g.setupVaults,
-			"backup-plans":      g.setupPlans,
-			"backup-selections": g.setupSelections,
-			"backup-jobs":       g.setupJobs,
+			"backup-vaults": g.setupVaults,
+			"backup-plans":  g.setupPlans,
+			"backup-jobs":   g.setupJobs,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"backup-vaults":     g.teardownVaults,
-			"backup-plans":      g.teardownPlans,
-			"backup-selections": g.teardownSelections,
-			"backup-jobs":       g.teardownJobs,
+			"backup-vaults": g.teardownVaults,
+			"backup-plans":  g.teardownPlans,
+			"backup-jobs":   g.teardownJobs,
 		},
 	}
 }
@@ -637,14 +630,10 @@ func backupPlanMembers(out map[string]any, op string) (map[string]map[string]any
 	return plans, nil
 }
 
-// ─── backup-selections and backup-jobs ────────────────────────────────────────
+// ─── backup-jobs ──────────────────────────────────────────────────────────────
 //
-// Backup selections are emulated (#2308) and backup-selections is a live group:
-// its Get and Delete tests `depend` on CreateBackupSelection in the registry, so
-// they run against the selection it minted.
-//
-// Backup jobs are not: Backup implements a fraction of the 115 operations AWS
-// models, and the job operations are outside it. Those tests exist anyway —
+// Backup jobs are not emulated: Backup implements a fraction of the 115
+// operations AWS models, and the job operations are outside it. Those tests exist anyway —
 // compat/AGENTS.md § Core principles 3, tests cover all services, not just
 // implemented ones — and each records `unimplemented` against the 501 the
 // emulator answers. That is the coverage metric, and it is what makes the day
@@ -671,136 +660,6 @@ func backupPlanMembers(out map[string]any, op string) (map[string]map[string]any
 
 // backupMissingJobID stands in for an identifier StartBackupJob cannot yet mint.
 const backupMissingJobID = "22222222-2222-2222-2222-222222222222"
-
-// setupSelections creates the plan a selection hangs off, and the vault its
-// rule targets. A selection is a child of a plan in AWS, so a test that did not
-// have one would not be exercising the modeled shape.
-func (g *backupCliGroup) setupSelections(_ context.Context, t *harness.TestContext) error {
-	vault := backupSelectionsNamer.Suffixed(t, "-vault")
-	t.Set("selection_vault", vault)
-	if err := awscli.Run(t.Endpoint, t.Region,
-		"backup", "create-backup-vault", "--backup-vault-name", vault); err != nil {
-		return err
-	}
-	out, err := awscli.RunOutput(t.Endpoint, t.Region, "backup", "create-backup-plan",
-		"--backup-plan", backupPlanDocument(backupSelectionsNamer.Name(t), "daily", vault))
-	if err != nil {
-		return err
-	}
-	id := backupString(out, "BackupPlanId")
-	if id == "" {
-		return fmt.Errorf("backup selections setup: CreateBackupPlan returned no BackupPlanId")
-	}
-	t.Set("selection_plan_id", id)
-	return nil
-}
-
-func (g *backupCliGroup) teardownSelections(_ context.Context, t *harness.TestContext) error {
-	// Reverse creation order: the selection (if DeleteBackupSelection did not
-	// already remove it), then the plan, then the vault.
-	planID := t.GetString("selection_plan_id")
-	if id := t.GetString("selection_id"); id != "" && planID != "" {
-		awscli.RunSigned(t.Endpoint, t.Region, "backup", "delete-backup-selection", //nolint:errcheck
-			"--backup-plan-id", planID, "--selection-id", id)
-	}
-	if planID != "" {
-		awscli.Run(t.Endpoint, t.Region, "backup", "delete-backup-plan", "--backup-plan-id", planID) //nolint:errcheck
-	}
-	if vault := t.GetString("selection_vault"); vault != "" {
-		awscli.Run(t.Endpoint, t.Region, "backup", "delete-backup-vault", "--backup-vault-name", vault) //nolint:errcheck
-	}
-	return nil
-}
-
-// backupSelectionDocument renders a BackupSelection naming every resource, the
-// broadest selection AWS accepts.
-func backupSelectionDocument(name string) string {
-	return fmt.Sprintf(
-		`{"SelectionName":%q,"IamRoleArn":"arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole","Resources":["*"]}`,
-		name)
-}
-
-func (g *backupCliGroup) CreateBackupSelection(_ context.Context, t *harness.TestContext) error {
-	planID := t.GetString("selection_plan_id")
-	if planID == "" {
-		return fmt.Errorf("backup CreateBackupSelection: no selection_plan_id from setup")
-	}
-	name := backupSelectionsNamer.Suffixed(t, "-sel")
-	out, err := awscli.RunOutputSigned(t.Endpoint, t.Region, "backup", "create-backup-selection",
-		"--backup-plan-id", planID,
-		"--backup-selection", backupSelectionDocument(name))
-	if err != nil {
-		return err
-	}
-	id := backupString(out, "SelectionId")
-	if id == "" {
-		return fmt.Errorf("backup CreateBackupSelection: SelectionId is empty: %#v", out)
-	}
-	t.Set("selection_id", id)
-	if got := backupString(out, "BackupPlanId"); got != planID {
-		return fmt.Errorf("backup CreateBackupSelection: BackupPlanId = %q, want %q", got, planID)
-	}
-	return nil
-}
-
-func (g *backupCliGroup) ListBackupSelections(_ context.Context, t *harness.TestContext) error {
-	planID := t.GetString("selection_plan_id")
-	if planID == "" {
-		return fmt.Errorf("backup ListBackupSelections: no selection_plan_id from setup")
-	}
-	out, err := awscli.RunOutputSigned(t.Endpoint, t.Region,
-		"backup", "list-backup-selections", "--backup-plan-id", planID)
-	if err != nil {
-		return err
-	}
-	if _, ok := backupList(out, "BackupSelectionsList"); !ok {
-		return fmt.Errorf("backup ListBackupSelections: the response carries no BackupSelectionsList: %#v", out)
-	}
-	return nil
-}
-
-func (g *backupCliGroup) GetBackupSelection(_ context.Context, t *harness.TestContext) error {
-	planID := t.GetString("selection_plan_id")
-	if planID == "" {
-		return fmt.Errorf("backup GetBackupSelection: no selection_plan_id from setup")
-	}
-	id := t.GetString("selection_id")
-	if id == "" {
-		return fmt.Errorf("backup GetBackupSelection: no selection_id from CreateBackupSelection")
-	}
-	out, err := awscli.RunOutputSigned(t.Endpoint, t.Region, "backup", "get-backup-selection",
-		"--backup-plan-id", planID, "--selection-id", id)
-	if err != nil {
-		return err
-	}
-	if got := backupString(out, "SelectionId"); got != id {
-		return fmt.Errorf("backup GetBackupSelection: SelectionId = %q, want %q", got, id)
-	}
-	if out["BackupSelection"] == nil {
-		return fmt.Errorf("backup GetBackupSelection: the response carries no BackupSelection: %#v", out)
-	}
-	return nil
-}
-
-func (g *backupCliGroup) DeleteBackupSelection(_ context.Context, t *harness.TestContext) error {
-	planID := t.GetString("selection_plan_id")
-	if planID == "" {
-		return fmt.Errorf("backup DeleteBackupSelection: no selection_plan_id from setup")
-	}
-	id := t.GetString("selection_id")
-	if id == "" {
-		return fmt.Errorf("backup DeleteBackupSelection: no selection_id from CreateBackupSelection")
-	}
-	if err := awscli.RunSigned(t.Endpoint, t.Region, "backup", "delete-backup-selection",
-		"--backup-plan-id", planID, "--selection-id", id); err != nil {
-		return err
-	}
-	t.Set("selection_id", "")
-	// DeleteBackupSelection's modeled output is Unit, so the delete is proved
-	// by the selection no longer being gettable.
-	return expectBackupError(t, "GetBackupSelection after DeleteBackupSelection", "ResourceNotFoundException", 400,
-		"get-backup-selection", "--backup-plan-id", planID, "--selection-id", id)
-}
 
 // setupJobs creates the vault a backup job would write its recovery points to.
 func (g *backupCliGroup) setupJobs(_ context.Context, t *harness.TestContext) error {

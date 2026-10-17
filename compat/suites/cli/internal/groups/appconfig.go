@@ -25,13 +25,15 @@ import (
 // separate AWS model with its own signing name and lives in the appconfigdata
 // group, not here.
 //
-// Groups: appconfig-hosted-versions, appconfig-deployment-strategies,
-// appconfig-extensions, appconfig-experiments. appconfig-applications,
-// appconfig-environments, appconfig-configuration-profiles, appconfig-tags and
-// appconfig-deployments resolve through their authored scenarios
+// Groups: appconfig-hosted-versions. appconfig-applications,
+// appconfig-environments, appconfig-configuration-profiles, appconfig-tags,
+// appconfig-deployments, appconfig-deployment-strategies, appconfig-extensions
+// and appconfig-experiments resolve through their authored scenarios
 // (compat/model/authored/appconfig-applications.json,
 // appconfig-environments.json, appconfig-configuration-profiles.json,
-// appconfig-tags.json, appconfig-deployments.json).
+// appconfig-tags.json, appconfig-deployments.json,
+// appconfig-deployment-strategies.json, appconfig-extensions.json,
+// appconfig-experiments.json).
 func AppConfig() ServiceGroup {
 	g := &appconfigGroup{}
 	return ServiceGroup{
@@ -45,35 +47,12 @@ func AppConfig() ServiceGroup {
 			"appconfig-hosted-versions:CreateHostedConfigurationVersionStaleVersion": g.CreateHostedConfigurationVersionStaleVersion,
 			"appconfig-hosted-versions:DeleteHostedConfigurationVersion":             g.DeleteHostedConfigurationVersion,
 			"appconfig-hosted-versions:GetHostedConfigurationVersionNotFound":        g.GetHostedConfigurationVersionNotFound,
-
-			"appconfig-deployment-strategies:CreateDeploymentStrategy": g.CreateDeploymentStrategy,
-			"appconfig-deployment-strategies:GetDeploymentStrategy":    g.GetDeploymentStrategy,
-			"appconfig-deployment-strategies:ListDeploymentStrategies": g.ListDeploymentStrategies,
-			"appconfig-deployment-strategies:UpdateDeploymentStrategy": g.UpdateDeploymentStrategy,
-			"appconfig-deployment-strategies:DeleteDeploymentStrategy": g.DeleteDeploymentStrategy,
-
-			"appconfig-extensions:CreateExtension":            g.CreateExtension,
-			"appconfig-extensions:GetExtension":               g.GetExtension,
-			"appconfig-extensions:ListExtensions":             g.ListExtensions,
-			"appconfig-extensions:UpdateExtension":            g.UpdateExtension,
-			"appconfig-extensions:DeleteExtension":            g.DeleteExtension,
-			"appconfig-extensions:CreateExtensionAssociation": g.CreateExtensionAssociation,
-			"appconfig-extensions:GetExtensionAssociation":    g.GetExtensionAssociation,
-			"appconfig-extensions:ListExtensionAssociations":  g.ListExtensionAssociations,
-			"appconfig-extensions:UpdateExtensionAssociation": g.UpdateExtensionAssociation,
-			"appconfig-extensions:DeleteExtensionAssociation": g.DeleteExtensionAssociation,
-
-			"appconfig-experiments:ListExperimentDefinitions": g.ListExperimentDefinitions,
-			"appconfig-experiments:ListExperimentRuns":        g.ListExperimentRuns,
-			"appconfig-experiments:ListExperimentRunEvents":   g.ListExperimentRunEvents,
 		},
 		Setup: map[string]func(context.Context, *harness.TestContext) error{
 			"appconfig-hosted-versions": g.setupHostedVersions,
 		},
 		Teardown: map[string]func(context.Context, *harness.TestContext) error{
-			"appconfig-hosted-versions":       g.teardownHostedVersions,
-			"appconfig-deployment-strategies": g.teardownDeploymentStrategies,
-			"appconfig-extensions":            g.teardownExtensions,
+			"appconfig-hosted-versions": g.teardownHostedVersions,
 		},
 	}
 }
@@ -82,15 +61,8 @@ type appconfigGroup struct{}
 
 // One namer per group so two groups running in parallel never share a name.
 var (
-	acHostedNamer   = harness.NewNamer("ac-hcv")
-	acStrategyNamer = harness.NewNamer("ac-ds")
-	acExtNamer      = harness.NewNamer("ac-ext")
+	acHostedNamer = harness.NewNamer("ac-hcv")
 )
-
-// acMissingID stands in for an identifier no resource has. AppConfig's model
-// constrains Id to `[a-z0-9]{4,7}`, so a probe has to look like one or the
-// request is rejected before it reaches a handler.
-const acMissingID = "zzzzzzz"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -117,13 +89,6 @@ const (
 func acExpectFailure(t *harness.TestContext, what, code string, status int, args ...string) error {
 	return assertAWSFailure(awscli.RunStatusSigned, t, "appconfig "+what, code, status,
 		append([]string{"appconfig"}, args...)...)
-}
-
-// acARN builds an AppConfig resource ARN. Overcast's tag dispatcher picks the
-// owning service out of the ARN, so the service field has to be "appconfig" or
-// the request is answered by API Gateway's service-agnostic tag store.
-func acARN(t *harness.TestContext, resource string) string {
-	return fmt.Sprintf("arn:aws:appconfig:%s:000000000000:%s", t.Region, resource)
 }
 
 func acString(m map[string]any, key string) string {
@@ -416,303 +381,4 @@ func (g *appconfigGroup) GetHostedConfigurationVersionNotFound(_ context.Context
 		"--application-id", t.GetString("ac_hcv_app_id"),
 		"--configuration-profile-id", t.GetString("ac_hcv_prof_id"),
 		"--version-number", "9999", outPath)
-}
-
-// ─── appconfig-deployment-strategies ──────────────────────────────────────────
-//
-// Overcast does not emulate deployments, so these are expected to answer 501.
-// They are here because the URIs are the thing under test: `/deploymentstrategies`
-// is exactly the kind of collection route that answered the wrong service in
-// issue #963, and a 501 with an AppConfig-shaped error body is the correct
-// result while the operations are unimplemented.
-
-func (g *appconfigGroup) teardownDeploymentStrategies(_ context.Context, t *harness.TestContext) error {
-	if id := t.GetString("ac_ds_id"); id != "" {
-		acRun(t, "delete-deployment-strategy", "--deployment-strategy-id", id) //nolint:errcheck
-	}
-	return nil
-}
-
-// acStrategyID returns the strategy CreateDeploymentStrategy made. Every test
-// that reads it declares `depends: [CreateDeploymentStrategy]` in registry.json,
-// so the harness skips it ("dependency failed") when Create did not pass,
-// including while Create answers 501. There is no stand-in id: the scenario
-// port of this group cannot invent one, and the two have to answer alike.
-func acStrategyID(t *harness.TestContext) string {
-	return t.GetString("ac_ds_id")
-}
-
-func (g *appconfigGroup) CreateDeploymentStrategy(_ context.Context, t *harness.TestContext) error {
-	name := acStrategyNamer.Name(t)
-	out, err := acOut(t, "create-deployment-strategy",
-		"--name", name,
-		"--deployment-duration-in-minutes", "0",
-		"--growth-factor", "100",
-		"--replicate-to", "NONE",
-	)
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateDeploymentStrategy: no Id in response: %v", out)
-	}
-	t.Set("ac_ds_id", id)
-	if acString(out, "Name") != name {
-		return fmt.Errorf("appconfig CreateDeploymentStrategy: expected Name %q, got %v", name, out)
-	}
-	got, err := acOut(t, "get-deployment-strategy", "--deployment-strategy-id", id)
-	if err != nil {
-		return fmt.Errorf("appconfig CreateDeploymentStrategy: get after create failed: %w", err)
-	}
-	if acString(got, "Name") != name {
-		return fmt.Errorf("appconfig CreateDeploymentStrategy: get returned %v, want Name %q", got, name)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) GetDeploymentStrategy(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "get-deployment-strategy", "--deployment-strategy-id", acStrategyID(t))
-	if err != nil {
-		return err
-	}
-	if acString(out, "Id") == "" {
-		return fmt.Errorf("appconfig GetDeploymentStrategy: no Id in response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListDeploymentStrategies(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-deployment-strategies")
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListDeploymentStrategies: no Items member in the response: %v", out)
-	}
-	if id := t.GetString("ac_ds_id"); id != "" && acFindByID(acItems(out), "Id", id) == nil {
-		return fmt.Errorf("appconfig ListDeploymentStrategies: strategy %q absent from the listing", id)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UpdateDeploymentStrategy(_ context.Context, t *harness.TestContext) error {
-	const updated = "updated by compat"
-	out, err := acOut(t, "update-deployment-strategy",
-		"--deployment-strategy-id", acStrategyID(t), "--description", updated)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateDeploymentStrategy: expected Description %q, got %v", updated, out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) DeleteDeploymentStrategy(_ context.Context, t *harness.TestContext) error {
-	id := acStrategyID(t)
-	if err := acRun(t, "delete-deployment-strategy", "--deployment-strategy-id", id); err != nil {
-		return err
-	}
-	t.Set("ac_ds_id", "")
-	return acExpectFailure(t, "DeleteDeploymentStrategy", "ResourceNotFoundException", acStatusNotFound,
-		"get-deployment-strategy", "--deployment-strategy-id", id)
-}
-
-// ─── appconfig-extensions ─────────────────────────────────────────────────────
-//
-// Unimplemented too. `/extensions` and `/extensionassociations` are top-level
-// collection URIs with no prerequisites, which makes them the closest analogue
-// in this service to the routes issue #963 was about.
-
-const acExtensionActions = `{"PRE_START_DEPLOYMENT":[{"Name":"compat","Uri":"arn:aws:sns:us-east-1:000000000000:compat"}]}`
-
-func (g *appconfigGroup) teardownExtensions(_ context.Context, t *harness.TestContext) error {
-	if id := t.GetString("ac_ext_assoc_id"); id != "" {
-		acRun(t, "delete-extension-association", "--extension-association-id", id) //nolint:errcheck
-	}
-	if id := t.GetString("ac_ext_id"); id != "" {
-		acRun(t, "delete-extension", "--extension-identifier", id) //nolint:errcheck
-	}
-	return nil
-}
-
-// acExtensionID and acExtensionAssociationID return the ids the group's Create
-// tests made. As with acStrategyID there is no stand-in: every test that reads
-// one declares `depends` on the Create that makes it in registry.json.
-func acExtensionID(t *harness.TestContext) string {
-	return t.GetString("ac_ext_id")
-}
-
-func acExtensionAssociationID(t *harness.TestContext) string {
-	return t.GetString("ac_ext_assoc_id")
-}
-
-func (g *appconfigGroup) CreateExtension(_ context.Context, t *harness.TestContext) error {
-	name := acExtNamer.Name(t)
-	out, err := acOut(t, "create-extension", "--name", name, "--actions", acExtensionActions)
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateExtension: no Id in response: %v", out)
-	}
-	t.Set("ac_ext_id", id)
-	if acString(out, "Name") != name {
-		return fmt.Errorf("appconfig CreateExtension: expected Name %q, got %v", name, out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) GetExtension(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "get-extension", "--extension-identifier", acExtensionID(t))
-	if err != nil {
-		return err
-	}
-	if acString(out, "Id") == "" {
-		return fmt.Errorf("appconfig GetExtension: no Id in response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListExtensions(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-extensions")
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListExtensions: no Items member in the response: %v", out)
-	}
-	if id := t.GetString("ac_ext_id"); id != "" && acFindByID(acItems(out), "Id", id) == nil {
-		return fmt.Errorf("appconfig ListExtensions: extension %q absent from the listing", id)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UpdateExtension(_ context.Context, t *harness.TestContext) error {
-	const updated = "updated by compat"
-	out, err := acOut(t, "update-extension",
-		"--extension-identifier", acExtensionID(t), "--description", updated)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Description") != updated {
-		return fmt.Errorf("appconfig UpdateExtension: expected Description %q, got %v", updated, out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) DeleteExtension(_ context.Context, t *harness.TestContext) error {
-	id := acExtensionID(t)
-	if err := acRun(t, "delete-extension", "--extension-identifier", id); err != nil {
-		return err
-	}
-	t.Set("ac_ext_id", "")
-	return acExpectFailure(t, "DeleteExtension", "ResourceNotFoundException", acStatusNotFound,
-		"get-extension", "--extension-identifier", id)
-}
-
-func (g *appconfigGroup) CreateExtensionAssociation(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "create-extension-association",
-		"--extension-identifier", acExtensionID(t),
-		"--resource-identifier", acARN(t, "application/"+acMissingID))
-	if err != nil {
-		return err
-	}
-	id := acString(out, "Id")
-	if id == "" {
-		return fmt.Errorf("appconfig CreateExtensionAssociation: no Id in response: %v", out)
-	}
-	t.Set("ac_ext_assoc_id", id)
-	return nil
-}
-
-func (g *appconfigGroup) GetExtensionAssociation(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "get-extension-association",
-		"--extension-association-id", acExtensionAssociationID(t))
-	if err != nil {
-		return err
-	}
-	if acString(out, "Id") == "" {
-		return fmt.Errorf("appconfig GetExtensionAssociation: no Id in response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListExtensionAssociations(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-extension-associations")
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListExtensionAssociations: no Items member in the response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) UpdateExtensionAssociation(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "update-extension-association",
-		"--extension-association-id", acExtensionAssociationID(t),
-		"--parameters", `{"compat":"true"}`)
-	if err != nil {
-		return err
-	}
-	if acString(out, "Id") == "" {
-		return fmt.Errorf("appconfig UpdateExtensionAssociation: no Id in response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) DeleteExtensionAssociation(_ context.Context, t *harness.TestContext) error {
-	id := acExtensionAssociationID(t)
-	if err := acRun(t, "delete-extension-association", "--extension-association-id", id); err != nil {
-		return err
-	}
-	t.Set("ac_ext_assoc_id", "")
-	return acExpectFailure(t, "DeleteExtensionAssociation", "ResourceNotFoundException", acStatusNotFound,
-		"get-extension-association", "--extension-association-id", id)
-}
-
-// ─── appconfig-experiments ────────────────────────────────────────────────────
-//
-// The experiment surface is unimplemented, and its definitions cannot be
-// created, so only the three collection URIs are exercised. Each is expected to
-// answer 501 rather than fall through to another service's route.
-
-func (g *appconfigGroup) ListExperimentDefinitions(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-experiment-definitions", "--application-identifier", acMissingID)
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListExperimentDefinitions: no Items member in the response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListExperimentRuns(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-experiment-runs",
-		"--application-identifier", acMissingID, "--experiment-definition-identifier", acMissingID)
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListExperimentRuns: no Items member in the response: %v", out)
-	}
-	return nil
-}
-
-func (g *appconfigGroup) ListExperimentRunEvents(_ context.Context, t *harness.TestContext) error {
-	out, err := acOut(t, "list-experiment-run-events",
-		"--application-identifier", acMissingID,
-		"--experiment-definition-identifier", acMissingID,
-		"--run", "1")
-	if err != nil {
-		return err
-	}
-	if _, ok := out["Items"]; !ok {
-		return fmt.Errorf("appconfig ListExperimentRunEvents: no Items member in the response: %v", out)
-	}
-	return nil
 }
