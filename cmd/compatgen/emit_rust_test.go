@@ -287,6 +287,28 @@ func TestRustCallLines_spellsEveryShapeOfMember(t *testing.T) {
 			[]string{`                    .key(b.string("Settings.Tags[0].Key")?)`},
 		},
 		{
+			// A map whose values are lists is one setter per entry, and the
+			// setter takes the whole Vec (CreateExtension.Actions), so the
+			// list is a vec! of builder chains rather than repeated calls.
+			"a map of lists of structures inside a structure", "UpdateWidget",
+			`{"Settings":{"Hooks":{"a":[{"Key":"k1"},{"Key":"k2","Value":"v2"}],"b":[]}}}`,
+			[]string{
+				"            .hooks(",
+				`                "a",`,
+				"                vec![",
+				"                    aws_sdk_widgets::types::SprocketTag::builder()",
+				`                        .key("k1")`,
+				"                        .build(),",
+				`                        .value("v2")`,
+				`            .hooks("b", vec![])`,
+			},
+		},
+		{
+			"an expression inside a list inside a map", "UpdateWidget",
+			`{"Settings":{"Hooks":{"a":[{"Key":{"$ref":"t"}}]}}}`,
+			[]string{`                        .key(b.string("Settings.Hooks.a[0].Key")?)`},
+		},
+		{
 			"an expression into a string", "GetWidget",
 			`{"WidgetId":{"$ref":"widget.id"}}`,
 			[]string{`    .widget_id(b.string("WidgetId")?)`},
