@@ -28,6 +28,7 @@ public final class ScenariosGen {
                 new ScenariosAuthoredAppconfigExperimentsGen(clients),
                 new ScenariosAuthoredAppconfigExtensionsGen(clients),
                 new ScenariosAuthoredAppconfigTagsGen(clients),
+                new ScenariosAuthoredBackupSelectionsGen(clients),
                 new ScenariosAuthoredBackupTagsGen(clients),
                 new ScenariosAuthoredCognitoUserpoolsGen(clients),
                 new ScenariosAuthoredEcrPoliciesGen(clients),

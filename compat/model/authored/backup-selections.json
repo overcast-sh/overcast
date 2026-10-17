@@ -1,0 +1,186 @@
+{
+  "$comment": "Authored shadow port of the hand-written registry group backup-selections (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group has one native implementation, in the cli suite (compat/suites/cli/internal/groups/backup.go); the other six suites carry it as parity debt, which the port closes once it is flipped. This is step 1 of the two-PR migration: the group is named backup-selections-shadow and runs beside the native, gating nothing. The clauses are what the cli native asserted, plus read-backs of documented effects where it asserted only success, each choice stated on its test — see compat/model/README.md § Authored scenarios. The cli native also asserts the HTTP status (400) of the one error it provokes beside its code. The IR's error clause has no status, so only the code is carried: the model binds ResourceNotFoundException to exactly that status (smithy.api#httpError), and the code is what a caller branches on — the same choice every earlier port made.",
+  "version": 1,
+  "service": "backup",
+  "client": {
+    "sdkId": "Backup",
+    "endpointPrefix": "backup",
+    "signingName": "backup",
+    "protocol": "restJson1",
+    "apiVersion": "2018-11-15",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "A selection is a child of a backup plan, so setup creates the plan a selection hangs off and the vault its rule targets, exactly as the cli native does; the plan id is exported from CreateBackupPlan's response. The vault and plan are named by $name ({runId}-backup-selections-vault / -plan), so they are never shared with another Backup group (the groups run in parallel, which is why the native gives each its own Namer). The rule is the native's: a daily rule on cron(0 5 ? * * *) targeting the vault. Teardown mirrors the native in reverse creation order: the selection, then the plan, then the vault. DeleteBackupPlan refuses while selections exist, so the selection goes first; that call errors when DeleteBackupSelection already removed it, which teardown ignores (each teardown call is individually wrapped, and the native discards the same errors). No clause is wrapped in `eventually`: the native polls nothing.",
+      "name": "backup-selections-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateBackupVault",
+          "params": { "BackupVaultName": { "$name": "vault" } }
+        },
+        {
+          "op": "CreateBackupPlan",
+          "params": {
+            "BackupPlan": {
+              "BackupPlanName": { "$name": "plan" },
+              "Rules": [
+                {
+                  "RuleName": "daily",
+                  "TargetBackupVaultName": { "$name": "vault" },
+                  "ScheduleExpression": "cron(0 5 ? * * *)"
+                }
+              ]
+            }
+          },
+          "export": { "plan.id": "$.BackupPlanId" }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The native requires a non-empty SelectionId (exported for every later test) and a BackupPlanId equal to the plan it was created under. Both are carried. It asserts nothing else about the create, so the port adds a read-back of a documented effect: GetBackupSelection returns the SelectionName, IamRoleArn and Resources that were sent. The selection is the native's: the broadest AWS accepts, Resources [\"*\"], with the default service role ARN and a $name-d SelectionName ({runId}-backup-selections-sel).",
+          "name": "CreateBackupSelection",
+          "op": "CreateBackupSelection",
+          "call": {
+            "op": "CreateBackupSelection",
+            "params": {
+              "BackupPlanId": { "$ref": "plan.id" },
+              "BackupSelection": {
+                "SelectionName": { "$name": "sel" },
+                "IamRoleArn": "arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole",
+                "Resources": ["*"]
+              }
+            },
+            "export": { "selection.id": "$.SelectionId" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.SelectionId": { "nonEmpty": true },
+                "$.BackupPlanId": { "equals": { "$ref": "plan.id" } }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetBackupSelection",
+                "params": {
+                  "BackupPlanId": { "$ref": "plan.id" },
+                  "SelectionId": { "$ref": "selection.id" }
+                }
+              },
+              "checks": {
+                "$.BackupSelection.SelectionName": { "equals": { "$name": "sel" } },
+                "$.BackupSelection.IamRoleArn": { "equals": "arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole" },
+                "$.BackupSelection.Resources": { "nonEmpty": true }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native requires the response to carry a BackupSelectionsList (an absent member is what an answer from another service looked like) and nothing about its content. The port keeps that as isList and adds the documented effect: the list holds the created selection, matched on SelectionId and SelectionName. The registry declares no depends for this test, so the tests' order is what lets it read what CreateBackupSelection wrote; where that failed, this fails too rather than passing on an empty list — a cascade the native avoided, stated here rather than hidden.",
+          "name": "ListBackupSelections",
+          "op": "ListBackupSelections",
+          "call": {
+            "op": "ListBackupSelections",
+            "params": { "BackupPlanId": { "$ref": "plan.id" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.BackupSelectionsList": { "isList": true } }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.BackupSelectionsList",
+              "where": {
+                "$.SelectionId": { "$ref": "selection.id" },
+                "$.SelectionName": { "$name": "sel" }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native requires SelectionId to be the id CreateBackupSelection returned and a BackupSelection member in the response. The port carries the first as written and states the second as nonEmpty on $.BackupSelection, which is presence with a body. It adds the documented effects of the create the native left unread: the BackupSelection's SelectionName, IamRoleArn and Resources are the ones sent, and BackupPlanId is the plan's.",
+          "name": "GetBackupSelection",
+          "op": "GetBackupSelection",
+          "call": {
+            "op": "GetBackupSelection",
+            "params": {
+              "BackupPlanId": { "$ref": "plan.id" },
+              "SelectionId": { "$ref": "selection.id" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.SelectionId": { "equals": { "$ref": "selection.id" } },
+                "$.BackupPlanId": { "equals": { "$ref": "plan.id" } },
+                "$.BackupSelection": { "nonEmpty": true },
+                "$.BackupSelection.SelectionName": { "equals": { "$name": "sel" } },
+                "$.BackupSelection.IamRoleArn": { "equals": "arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole" },
+                "$.BackupSelection.Resources": { "nonEmpty": true }
+              }
+            }
+          ],
+          "depends": ["CreateBackupSelection"]
+        },
+        {
+          "$comment": "DeleteBackupSelection's modeled output is Unit, so the native proves the delete by the selection no longer being gettable: GetBackupSelection must fail with ResourceNotFoundException (and status 400, which the file-level comment explains is not carried). That is the `absent` error form. The port adds the list-side effect too: ListBackupSelections no longer holds the selection.",
+          "name": "DeleteBackupSelection",
+          "op": "DeleteBackupSelection",
+          "call": {
+            "op": "DeleteBackupSelection",
+            "params": {
+              "BackupPlanId": { "$ref": "plan.id" },
+              "SelectionId": { "$ref": "selection.id" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetBackupSelection",
+                "params": {
+                  "BackupPlanId": { "$ref": "plan.id" },
+                  "SelectionId": { "$ref": "selection.id" }
+                }
+              },
+              "error": { "shape": "ResourceNotFoundException", "code": "ResourceNotFoundException" }
+            },
+            {
+              "kind": "absent",
+              "itemsPath": "$.BackupSelectionsList",
+              "where": { "$.SelectionId": { "$ref": "selection.id" } },
+              "call": {
+                "op": "ListBackupSelections",
+                "params": { "BackupPlanId": { "$ref": "plan.id" } }
+              }
+            }
+          ],
+          "depends": ["CreateBackupSelection"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteBackupSelection",
+          "params": {
+            "BackupPlanId": { "$ref": "plan.id" },
+            "SelectionId": { "$ref": "selection.id" }
+          }
+        },
+        {
+          "op": "DeleteBackupPlan",
+          "params": { "BackupPlanId": { "$ref": "plan.id" } }
+        },
+        {
+          "op": "DeleteBackupVault",
+          "params": { "BackupVaultName": { "$name": "vault" } }
+        }
+      ]
+    }
+  ]
+}
