@@ -24,7 +24,8 @@ public record Check(String path, Check.Kind kind, Object value) {
         STARTS_WITH("startsWith"),
         CONTAINS("contains"),
         EQUALS_JSON("equalsJSON"),
-        MISSING("missing");
+        MISSING("missing"),
+        PRESENT("present");
 
         private final String label;
 
@@ -110,5 +111,14 @@ public record Check(String path, Check.Kind kind, Object value) {
      */
     public static Check missing(String path) {
         return new Check(path, Kind.MISSING, null);
+    }
+
+    /**
+     * Holds when the path resolves, whatever the value: an empty list, an
+     * empty string, zero and false all resolve, and so does a member the
+     * service sent as JSON null. Exactly the negation of {@link #missing}.
+     */
+    public static Check present(String path) {
+        return new Check(path, Kind.PRESENT, null);
     }
 }

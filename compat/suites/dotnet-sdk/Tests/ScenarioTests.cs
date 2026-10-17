@@ -217,13 +217,17 @@ public sealed class ScenarioTests
             (Check.Missing("$.NextToken"), true),
             (Check.IsList("$.QueueUrls"), true),
             (Check.NonEmpty("$.QueueUrls"), false),
+            (Check.Present("$.QueueUrls"), false),
+            (Check.Present("$.NextToken"), false),
             // A present list, empty: isList holds, nonEmpty does not.
             (Check.IsList("$.Empty"), true),
             (Check.NonEmpty("$.Empty"), false),
+            (Check.Present("$.Empty"), true),
             // A present value that is not a list fails isList.
             (Check.IsList("$.Name"), false),
             (Check.NonEmpty("$.Name"), true),
             (Check.Missing("$.Name"), false),
+            (Check.Present("$.Name"), true),
             // equals compares in the JSON type system, with no coercion.
             (Check.EqualTo("$.Name", "q"), true),
             (Check.EqualTo("$.Count", 2), true),

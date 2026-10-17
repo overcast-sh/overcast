@@ -339,6 +339,12 @@ func (e *execution) check(obs observed, c Check, kind, step string) error {
 		}
 		return nil
 
+	case CheckPresent:
+		if !resolved {
+			return fail("the path to resolve")
+		}
+		return nil
+
 	case CheckIsList:
 		// True of a present list, empty or not, and of an absent member:
 		// several AWS services omit an empty list rather than serializing [].

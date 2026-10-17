@@ -488,6 +488,15 @@ async fn every_check_holds_where_the_ir_says_it_does() {
     assert!(holds(vec![missing("$.Absent")]).await);
     assert!(!holds(vec![missing("$.Null")]).await);
 
+    // present is its negation: any resolved value holds, an empty page and a
+    // null member included; only an absent member fails.
+    assert!(holds(vec![present("$.Url")]).await);
+    assert!(holds(vec![present("$.Count")]).await, "0 resolves");
+    assert!(holds(vec![present("$.Empty")]).await);
+    assert!(holds(vec![present("$.Page")]).await, "an empty page resolves");
+    assert!(holds(vec![present("$.Null")]).await, "null resolves");
+    assert!(!holds(vec![present("$.Absent")]).await);
+
     assert!(holds(vec![matches("$.Url", "^http://")]).await);
     assert!(!holds(vec![matches("$.Url", "^https://")]).await);
     assert!(

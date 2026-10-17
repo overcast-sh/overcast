@@ -34,6 +34,7 @@ internal enum CheckKind
     Contains,
     EqualsJson,
     Missing,
+    Present,
 }
 
 /// <summary>
@@ -277,6 +278,13 @@ internal sealed record Check(string Path, CheckKind Kind, object? Value)
     /// null resolves, so Missing fails on it.
     /// </summary>
     public static Check Missing(string path) => new(path, CheckKind.Missing, null);
+
+    /// <summary>
+    /// Holds when the path resolves, whatever the value: an empty list, an
+    /// empty string, zero and false all resolve, and so does a member the
+    /// service sent as JSON null. Exactly the negation of Missing.
+    /// </summary>
+    public static Check Present(string path) => new(path, CheckKind.Present, null);
 }
 
 /// <summary>

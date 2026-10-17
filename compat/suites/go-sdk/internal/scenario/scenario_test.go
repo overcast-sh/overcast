@@ -206,12 +206,41 @@ func TestChecks_matchTheIRsClosedSet(t *testing.T) {
 		{"nonEmpty fails on an omitted page", NonEmpty("$.QueueUrls"), false},
 		{"missing holds for an omitted token", Missing("$.NextToken"), true},
 		{"nonEmpty fails for an omitted token", NonEmpty("$.NextToken"), false},
+		{"present fails for an omitted token", Present("$.NextToken"), false},
+		{"present fails for an omitted page", Present("$.QueueUrls"), false},
 		{"equals fails when the path does not resolve", Equals("$.NextToken", "x"), false},
 		{"matches fails when the path does not resolve", Matches("$.NextToken", "^x$"), false},
 		{"ResultMetadata is not part of the modeled response", Missing("$.ResultMetadata"), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := runChecks(t, out, tc.check)
+			if holds := err == nil; holds != tc.holds {
+				t.Errorf("check held = %v, want %v (%v)", holds, tc.holds, err)
+			}
+		})
+	}
+}
+
+// An empty slice the service sent as [] resolves; a nil slice is the SDK's
+// spelling of an omitted member and does not. present tells the two apart,
+// which isList (true of both) cannot.
+func TestPresent_tellsAnEmptyListFromAnOmittedOne(t *testing.T) {
+	sent := &sqs.ListQueuesOutput{QueueUrls: []string{}}
+	omitted := &sqs.ListQueuesOutput{}
+	for _, tc := range []struct {
+		name  string
+		out   *sqs.ListQueuesOutput
+		check Check
+		holds bool
+	}{
+		{"present holds for []", sent, Present("$.QueueUrls"), true},
+		{"isList holds for []", sent, IsList("$.QueueUrls"), true},
+		{"nonEmpty fails for []", sent, NonEmpty("$.QueueUrls"), false},
+		{"present fails for an omitted list", omitted, Present("$.QueueUrls"), false},
+		{"isList holds for an omitted list", omitted, IsList("$.QueueUrls"), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := runChecks(t, tc.out, tc.check)
 			if holds := err == nil; holds != tc.holds {
 				t.Errorf("check held = %v, want %v (%v)", holds, tc.holds, err)
 			}
@@ -238,6 +267,10 @@ func TestChecks_presentValues(t *testing.T) {
 		{"nonEmpty accepts a present value", NonEmpty("$.Attributes.QueueArn"), true},
 		{"nonEmpty rejects an empty string", NonEmpty("$.Attributes.ApproximateNumberOfMessagesD"), false},
 		{"isList rejects a present non-list", IsList("$.Attributes"), false},
+		{"present accepts a value", Present("$.Attributes.QueueArn"), true},
+		{"present accepts an empty string", Present("$.Attributes.ApproximateNumberOfMessagesD"), true},
+		{"present accepts a structure", Present("$.Attributes"), true},
+		{"present fails for a member that is not there", Present("$.Attributes.Nope"), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := runChecks(t, out, tc.check)

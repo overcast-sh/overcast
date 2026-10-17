@@ -140,6 +140,7 @@ func TestCheckDecoding(t *testing.T) {
 		{body: `{"nonEmpty":true}`, wantKind: CheckNonEmpty},
 		{body: `{"isList":true}`, wantKind: CheckIsList},
 		{body: `{"missing":true}`, wantKind: CheckMissing},
+		{body: `{"present":true}`, wantKind: CheckPresent},
 		{body: `{"equals":"60"}`, wantKind: CheckEquals, wantVal: "60"},
 		{body: `{"equals":null}`, wantKind: CheckEquals, wantVal: nil},
 		{body: `{"matches":"^p-"}`, wantKind: CheckMatches, wantVal: "^p-"},
@@ -240,7 +241,7 @@ func checkClause(t *testing.T, file, where string, a *Assertion) {
 				t.Errorf("%s: %s: %v", file, where, err)
 			}
 			switch check.Kind {
-			case CheckNonEmpty, CheckIsList, CheckEquals, CheckMatches, CheckEndsWith, CheckStartsWith, CheckContains, CheckEqualsJSON, CheckMissing:
+			case CheckNonEmpty, CheckIsList, CheckEquals, CheckMatches, CheckEndsWith, CheckStartsWith, CheckContains, CheckEqualsJSON, CheckMissing, CheckPresent:
 			default:
 				t.Errorf("%s: %s: unknown check %q at %s", file, where, check.Kind, path)
 			}

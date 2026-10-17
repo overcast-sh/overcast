@@ -599,6 +599,9 @@ fn test_appconfig_extensions_list_extension_associations(client: &aws_sdk_appcon
         },
         assert: vec![
             scenario::response_field(vec![
+                scenario::present("$.Items"),
+            ]),
+            scenario::response_field(vec![
                 scenario::is_list("$.Items"),
             ]),
         ],

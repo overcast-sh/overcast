@@ -467,6 +467,8 @@ func javaCheck(path string, c check) string {
 		return fmt.Sprintf("Check.isList(%s)", javaQuote(path))
 	case c.Missing:
 		return fmt.Sprintf("Check.missing(%s)", javaQuote(path))
+	case c.Present:
+		return fmt.Sprintf("Check.present(%s)", javaQuote(path))
 	case c.Matches != "":
 		return fmt.Sprintf("Check.matches(%s, %s)", javaQuote(path), javaQuote(c.Matches))
 	case c.hasAffix():

@@ -240,6 +240,9 @@ public final class ScenariosAuthoredAppconfigExtensionsGen implements ServiceGro
                         r -> cl().listExtensionAssociations((ListExtensionAssociationsRequest) r)),
                 List.of(
                         Clause.responseField(
+                                Check.present("$.Items")
+                        ),
+                        Clause.responseField(
                                 Check.isList("$.Items")
                         )
                 ));

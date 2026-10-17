@@ -185,6 +185,8 @@ class GroupExecutionTest {
         assertHolds(response, Check.missing("$.QueueUrls"));
         assertHolds(response, Check.missing("$.NextToken"));
         assertFails(response, Check.nonEmpty("$.QueueUrls"));
+        assertFails(response, Check.present("$.QueueUrls"));
+        assertFails(response, Check.present("$.NextToken"));
 
         Object page = ListQueuesResponse.builder().queueUrls("http://q/a").build();
         assertHolds(page, Check.isList("$.QueueUrls"));
@@ -192,6 +194,9 @@ class GroupExecutionTest {
         assertHolds(page, Check.equalTo("$.QueueUrls[0]", "http://q/a"));
         assertHolds(page, Check.matches("$.QueueUrls[0]", "^http://q/"));
         assertFails(page, Check.missing("$.QueueUrls"));
+        assertHolds(page, Check.present("$.QueueUrls"));
+        assertHolds(page, Check.present("$.QueueUrls[0]"));
+        assertFails(page, Check.present("$.QueueUrls[1]"));
         assertFails(page, Check.equalTo("$.QueueUrls[0]", "http://q/b"));
         assertFails(page, Check.equalTo("$.QueueUrls", "http://q/a"));
 

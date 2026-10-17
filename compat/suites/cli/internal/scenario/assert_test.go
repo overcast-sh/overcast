@@ -113,6 +113,10 @@ func TestResponseFieldChecks(t *testing.T) {
 		{name: "missing holds when absent", clause: field("$.Nope", obj{"missing": true}), script: script},
 		{name: "missing holds for a deep absent segment", clause: field("$.Nested.Nope.Deep", obj{"missing": true}), script: script},
 		{name: "missing fails when present", clause: field("$.Id", obj{"missing": true}), script: script, wantErr: "missing"},
+		{name: "present holds when present", clause: field("$.Id", obj{"present": true}), script: script},
+		{name: "present holds for null", clause: field("$.Null", obj{"present": true}), script: script},
+		{name: "present fails when absent", clause: field("$.Nope", obj{"present": true}), script: script, wantErr: "actual " + missingValue},
+		{name: "present fails for a deep absent segment", clause: field("$.Nested.Nope.Deep", obj{"present": true}), script: script, wantErr: "the path to resolve"},
 		{name: "missing holds is not the same as null", clause: field("$.Null", obj{"missing": true}), script: script, wantErr: "missing"},
 	})
 }

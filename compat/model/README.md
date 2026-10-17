@@ -200,7 +200,7 @@ The set is closed. `kind` selects the fields.
 | Check | Holds when |
 | --- | --- |
 | `{"nonEmpty": true}` | the path resolves to a value that is not `null`, `""`, `[]` or `{}`; numbers and booleans are never empty |
-| `{"isList": true}` | the path resolves to a list, **empty or not** — or does not resolve at all. It exists because `nonEmpty` cannot say "this is a page of results": a single-page `List*` legally returns an empty page |
+| `{"isList": true}` | the path resolves to a list, **empty or not** — or does not resolve at all. It exists because `nonEmpty` cannot say "this is a page of results": a single-page `List*` legally returns an empty page. To insist the member is there, add a `present` clause |
 | `{"equals": <value>}` | the path resolves and the value is equal, as JSON, to the evaluated expression — by JSON type, with no coercion, so `1` never equals `"1"` and `true` never equals `1` |
 | `{"equalsJSON": <document>}` | the path resolves to a JSON document equal, as a JSON value, to the literal object or array given: a string is percent-decoded once and parsed, an object or array is the document already. See [Documents in a string](#documents-in-a-string-equalsjson) |
 | `{"matches": "<regex>"}` | the path resolves to a string matching the regular expression (RE2-compatible syntax; anchored only where the pattern anchors itself). A pattern the interpreter's own engine will not compile fails the check as an ordinary mismatch — expected `pattern <p>`, actual `unsupported pattern: <why>` — never as an exception out of the evaluator |
@@ -208,6 +208,7 @@ The set is closed. `kind` selects the fields.
 | `{"startsWith": <value>}` | the same, at the start of the string |
 | `{"contains": <value>}` | the same, anywhere in the string |
 | `{"missing": true}` | the path does not resolve — any segment absent. A member the service sent as JSON `null` **resolves**, so `missing` fails on it, and so does `nonEmpty` |
+| `{"present": true}` | the path resolves — every segment is there. Any value satisfies it: `[]`, `{}`, `""`, `0`, `false`, and JSON `null`, which resolves. It is exactly the negation of `missing`, and on failure reads `expected the path to resolve, actual <missing>` |
 
 Everything that reads a list — `listContains`, `absent` in its list form and
 the `isList` check — treats **an absent list and an empty one alike, and a
@@ -216,6 +217,31 @@ must not read differently from one that serializes `[]`, and several AWS
 services (SQS's `ListQueues` among them) do omit it. So absence passes
 `absent` and `isList` and fails `listContains`; a present value that is not a
 list fails all three.
+
+**`present` is the one check that tells an omitted list from an empty one.**
+`isList` cannot (it passes both) and `nonEmpty` cannot (it fails both). Use it
+where a native asserted that a member is *there* — typically a guard against
+another service answering the URL, such as the S3 fall-through of #963 — and
+the correct answer may be an empty page. It says nothing about the value's
+type, and a path carries one check, so "present and a list" is two clauses,
+`present` then `isList`, each its own `responseField`:
+
+```json
+"assert": [
+  { "kind": "responseField", "checks": { "$.Items": { "present": true } } },
+  { "kind": "responseField", "checks": { "$.Items": { "isList": true } } }
+]
+```
+
+This was chosen over a stricter `isList` form (`{"isList": "present"}`)
+because `present` composes with every other check and one spelling keeps the
+check set a list of single-purpose predicates; a variant of `isList` would
+have made it two checks in one. Where the second clause is redundant it is
+left out: `listContains` and the list form of `absent` already fail a present
+non-list. A typed SDK may deserialize an empty XML list the same as an omitted one,
+so check the typed backends before putting `present` on an empty list of a
+query-protocol service; so far it guards JSON-protocol pages (Backup and
+AppConfig lists).
 
 **`where`** maps an item-relative path to a value; `$` is the item itself
 (`{"$": {"$ref": "queue.url"}}` for a list of strings). An item matches when

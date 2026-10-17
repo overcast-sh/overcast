@@ -450,6 +450,31 @@ class TestAssertions(unittest.TestCase):
             run_one(spec_for("$.QueueUrls"), "ListQueues",
                     FakeClient({"list_queues": [{"QueueUrls": "not-a-list"}]}))
 
+    def test_present_holds_for_any_resolved_value_and_fails_only_when_absent(self):
+        """present is the negation of missing: [], {}, "", 0, False and null all
+        resolve; only an absent member (or segment) fails it."""
+        def spec_for(check_path):
+            return make_group(tests=[{
+                "name": "ListQueues", "op": "ListQueues",
+                "call": {"op": "ListQueues", "params": {}},
+                "assert": [{"kind": "responseField",
+                            "checks": {check_path: {"present": True}}}],
+            }])
+
+        response = {"A": [], "B": {}, "C": "", "D": 0, "E": False, "F": None,
+                    "G": {"H": "x"}}
+        for member in "ABCDEF":
+            run_one(spec_for(f"$.{member}"), "ListQueues",
+                    FakeClient({"list_queues": [response]}))
+        run_one(spec_for("$.G.H"), "ListQueues", FakeClient({"list_queues": [response]}))
+        for absent in ("$.Absent", "$.G.Nope", "$.A[0]", "$.F.Nope"):
+            with self.assertRaises(ScenarioFailure) as caught:
+                run_one(spec_for(absent), "ListQueues",
+                        FakeClient({"list_queues": [response]}))
+            message = str(caught.exception)
+            self.assertIn("expected=the path to resolve", message)
+            self.assertIn("<missing>", message)
+
     def test_a_pattern_re_rejects_is_a_mismatch_not_a_traceback(self):
         """The model states its patterns in RE2. One `re` will not compile is a
         normal six-field mismatch in every interpreter — never an exception out

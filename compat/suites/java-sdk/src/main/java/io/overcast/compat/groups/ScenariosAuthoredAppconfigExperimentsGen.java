@@ -96,6 +96,9 @@ public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGr
                         r -> cl().listExperimentDefinitions((ListExperimentDefinitionsRequest) r)),
                 List.of(
                         Clause.responseField(
+                                Check.present("$.Items")
+                        ),
+                        Clause.responseField(
                                 Check.isList("$.Items")
                         )
                 ));
@@ -110,6 +113,9 @@ public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGr
                                 .build(),
                         r -> cl().listExperimentRuns((ListExperimentRunsRequest) r)),
                 List.of(
+                        Clause.responseField(
+                                Check.present("$.Items")
+                        ),
                         Clause.responseField(
                                 Check.isList("$.Items")
                         )
@@ -126,6 +132,9 @@ public final class ScenariosAuthoredAppconfigExperimentsGen implements ServiceGr
                                 .build(),
                         r -> cl().listExperimentRunEvents((ListExperimentRunEventsRequest) r)),
                 List.of(
+                        Clause.responseField(
+                                Check.present("$.Items")
+                        ),
                         Clause.responseField(
                                 Check.isList("$.Items")
                         )

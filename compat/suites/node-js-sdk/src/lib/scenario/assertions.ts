@@ -110,6 +110,9 @@ function evaluateCheck(
     return { path, expected: expectationOf(check, ctx), actual: "<missing>" };
   }
 
+  // Any resolved value satisfies it: [], {}, "", 0, false and null included.
+  if ("present" in check) return null;
+
   if ("nonEmpty" in check) {
     // null, "", [] and {} are empty; numbers and booleans never are.
     if (!isEmpty(found.value)) return null;
@@ -171,6 +174,8 @@ function expectationOf(check: Check, ctx: EvalContext): string {
   if ("equalsJSON" in check) return `equalsJSON ${JSON.stringify(check.equalsJSON)}`;
   // isList and missing are handled before this is reached — both hold on a
   // path that does not resolve, so neither has an expectation to render here.
+  // present falls to the default: it fails only on a path that does not
+  // resolve, which is "the path to resolve".
   return "the path to resolve";
 }
 

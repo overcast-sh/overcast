@@ -133,6 +133,7 @@ const (
 	CheckEquals   CheckKind = "equals"
 	CheckMatches  CheckKind = "matches"
 	CheckMissing  CheckKind = "missing"
+	CheckPresent  CheckKind = "present"
 	// CheckEndsWith, CheckStartsWith and CheckContains compare a string with
 	// the evaluated operand, a value expression that must yield a non-empty
 	// string.
@@ -163,11 +164,11 @@ func (c *Check) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	if len(raw) != 1 {
-		return fmt.Errorf("check must carry exactly one of nonEmpty/isList/equals/matches/endsWith/startsWith/contains/equalsJSON/missing, got %d entries", len(raw))
+		return fmt.Errorf("check must carry exactly one of nonEmpty/isList/equals/matches/endsWith/startsWith/contains/equalsJSON/missing/present, got %d entries", len(raw))
 	}
 	for k, v := range raw {
 		switch CheckKind(k) {
-		case CheckNonEmpty, CheckIsList, CheckMissing:
+		case CheckNonEmpty, CheckIsList, CheckMissing, CheckPresent:
 			c.Kind, c.Value = CheckKind(k), nil
 		case CheckEquals, CheckMatches, CheckEndsWith, CheckStartsWith, CheckContains:
 			c.Kind, c.Value = CheckKind(k), v
