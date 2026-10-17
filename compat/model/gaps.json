@@ -3,13 +3,6 @@
   "gaps": [
     {
       "service": "appconfig",
-      "operation": "CreateExtension",
-      "group": "appconfig-extensions-shadow",
-      "reason": "rust-emit-unsupported:Actions",
-      "detail": "CreateExtension.Actions cannot be spelled as Rust: no Rust literal for a list member"
-    },
-    {
-      "service": "appconfig",
       "operation": "ListExperimentDefinitions",
       "group": "appconfig-experiments-shadow",
       "reason": "dotnet-emit-unsupported:ListExperimentDefinitionsRequest",

@@ -591,7 +591,15 @@ func rustSetterCalls(model *serviceModel, crate, setter, target string, value an
 			if err != nil {
 				return nil, err
 			}
-			lines = append(lines, rustSetterLine(indent, setter, renderedKey+", "+renderedValue)...)
+			if strings.Contains(renderedValue, "\n") {
+				// A multi-line value cannot share the key's line, because its
+				// own first line is already indented to its column.
+				lines = append(lines, indent+"."+setter+"(", indent+"    "+renderedKey+",")
+				lines = append(lines, strings.Split(renderedValue, "\n")...)
+				lines = append(lines, indent+")")
+				continue
+			}
+			lines = append(lines, rustSetterLine(indent, setter, renderedKey+", "+strings.TrimLeft(renderedValue, " "))...)
 		}
 		return lines, nil
 	default:
@@ -607,7 +615,7 @@ func rustSetterCalls(model *serviceModel, crate, setter, target string, value an
 // over several when the argument is itself multi-line.
 func rustSetterLine(indent, setter, argument string) []string {
 	if !strings.Contains(argument, "\n") {
-		return []string{fmt.Sprintf("%s.%s(%s)", indent, setter, argument)}
+		return []string{fmt.Sprintf("%s.%s(%s)", indent, setter, strings.TrimLeft(argument, " "))}
 	}
 	lines := []string{fmt.Sprintf("%s.%s(", indent, setter)}
 	lines = append(lines, strings.Split(argument, "\n")...)
@@ -629,6 +637,9 @@ func rustSetterLine(indent, setter, argument string) []string {
 // model, so a shape that refers to itself is only as deep as the params
 // document that fills it in.
 func rustScalarOrComposite(model *serviceModel, crate, target string, value any, path, indent string, bind *rustBindings) (string, error) {
+	if _, _, isExpr := exprOf(value); !isExpr && model.Kind(target) == "list" {
+		return rustVec(model, crate, target, value, path, indent, bind)
+	}
 	if model.Kind(target) != "structure" {
 		return rustValueOfKind(model, crate, target, value, path, bind)
 	}
@@ -656,6 +667,43 @@ func rustScalarOrComposite(model *serviceModel, crate, target string, value any,
 	if rustBuilderIsFallible(model, target) {
 		fmt.Fprintf(&b, "\n%s        .map_err(|err| scenario::build_error(%s, err))?", indent, rustString(path))
 	}
+	return b.String(), nil
+}
+
+// rustVec renders a list as a `vec![...]` expression, for the places where the
+// SDK's setter takes the whole list rather than appending one element: the value
+// of a map entry, whose setter is `.actions(key, Vec<Action>)`, and an element
+// that is itself a list. An element is spelled by rustScalarOrComposite, so a
+// list of structures is a list of builder chains and the nesting is as total as
+// it is for a structure's members.
+//
+// Like a structure literal, the result is multi-line and starts at indent plus
+// one step, which is where rustSetterLine expects an argument to sit.
+func rustVec(model *serviceModel, crate, target string, value any, path, indent string, bind *rustBindings) (string, error) {
+	items, ok := value.([]any)
+	if !ok {
+		return "", fmt.Errorf("%s is a list member but the scenario gives it %T", path, value)
+	}
+	element := model.Shapes[target].Member
+	elementIndent := indent + "    "
+	var b strings.Builder
+	if len(items) == 0 {
+		return indent + "    vec![]", nil
+	}
+	fmt.Fprintf(&b, "%s    vec![", indent)
+	for i, item := range items {
+		rendered, err := rustScalarOrComposite(model, crate, element, item, fmt.Sprintf("%s[%d]", path, i), elementIndent, bind)
+		if err != nil {
+			return "", err
+		}
+		// A scalar element is a bare expression; a composite one is already
+		// indented to the column its own lines sit in.
+		if !strings.Contains(rendered, "\n") && !strings.HasPrefix(rendered, " ") {
+			rendered = elementIndent + "    " + rendered
+		}
+		b.WriteString("\n" + rendered + ",")
+	}
+	fmt.Fprintf(&b, "\n%s    ]", indent)
 	return b.String(), nil
 }
 

@@ -15,6 +15,11 @@ use crate::scenario::{self, Call, Group, Test};
 /// The scenario file every group in this file was generated from.
 const SCENARIO_FILE: &str = "compat/model/authored/appconfig-extensions.json";
 
+const GROUP_APPCONFIG_EXTENSIONS_SHADOW: Group = Group {
+    name: "appconfig-extensions-shadow",
+    file: SCENARIO_FILE,
+};
+
 /// The authored appconfig-extensions groups.
 ///
 /// The client is built once, from the config the suite's hand-written groups
@@ -43,16 +48,754 @@ impl ServiceGroup for ScenariosAuthoredAppconfigExtensions {
 
     fn impls(&self) -> HashMap<String, TestFn> {
         let mut impls: HashMap<String, TestFn> = HashMap::new();
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:CreateExtension".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "CreateExtension", test_appconfig_extensions_shadow_create_extension(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:GetExtension".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "GetExtension", test_appconfig_extensions_shadow_get_extension(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:ListExtensions".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "ListExtensions", test_appconfig_extensions_shadow_list_extensions(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:UpdateExtension".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "UpdateExtension", test_appconfig_extensions_shadow_update_extension(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:CreateExtensionAssociation".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "CreateExtensionAssociation", test_appconfig_extensions_shadow_create_extension_association(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:GetExtensionAssociation".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "GetExtensionAssociation", test_appconfig_extensions_shadow_get_extension_association(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:ListExtensionAssociations".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "ListExtensionAssociations", test_appconfig_extensions_shadow_list_extension_associations(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:UpdateExtensionAssociation".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "UpdateExtensionAssociation", test_appconfig_extensions_shadow_update_extension_association(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:DeleteExtensionAssociation".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "DeleteExtensionAssociation", test_appconfig_extensions_shadow_delete_extension_association(&client))
+                            .await
+                    })
+                }),
+            );
+        }
+        {
+            let client = self.client.clone();
+            impls.insert(
+                "appconfig-extensions-shadow:DeleteExtension".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW
+                            .run_test(&ctx, "DeleteExtension", test_appconfig_extensions_shadow_delete_extension(&client))
+                            .await
+                    })
+                }),
+            );
+        }
         impls
     }
 
     fn setups(&self) -> HashMap<String, TestFn> {
         let mut setups: HashMap<String, TestFn> = HashMap::new();
+        {
+            let client = self.client.clone();
+            setups.insert(
+                "appconfig-extensions-shadow".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW.run_setup(&ctx, setup_appconfig_extensions_shadow(&client)).await
+                    })
+                }),
+            );
+        }
         setups
     }
 
     fn teardowns(&self) -> HashMap<String, TestFn> {
         let mut teardowns: HashMap<String, TestFn> = HashMap::new();
+        {
+            let client = self.client.clone();
+            teardowns.insert(
+                "appconfig-extensions-shadow".to_string(),
+                Arc::new(move |ctx: TestContext| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        GROUP_APPCONFIG_EXTENSIONS_SHADOW.run_teardown(&ctx, teardown_appconfig_extensions_shadow(&client)).await
+                    })
+                }),
+            );
+        }
         teardowns
+    }
+}
+
+fn setup_appconfig_extensions_shadow(_client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+    // An empty phase is a no-op, not a missing one.
+    Vec::new()
+}
+
+fn teardown_appconfig_extensions_shadow(client: &aws_sdk_appconfig::Client) -> Vec<Call> {
+    vec![
+        Call {
+            op: "DeleteExtensionAssociation",
+            params: scenario::map(vec![
+                ("ExtensionAssociationId", scenario::context("assoc.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .delete_extension_association()
+                            .extension_association_id(b.string("ExtensionAssociationId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        Call {
+            op: "DeleteExtension",
+            params: scenario::map(vec![
+                ("ExtensionIdentifier", scenario::context("ext.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .delete_extension()
+                            .extension_identifier(b.string("ExtensionIdentifier")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+    ]
+}
+
+fn test_appconfig_extensions_shadow_create_extension(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "CreateExtension",
+            params: scenario::map(vec![
+                ("Actions", scenario::lit(::serde_json::json!({"PRE_START_DEPLOYMENT": [{"Name": "compat", "Uri": "arn:aws:sns:us-east-1:000000000000:compat"}]}))),
+                ("Name", scenario::name("ext")),
+            ]),
+            export: vec![
+                ("ext.id", "$.Id"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .create_extension()
+                            .actions(
+                                aws_sdk_appconfig::types::ActionPoint::from("PRE_START_DEPLOYMENT"),
+                                vec![
+                                    aws_sdk_appconfig::types::Action::builder()
+                                        .name("compat")
+                                        .uri("arn:aws:sns:us-east-1:000000000000:compat")
+                                        .build(),
+                                ]
+                            )
+                            .name(b.string("Name")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::non_empty("$.Id"),
+                scenario::equals("$.Name", scenario::name("ext")),
+            ]),
+            scenario::readback(
+                Call {
+                    op: "GetExtension",
+                    params: scenario::map(vec![
+                        ("ExtensionIdentifier", scenario::context("ext.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .get_extension()
+                                    .extension_identifier(b.string("ExtensionIdentifier")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                },
+                vec![
+                    scenario::non_empty("$.Actions.PRE_START_DEPLOYMENT"),
+                    scenario::equals("$.Name", scenario::name("ext")),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_get_extension(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "GetExtension",
+            params: scenario::map(vec![
+                ("ExtensionIdentifier", scenario::context("ext.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .get_extension()
+                            .extension_identifier(b.string("ExtensionIdentifier")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.Id", scenario::context("ext.id")),
+                scenario::equals("$.Name", scenario::name("ext")),
+            ]),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_list_extensions(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "ListExtensions",
+            params: scenario::lit(::serde_json::json!({})),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |_b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .list_extensions()
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::list_contains(
+                None,
+                "$.Items",
+                vec![
+                    scenario::where_entry("$.Id", scenario::context("ext.id")),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_update_extension(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "UpdateExtension",
+            params: scenario::map(vec![
+                ("Description", scenario::lit(::serde_json::json!("updated by compat"))),
+                ("ExtensionIdentifier", scenario::context("ext.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .update_extension()
+                            .description("updated by compat")
+                            .extension_identifier(b.string("ExtensionIdentifier")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.Description", scenario::lit(::serde_json::json!("updated by compat"))),
+            ]),
+            scenario::readback(
+                Call {
+                    op: "GetExtension",
+                    params: scenario::map(vec![
+                        ("ExtensionIdentifier", scenario::context("ext.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .get_extension()
+                                    .extension_identifier(b.string("ExtensionIdentifier")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                },
+                vec![
+                    scenario::equals("$.Description", scenario::lit(::serde_json::json!("updated by compat"))),
+                    scenario::equals("$.Name", scenario::name("ext")),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_create_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "CreateExtensionAssociation",
+            params: scenario::map(vec![
+                ("ExtensionIdentifier", scenario::context("ext.id")),
+                ("ResourceIdentifier", scenario::lit(::serde_json::json!("arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz"))),
+            ]),
+            export: vec![
+                ("assoc.id", "$.Id"),
+            ],
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .create_extension_association()
+                            .extension_identifier(b.string("ExtensionIdentifier")?)
+                            .resource_identifier("arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz")
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::non_empty("$.Id"),
+            ]),
+            scenario::readback(
+                Call {
+                    op: "GetExtensionAssociation",
+                    params: scenario::map(vec![
+                        ("ExtensionAssociationId", scenario::context("assoc.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .get_extension_association()
+                                    .extension_association_id(b.string("ExtensionAssociationId")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                },
+                vec![
+                    scenario::equals("$.Id", scenario::context("assoc.id")),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_get_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "GetExtensionAssociation",
+            params: scenario::map(vec![
+                ("ExtensionAssociationId", scenario::context("assoc.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .get_extension_association()
+                            .extension_association_id(b.string("ExtensionAssociationId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.Id", scenario::context("assoc.id")),
+            ]),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_list_extension_associations(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "ListExtensionAssociations",
+            params: scenario::lit(::serde_json::json!({})),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |_b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .list_extension_associations()
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::is_list("$.Items"),
+            ]),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_update_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "UpdateExtensionAssociation",
+            params: scenario::map(vec![
+                ("ExtensionAssociationId", scenario::context("assoc.id")),
+                ("Parameters", scenario::lit(::serde_json::json!({"compat": "true"}))),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .update_extension_association()
+                            .extension_association_id(b.string("ExtensionAssociationId")?)
+                            .parameters("compat", "true")
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::response_field(vec![
+                scenario::equals("$.Id", scenario::context("assoc.id")),
+                scenario::equals("$.Parameters.compat", scenario::lit(::serde_json::json!("true"))),
+            ]),
+            scenario::readback(
+                Call {
+                    op: "GetExtensionAssociation",
+                    params: scenario::map(vec![
+                        ("ExtensionAssociationId", scenario::context("assoc.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .get_extension_association()
+                                    .extension_association_id(b.string("ExtensionAssociationId")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                },
+                vec![
+                    scenario::equals("$.Parameters.compat", scenario::lit(::serde_json::json!("true"))),
+                ],
+            ),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_delete_extension_association(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "DeleteExtensionAssociation",
+            params: scenario::map(vec![
+                ("ExtensionAssociationId", scenario::context("assoc.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .delete_extension_association()
+                            .extension_association_id(b.string("ExtensionAssociationId")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::absent_by_error(
+                Call {
+                    op: "GetExtensionAssociation",
+                    params: scenario::map(vec![
+                        ("ExtensionAssociationId", scenario::context("assoc.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .get_extension_association()
+                                    .extension_association_id(b.string("ExtensionAssociationId")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                },
+                scenario::error("ResourceNotFoundException", "ResourceNotFoundException"),
+            ),
+        ],
+    }
+}
+
+fn test_appconfig_extensions_shadow_delete_extension(client: &aws_sdk_appconfig::Client) -> Test {
+    Test {
+        call: Call {
+            op: "DeleteExtension",
+            params: scenario::map(vec![
+                ("ExtensionIdentifier", scenario::context("ext.id")),
+            ]),
+            export: Vec::new(),
+            invoke: {
+                let client = client.clone();
+                scenario::invoker(move |b| {
+                    let client = client.clone();
+                    Box::pin(async move {
+                        let capture = scenario::Capture::new();
+                        let request = client
+                            .delete_extension()
+                            .extension_identifier(b.string("ExtensionIdentifier")?)
+                            .customize()
+                            .interceptor(capture.clone());
+                        Ok(scenario::observe(request.send().await, &capture))
+                    })
+                })
+            },
+        },
+        assert: vec![
+            scenario::absent_by_error(
+                Call {
+                    op: "GetExtension",
+                    params: scenario::map(vec![
+                        ("ExtensionIdentifier", scenario::context("ext.id")),
+                    ]),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .get_extension()
+                                    .extension_identifier(b.string("ExtensionIdentifier")?)
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                },
+                scenario::error("ResourceNotFoundException", "ResourceNotFoundException"),
+            ),
+            scenario::absent_from_list(
+                Some(Call {
+                    op: "ListExtensions",
+                    params: scenario::lit(::serde_json::json!({})),
+                    export: Vec::new(),
+                    invoke: {
+                        let client = client.clone();
+                        scenario::invoker(move |_b| {
+                            let client = client.clone();
+                            Box::pin(async move {
+                                let capture = scenario::Capture::new();
+                                let request = client
+                                    .list_extensions()
+                                    .customize()
+                                    .interceptor(capture.clone());
+                                Ok(scenario::observe(request.send().await, &capture))
+                            })
+                        })
+                    },
+                }),
+                "$.Items",
+                vec![
+                    scenario::where_entry("$.Id", scenario::context("ext.id")),
+                ],
+            ),
+        ],
     }
 }

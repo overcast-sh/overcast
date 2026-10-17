@@ -116,6 +116,7 @@
 "SprocketNotFound": {"type":"structure","members":{"message":{"target":"smithy.api#String"}},"traits":{"smithy.api#error":"client","smithy.api#httpError":404}},
 "SprocketTag": {"type":"structure","members":{"Key":{"target":"smithy.api#String"},"Value":{"target":"smithy.api#String"}}},
 "SprocketTagList": {"type":"list","member":"SprocketTag"},
+"SprocketTagListMap": {"type":"map","key":"smithy.api#String","value":"SprocketTagList"},
 "SyncWidgets": {"type":"operation","input":"SyncWidgetsRequest","output":"smithy.api#Unit"},
 "SyncWidgetsRequest": {"type":"structure","traits":{"smithy.api#input":{}}},
 "TagGauge": {"type":"operation","input":"TagGaugeRequest","output":"smithy.api#Unit"},
@@ -154,7 +155,7 @@
 "WidgetName": {"type":"string","traits":{"smithy.api#length":{"max":64,"min":1},"smithy.api#pattern":"^[a-z0-9-]+$"}},
 "WidgetNotFound": {"type":"structure","members":{"message":{"target":"smithy.api#String"}},"traits":{"aws.protocols#awsQueryError":{"code":"Widget.NotFound","httpResponseCode":404},"smithy.api#error":"client","smithy.api#httpError":404}},
 "WidgetService": {"type":"service","version":"2026-01-01","operations":["ArchiveWidget","CalibrateGauge","CreateCog","CreateSprocket","CreateWidget","DeleteSprocket","DeleteWidget","DescribeGauge","DescribeGizmo","DescribeHub","DescribeHubTags","DescribeValve","DescribeWidget","FreezeWidget","GetSprocket","GetWidget","GetWidgetAck","GetWidgetHistory","GetWidgetSecret","ListCogs","ListGaugeTags","ListGauges","ListSprocketTags","ListValveTags","ListWidgetTags","ListWidgets","ListWidgetsAndCogs","PingWidgets","PolishWidget","PurgeWidgets","RotateWidget","ScanWidgets","SetWidgetSize","SyncWidgets","TagGauge","TagHub","TagSprocket","TagValve","TagWidget","UntagGauge","UntagHub","UntagSprocket","UntagValve","UntagWidget","UpdateWidget"],"traits":{"aws.api#service":{"endpointPrefix":"widgets","sdkId":"Widgets"},"aws.auth#sigv4":{"name":"widgets"},"aws.protocols#awsJson1_1":{}}},
-"WidgetSettings": {"type":"structure","members":{"Cogs":{"target":"CogList"},"Labels":{"target":"TagMap"},"Retention":{"target":"RetentionPolicy"},"Tags":{"target":"SprocketTagList"}}},
+"WidgetSettings": {"type":"structure","members":{"Cogs":{"target":"CogList"},"Hooks":{"target":"SprocketTagListMap"},"Labels":{"target":"TagMap"},"Retention":{"target":"RetentionPolicy"},"Tags":{"target":"SprocketTagList"}}},
 "WidgetSize": {"type":"integer","traits":{"smithy.api#range":{"max":100,"min":1}}}
 }
 }
