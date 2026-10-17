@@ -462,6 +462,43 @@
       ]
     },
     {
+      "service": "backup",
+      "name": "backup-selections-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/backup-selections.json",
+      "state": "candidate",
+      "shadowOf": "backup-selections",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateBackupSelection"
+        },
+        {
+          "name": "ListBackupSelections"
+        },
+        {
+          "name": "GetBackupSelection",
+          "depends": [
+            "CreateBackupSelection"
+          ]
+        },
+        {
+          "name": "DeleteBackupSelection",
+          "depends": [
+            "CreateBackupSelection"
+          ]
+        }
+      ]
+    },
+    {
       "service": "batch",
       "name": "batch-gen-computeenvironment",
       "generated": true,

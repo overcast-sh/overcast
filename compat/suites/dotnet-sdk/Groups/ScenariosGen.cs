@@ -22,6 +22,7 @@ internal static class ScenarioGroups
         new ScenariosAuthoredAppconfigEnvironments(clients),
         new ScenariosAuthoredAppconfigExtensions(clients),
         new ScenariosAuthoredAppconfigTags(clients),
+        new ScenariosAuthoredBackupSelections(clients),
         new ScenariosAuthoredBackupTags(clients),
         new ScenariosAuthoredCognitoUserpools(clients),
         new ScenariosAuthoredEcrPolicies(clients),

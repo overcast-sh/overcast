@@ -29,6 +29,9 @@ mod scenarios_authored_appconfig_extensions_gen;
 #[path = "scenarios_authored_appconfig_tags_gen.rs"]
 mod scenarios_authored_appconfig_tags_gen;
 
+#[path = "scenarios_authored_backup_selections_gen.rs"]
+mod scenarios_authored_backup_selections_gen;
+
 #[path = "scenarios_authored_backup_tags_gen.rs"]
 mod scenarios_authored_backup_tags_gen;
 
@@ -128,6 +131,7 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_appconfig_environments_gen::ScenariosAuthoredAppconfigEnvironments::new(clients)),
         Box::new(scenarios_authored_appconfig_extensions_gen::ScenariosAuthoredAppconfigExtensions::new(clients)),
         Box::new(scenarios_authored_appconfig_tags_gen::ScenariosAuthoredAppconfigTags::new(clients)),
+        Box::new(scenarios_authored_backup_selections_gen::ScenariosAuthoredBackupSelections::new(clients)),
         Box::new(scenarios_authored_backup_tags_gen::ScenariosAuthoredBackupTags::new(clients)),
         Box::new(scenarios_authored_cognito_userpools_gen::ScenariosAuthoredCognitoUserpools::new(clients)),
         Box::new(scenarios_authored_ecr_policies_gen::ScenariosAuthoredEcrPolicies::new(clients)),
