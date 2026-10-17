@@ -1,0 +1,637 @@
+{
+  "$comment": "Authored shadow port of the hand-written registry group ecr-repositories (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/ecr.go); go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk never implemented it and carry it as parity debt, which the port closes once it is flipped. This is step 1 of the two-PR migration: the group is named ecr-repositories-shadow and runs beside the native, gating nothing. It was left out of the wave 3 ports (#2240) because the IR could not walk the pages of a list and Overcast did not page DescribeRepositories, ListImages or DescribeImages; both are fixed now (#2315, #2317). The clauses are what the cli native asserted, plus read-backs of documented effects where it asserted only success, each choice stated on its test — see compat/model/README.md § Authored scenarios. The cli native also asserts the HTTP status (400) of every error it provokes beside its code. The IR's error clause has no status, so only the code is carried: ECR is awsJson1_1 and none of its modeled errors binds an httpError status, so 400 is the protocol default, and the code is what a caller branches on — the same choice every earlier port made.",
+  "version": 1,
+  "service": "ecr",
+  "client": {
+    "sdkId": "ECR",
+    "endpointPrefix": "api.ecr",
+    "signingName": "ecr",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2015-09-21",
+    "targetPrefix": "AmazonEC2ContainerRegistry_V20150921",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "The native's setup creates two extra repositories (-page1, -page2) so that three exist for the pagination test however the rest of the group fares; so does this setup, and it exports their ARNs. It also creates the three repositories the native creates inside DeleteRepository, DeleteRepositoryNotEmpty and DeleteRepositoryForce, because an IR test has one primary call, and puts an image in two of them. They are named by $name ({runId}-ecr-repositories-shadow-<n>), so they are never the native group's (whose namer is ecr-repo) or another ECR group's; CreateRepository refuses a repeat and the groups run in parallel. The extra repositories exist while the pagination test walks, which only adds pages. Teardown deletes all six with force, as the native does, each call wrapped individually so a repository a test already deleted is skipped. Only the pagination walks are wrapped in `eventually`; the native polls nothing else.",
+      "name": "ecr-repositories-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "page1"
+            }
+          },
+          "export": {
+            "page1.arn": "$.repository.repositoryArn"
+          }
+        },
+        {
+          "op": "CreateRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "page2"
+            }
+          },
+          "export": {
+            "page2.arn": "$.repository.repositoryArn"
+          }
+        },
+        {
+          "op": "CreateRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "del"
+            }
+          }
+        },
+        {
+          "op": "CreateRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "nonempty"
+            }
+          }
+        },
+        {
+          "op": "PutImage",
+          "params": {
+            "repositoryName": {
+              "$name": "nonempty"
+            },
+            "imageTag": "keepme",
+            "imageManifest": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000001\"},\"layers\":[]}"
+          }
+        },
+        {
+          "op": "CreateRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "force"
+            }
+          }
+        },
+        {
+          "op": "PutImage",
+          "params": {
+            "repositoryName": {
+              "$name": "force"
+            },
+            "imageTag": "doomed",
+            "imageManifest": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000002\"},\"layers\":[]}"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The native requires the repository CreateRepository describes to carry the name asked for, an ECR ARN ending in it, a non-empty registryId, a repositoryUri naming it, a createdAt and imageTagMutability MUTABLE, then describes it back and requires the same ARN. The ARN and URI suffix cannot interpolate the name, so they are regexes on the shape of the group's own $name ({runId}-ecr-repositories-shadow-repo): the host of the URI is the registry container's published address and is not fixed, only the path is. The ARN is exported for the later tests.",
+          "name": "CreateRepository",
+          "op": "CreateRepository",
+          "call": {
+            "op": "CreateRepository",
+            "params": {
+              "repositoryName": {
+                "$name": "repo"
+              }
+            },
+            "export": {
+              "repo.arn": "$.repository.repositoryArn"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.repository.repositoryName": {
+                  "equals": {
+                    "$name": "repo"
+                  }
+                },
+                "$.repository.repositoryArn": {
+                  "matches": "^arn:aws:ecr:[a-z0-9-]+:[0-9]{12}:repository/.+-ecr-repositories-shadow-repo$"
+                },
+                "$.repository.registryId": {
+                  "nonEmpty": true
+                },
+                "$.repository.repositoryUri": {
+                  "matches": "/.+-ecr-repositories-shadow-repo$"
+                },
+                "$.repository.createdAt": {
+                  "nonEmpty": true
+                },
+                "$.repository.imageTagMutability": {
+                  "equals": "MUTABLE"
+                }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeRepositories",
+                "params": {
+                  "repositoryNames": [
+                    {
+                      "$name": "repo"
+                    }
+                  ]
+                }
+              },
+              "checks": {
+                "$.repositories[0].repositoryName": {
+                  "equals": {
+                    "$name": "repo"
+                  }
+                },
+                "$.repositories[0].repositoryArn": {
+                  "equals": {
+                    "$ref": "repo.arn"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native requires --repository-names to return exactly one repository, with the same shape CreateRepository returned. `exactly one` is a second item missing, as the ecr-tags port spells it.",
+          "name": "DescribeRepositories",
+          "op": "DescribeRepositories",
+          "call": {
+            "op": "DescribeRepositories",
+            "params": {
+              "repositoryNames": [
+                {
+                  "$name": "repo"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.repositories[0].repositoryName": {
+                  "equals": {
+                    "$name": "repo"
+                  }
+                },
+                "$.repositories[1]": {
+                  "missing": true
+                },
+                "$.repositories[0].repositoryArn": {
+                  "equals": {
+                    "$ref": "repo.arn"
+                  }
+                },
+                "$.repositories[0].registryId": {
+                  "nonEmpty": true
+                },
+                "$.repositories[0].repositoryUri": {
+                  "matches": "/.+-ecr-repositories-shadow-repo$"
+                },
+                "$.repositories[0].createdAt": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "$comment": "The unfiltered collection read, the shape of call #963 found answering 501 or as another service. The native requires the list to be non-empty and to hold this group's three repositories with the repository shape. Each is a listContains on its name and its ARN (the two setup repositories' ARNs are exported by setup, repo's by CreateRepository), which is the native's ARN check. The first page is enough: it is the unpaginated call, and the default page is 100.",
+          "name": "DescribeRepositoriesAll",
+          "op": "DescribeRepositories",
+          "call": {
+            "op": "DescribeRepositories",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.repositories",
+              "where": {
+                "$.repositoryName": {
+                  "$name": "repo"
+                },
+                "$.repositoryArn": {
+                  "$ref": "repo.arn"
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.repositories",
+              "where": {
+                "$.repositoryName": {
+                  "$name": "page1"
+                },
+                "$.repositoryArn": {
+                  "$ref": "page1.arn"
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.repositories",
+              "where": {
+                "$.repositoryName": {
+                  "$name": "page2"
+                },
+                "$.repositoryArn": {
+                  "$ref": "page2.arn"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "$comment": "Native: a full walk at --page-size 1 must return all three of the group's repositories; --max-items 1 must return exactly one repository and a NextToken; resuming from the token must return at least two of the three. The primary call is the first page at maxResults 1: one repository and a nextToken. Three listContains clauses, one per repository, each walk every page at a page size of 1 (the member names are the @paginated trait's: maxResults, nextToken, nextToken). `minPages: 3` is the native's `at least two came back after the first page`: with every page holding at most one repository, three repositories need at least three pages, so the first page holds at most one of them and at least two arrive after it. A service that replayed the first page or stopped after it fails minPages and the contains. Scoping: DescribeRepositories has no prefix filter, and repositoryNames cannot be combined with maxResults (the emulator answers InvalidParameterException, as the API Reference documents), so a filtered list could not be paged at all. The walk is therefore the whole account, as the native's is: other groups' repositories only add pages, and the three names are found wherever they sort. The walk stops at 50 pages and a suite's emulator holds well under that. A repository created or deleted by a parallel ECR group mid-walk can shift an offset token and skip one of ours, so each walk sits in `eventually` and is repeated whole, up to three times; a service that never returns a repository fails all three.",
+          "name": "DescribeRepositoriesPaginated",
+          "op": "DescribeRepositories",
+          "call": {
+            "op": "DescribeRepositories",
+            "params": {
+              "maxResults": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.repositories[0]": {
+                  "nonEmpty": true
+                },
+                "$.repositories[1]": {
+                  "missing": true
+                },
+                "$.nextToken": {
+                  "nonEmpty": true
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 3,
+              "delayMs": 250,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "DescribeRepositories",
+                  "params": {}
+                },
+                "itemsPath": "$.repositories",
+                "where": {
+                  "$.repositoryName": {
+                    "$name": "repo"
+                  }
+                },
+                "paginate": {
+                  "pageSize": 1,
+                  "minPages": 3,
+                  "inputToken": "nextToken",
+                  "outputToken": "nextToken",
+                  "pageSizeMember": "maxResults"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 3,
+              "delayMs": 250,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "DescribeRepositories",
+                  "params": {}
+                },
+                "itemsPath": "$.repositories",
+                "where": {
+                  "$.repositoryName": {
+                    "$name": "page1"
+                  }
+                },
+                "paginate": {
+                  "pageSize": 1,
+                  "minPages": 3,
+                  "inputToken": "nextToken",
+                  "outputToken": "nextToken",
+                  "pageSizeMember": "maxResults"
+                }
+              }
+            },
+            {
+              "kind": "eventually",
+              "maxAttempts": 3,
+              "delayMs": 250,
+              "assert": {
+                "kind": "listContains",
+                "call": {
+                  "op": "DescribeRepositories",
+                  "params": {}
+                },
+                "itemsPath": "$.repositories",
+                "where": {
+                  "$.repositoryName": {
+                    "$name": "page2"
+                  }
+                },
+                "paginate": {
+                  "pageSize": 1,
+                  "minPages": 3,
+                  "inputToken": "nextToken",
+                  "outputToken": "nextToken",
+                  "pageSizeMember": "maxResults"
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "$comment": "The native repeats the read with a SigV4-signed request, to prove the signed path a real caller uses reaches ECR and not S3, which shares the service root; the response must carry a \"repositories\" key and the repository shape. Every IR backend signs, so the primary call is that request, and a response that is not ECR's fails the checks on $.repositories. Same checks as DescribeRepositories.",
+          "name": "DescribeRepositoriesSigned",
+          "op": "DescribeRepositories",
+          "call": {
+            "op": "DescribeRepositories",
+            "params": {
+              "repositoryNames": [
+                {
+                  "$name": "repo"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.repositories[0].repositoryName": {
+                  "equals": {
+                    "$name": "repo"
+                  }
+                },
+                "$.repositories[0].repositoryArn": {
+                  "equals": {
+                    "$ref": "repo.arn"
+                  }
+                },
+                "$.repositories[0].registryId": {
+                  "nonEmpty": true
+                },
+                "$.repositories[0].repositoryUri": {
+                  "matches": "/.+-ecr-repositories-shadow-repo$"
+                },
+                "$.repositories[0].createdAt": {
+                  "nonEmpty": true
+                }
+              }
+            }
+          ],
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "$comment": "A name nothing created: RepositoryNotFoundException. No depends, as in the registry.",
+          "name": "DescribeRepositoriesNotFound",
+          "op": "DescribeRepositories",
+          "call": {
+            "op": "DescribeRepositories",
+            "params": {
+              "repositoryNames": [
+                {
+                  "$name": "absent"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "RepositoryNotFoundException",
+                "code": "RepositoryNotFoundException"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Creating the repository CreateRepository made: RepositoryAlreadyExistsException, as the native requires.",
+          "name": "CreateRepositoryAlreadyExists",
+          "op": "CreateRepository",
+          "call": {
+            "op": "CreateRepository",
+            "params": {
+              "repositoryName": {
+                "$name": "repo"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "RepositoryAlreadyExistsException",
+                "code": "RepositoryAlreadyExistsException"
+              }
+            }
+          ],
+          "depends": [
+            "CreateRepository"
+          ]
+        },
+        {
+          "$comment": "The native creates a repository in the test, deletes it, requires the response to name it, then requires a describe to answer RepositoryNotFoundException. An IR test has one primary call, so setup creates `del` and the test deletes it; the read-back is the `absent` error form.",
+          "name": "DeleteRepository",
+          "op": "DeleteRepository",
+          "call": {
+            "op": "DeleteRepository",
+            "params": {
+              "repositoryName": {
+                "$name": "del"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.repository.repositoryName": {
+                  "equals": {
+                    "$name": "del"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeRepositories",
+                "params": {
+                  "repositoryNames": [
+                    {
+                      "$name": "del"
+                    }
+                  ]
+                }
+              },
+              "error": {
+                "shape": "RepositoryNotFoundException",
+                "code": "RepositoryNotFoundException"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "Per the ECR API Reference, DeleteRepository on a repository that still holds images answers RepositoryNotEmptyException unless force is set. Setup creates `nonempty` and puts one image in it (the native does both in the test). The native also requires the refused delete to have left the repository in place, which is the read-back.",
+          "name": "DeleteRepositoryNotEmpty",
+          "op": "DeleteRepository",
+          "call": {
+            "op": "DeleteRepository",
+            "params": {
+              "repositoryName": {
+                "$name": "nonempty"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "RepositoryNotEmptyException",
+                "code": "RepositoryNotEmptyException"
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "DescribeRepositories",
+                "params": {
+                  "repositoryNames": [
+                    {
+                      "$name": "nonempty"
+                    }
+                  ]
+                }
+              },
+              "checks": {
+                "$.repositories[0].repositoryName": {
+                  "equals": {
+                    "$name": "nonempty"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "force deletes a repository that holds an image: setup creates `force` with one image in it; the response names the repository, and a describe then answers RepositoryNotFoundException, as the native requires.",
+          "name": "DeleteRepositoryForce",
+          "op": "DeleteRepository",
+          "call": {
+            "op": "DeleteRepository",
+            "params": {
+              "repositoryName": {
+                "$name": "force"
+              },
+              "force": true
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.repository.repositoryName": {
+                  "equals": {
+                    "$name": "force"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "DescribeRepositories",
+                "params": {
+                  "repositoryNames": [
+                    {
+                      "$name": "force"
+                    }
+                  ]
+                }
+              },
+              "error": {
+                "shape": "RepositoryNotFoundException",
+                "code": "RepositoryNotFoundException"
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "force"
+            },
+            "force": true
+          }
+        },
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "nonempty"
+            },
+            "force": true
+          }
+        },
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "del"
+            },
+            "force": true
+          }
+        },
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "repo"
+            },
+            "force": true
+          }
+        },
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "page2"
+            },
+            "force": true
+          }
+        },
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "page1"
+            },
+            "force": true
+          }
+        }
+      ]
+    }
+  ]
+}

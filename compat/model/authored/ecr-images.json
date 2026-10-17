@@ -1,0 +1,455 @@
+{
+  "$comment": "Authored shadow port of the hand-written registry group ecr-images (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group's only native is the cli suite's (compat/suites/cli/internal/groups/ecr.go); go-sdk, python-sdk, node-js-sdk, java-sdk, dotnet-sdk and rust-sdk never implemented it and carry it as parity debt, which the port closes once it is flipped. This is step 1 of the two-PR migration: the group is named ecr-images-shadow and runs beside the native, gating nothing. It was left out of the wave 3 ports (#2240) because the IR could not walk the pages of a list and Overcast did not page DescribeRepositories, ListImages or DescribeImages; both are fixed now (#2315, #2317). The clauses are what the cli native asserted, plus read-backs of documented effects where it asserted only success, each choice stated on its test — see compat/model/README.md § Authored scenarios. The cli native also asserts the HTTP status (400) of every error it provokes beside its code. The IR's error clause has no status, so only the code is carried: ECR is awsJson1_1 and none of its modeled errors binds an httpError status, so 400 is the protocol default, and the code is what a caller branches on — the same choice every earlier port made.",
+  "version": 1,
+  "service": "ecr",
+  "client": {
+    "sdkId": "ECR",
+    "endpointPrefix": "api.ecr",
+    "signingName": "ecr",
+    "protocol": "awsJson1_1",
+    "apiVersion": "2015-09-21",
+    "targetPrefix": "AmazonEC2ContainerRegistry_V20150921",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "Setup creates the two repositories the native's does, `imgs` and `paged` ({runId}-ecr-images-shadow-imgs / -paged; never the native group's, whose namer is ecr-img). The paginated test gets its own so its page boundaries do not move when a neighbouring test adds or deletes an image. Setup also publishes the three paginated images and the `doomed` image BatchDeleteImage removes, which the native publishes inside those tests (an IR test has one primary call). Every image carries distinct manifest bytes, because ECR stores a manifest under the digest of its own bytes and two images differing only by tag would collide. Teardown deletes both repositories with force, as the native does. No clause is wrapped in `eventually`: the native polls nothing.",
+      "name": "ecr-images-shadow",
+      "kind": "lifecycle",
+      "setup": [
+        {
+          "op": "CreateRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "imgs"
+            }
+          }
+        },
+        {
+          "op": "CreateRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "paged"
+            }
+          }
+        },
+        {
+          "op": "PutImage",
+          "params": {
+            "repositoryName": {
+              "$name": "paged"
+            },
+            "imageTag": "page1",
+            "imageManifest": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000021\"},\"layers\":[]}"
+          }
+        },
+        {
+          "op": "PutImage",
+          "params": {
+            "repositoryName": {
+              "$name": "paged"
+            },
+            "imageTag": "page2",
+            "imageManifest": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000022\"},\"layers\":[]}"
+          }
+        },
+        {
+          "op": "PutImage",
+          "params": {
+            "repositoryName": {
+              "$name": "paged"
+            },
+            "imageTag": "page3",
+            "imageManifest": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000023\"},\"layers\":[]}"
+          }
+        },
+        {
+          "op": "PutImage",
+          "params": {
+            "repositoryName": {
+              "$name": "imgs"
+            },
+            "imageTag": "doomed",
+            "imageManifest": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000011\"},\"layers\":[]}"
+          }
+        }
+      ],
+      "tests": [
+        {
+          "$comment": "The native requires a sha256 imageDigest, then ListImages to show the tag v1. The digest is exported for the later tests; that the response carries the tag is added, the API Reference documenting PutImage as echoing the imageId.",
+          "name": "PutImage",
+          "op": "PutImage",
+          "call": {
+            "op": "PutImage",
+            "params": {
+              "repositoryName": {
+                "$name": "imgs"
+              },
+              "imageTag": "v1",
+              "imageManifest": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000010\"},\"layers\":[]}"
+            },
+            "export": {
+              "image.digest": "$.image.imageId.imageDigest"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.image.imageId.imageDigest": {
+                  "matches": "^sha256:"
+                },
+                "$.image.imageId.imageTag": {
+                  "equals": "v1"
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListImages",
+                "params": {
+                  "repositoryName": {
+                    "$name": "imgs"
+                  }
+                }
+              },
+              "itemsPath": "$.imageIds",
+              "where": {
+                "$.imageTag": "v1"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native requires the digest PutImage returned to be listed, carrying the tag v1.",
+          "name": "ListImages",
+          "op": "ListImages",
+          "call": {
+            "op": "ListImages",
+            "params": {
+              "repositoryName": {
+                "$name": "imgs"
+              }
+            }
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.imageIds",
+              "where": {
+                "$.imageDigest": {
+                  "$ref": "image.digest"
+                },
+                "$.imageTag": "v1"
+              }
+            }
+          ],
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "$comment": "Native: three images published into a repository the test owns; --max-items 1 returns one imageId and a NextToken; resuming returns the other two and does not replay the first. Setup publishes the three (page1 to page3) into `paged`, which nothing else touches, so the page boundaries are deterministic. The primary call is the first page at maxResults 1: one imageId and a nextToken. Each tag then has a listContains that walks every page at a page size of 1 (member names from ListImages' @paginated trait: maxResults, nextToken, nextToken). `minPages: 3` is the native's `the other two came back on the resumed page`: three images at one per page need exactly three pages, so two arrive after the first and none is lost. The native's `no replay` is covered by the same count: a replayed page would repeat an image and leave another out, failing a contains. The repository is the test's own, so no scoping or retry is needed.",
+          "name": "ListImagesPaginated",
+          "op": "ListImages",
+          "call": {
+            "op": "ListImages",
+            "params": {
+              "repositoryName": {
+                "$name": "paged"
+              },
+              "maxResults": 1
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.imageIds[0]": {
+                  "nonEmpty": true
+                },
+                "$.imageIds[1]": {
+                  "missing": true
+                },
+                "$.nextToken": {
+                  "nonEmpty": true
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListImages",
+                "params": {
+                  "repositoryName": {
+                    "$name": "paged"
+                  }
+                }
+              },
+              "itemsPath": "$.imageIds",
+              "where": {
+                "$.imageTag": "page1"
+              },
+              "paginate": {
+                "pageSize": 1,
+                "minPages": 3,
+                "inputToken": "nextToken",
+                "outputToken": "nextToken",
+                "pageSizeMember": "maxResults"
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListImages",
+                "params": {
+                  "repositoryName": {
+                    "$name": "paged"
+                  }
+                }
+              },
+              "itemsPath": "$.imageIds",
+              "where": {
+                "$.imageTag": "page2"
+              },
+              "paginate": {
+                "pageSize": 1,
+                "minPages": 3,
+                "inputToken": "nextToken",
+                "outputToken": "nextToken",
+                "pageSizeMember": "maxResults"
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListImages",
+                "params": {
+                  "repositoryName": {
+                    "$name": "paged"
+                  }
+                }
+              },
+              "itemsPath": "$.imageIds",
+              "where": {
+                "$.imageTag": "page3"
+              },
+              "paginate": {
+                "pageSize": 1,
+                "minPages": 3,
+                "inputToken": "nextToken",
+                "outputToken": "nextToken",
+                "pageSizeMember": "maxResults"
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native requires exactly one imageDetail for tag v1, with the digest PutImage returned, the repository name, and v1 among its imageTags.",
+          "name": "DescribeImages",
+          "op": "DescribeImages",
+          "call": {
+            "op": "DescribeImages",
+            "params": {
+              "repositoryName": {
+                "$name": "imgs"
+              },
+              "imageIds": [
+                {
+                  "imageTag": "v1"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.imageDetails[0].imageDigest": {
+                  "equals": {
+                    "$ref": "image.digest"
+                  }
+                },
+                "$.imageDetails[0].repositoryName": {
+                  "equals": {
+                    "$name": "imgs"
+                  }
+                },
+                "$.imageDetails[1]": {
+                  "missing": true
+                }
+              }
+            },
+            {
+              "kind": "listContains",
+              "itemsPath": "$.imageDetails[0].imageTags",
+              "where": {
+                "$": "v1"
+              }
+            }
+          ],
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "$comment": "The native requires no failures, exactly one image, the manifest PutImage stored byte for byte, and the PutImage digest.",
+          "name": "BatchGetImage",
+          "op": "BatchGetImage",
+          "call": {
+            "op": "BatchGetImage",
+            "params": {
+              "repositoryName": {
+                "$name": "imgs"
+              },
+              "imageIds": [
+                {
+                  "imageTag": "v1"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.failures[0]": {
+                  "missing": true
+                },
+                "$.images[0].imageManifest": {
+                  "equals": "{\"schemaVersion\":2,\"mediaType\":\"application/vnd.docker.distribution.manifest.v2+json\",\"config\":{\"mediaType\":\"application/vnd.docker.container.image.v1+json\",\"size\":2,\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000010\"},\"layers\":[]}"
+                },
+                "$.images[0].imageId.imageDigest": {
+                  "equals": {
+                    "$ref": "image.digest"
+                  }
+                },
+                "$.images[1]": {
+                  "missing": true
+                }
+              }
+            }
+          ],
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "$comment": "Setup publishes the `doomed` tag the native publishes in the test. The native requires no failures and exactly one deleted imageId, then that doomed is no longer listed and v1 still is.",
+          "name": "BatchDeleteImage",
+          "op": "BatchDeleteImage",
+          "call": {
+            "op": "BatchDeleteImage",
+            "params": {
+              "repositoryName": {
+                "$name": "imgs"
+              },
+              "imageIds": [
+                {
+                  "imageTag": "doomed"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.failures[0]": {
+                  "missing": true
+                },
+                "$.imageIds[0].imageTag": {
+                  "equals": "doomed"
+                },
+                "$.imageIds[1]": {
+                  "missing": true
+                }
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListImages",
+                "params": {
+                  "repositoryName": {
+                    "$name": "imgs"
+                  }
+                }
+              },
+              "itemsPath": "$.imageIds",
+              "where": {
+                "$.imageTag": "doomed"
+              }
+            },
+            {
+              "kind": "listContains",
+              "call": {
+                "op": "ListImages",
+                "params": {
+                  "repositoryName": {
+                    "$name": "imgs"
+                  }
+                }
+              },
+              "itemsPath": "$.imageIds",
+              "where": {
+                "$.imageTag": "v1"
+              }
+            }
+          ],
+          "depends": [
+            "PutImage"
+          ]
+        },
+        {
+          "$comment": "A tag nothing pushed: ImageNotFoundException. No depends, as in the registry.",
+          "name": "DescribeImagesNotFound",
+          "op": "DescribeImages",
+          "call": {
+            "op": "DescribeImages",
+            "params": {
+              "repositoryName": {
+                "$name": "imgs"
+              },
+              "imageIds": [
+                {
+                  "imageTag": "no-such-tag"
+                }
+              ]
+            }
+          },
+          "assert": [
+            {
+              "kind": "errorCode",
+              "error": {
+                "shape": "ImageNotFoundException",
+                "code": "ImageNotFoundException"
+              }
+            }
+          ]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "paged"
+            },
+            "force": true
+          }
+        },
+        {
+          "op": "DeleteRepository",
+          "params": {
+            "repositoryName": {
+              "$name": "imgs"
+            },
+            "force": true
+          }
+        }
+      ]
+    }
+  ]
+}
