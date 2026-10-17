@@ -85,7 +85,12 @@ export type Check =
   | { endsWith: Value }
   | { startsWith: Value }
   | { contains: Value }
-  | { missing: true };
+  | { missing: true }
+  /**
+   * The path resolves, whatever the value (`[]`, `{}`, `""`, `0`, `false` and
+   * JSON null included). Exactly the negation of `missing`.
+   */
+  | { present: true };
 
 /** Response path → check. */
 export type Checks = Record<Path, Check>;

@@ -174,6 +174,36 @@ describe("checks", () => {
     );
   });
 
+  it("present holds for any resolved value, null and empties included", () => {
+    const response = { A: [], B: {}, C: "", D: 0, E: false, F: null, G: { H: "x" } };
+    for (const member of ["A", "B", "C", "D", "E", "F", "G"]) {
+      assert.equal(evaluateChecks(response, { [`$.${member}`]: { present: true } }, ctx), null, member);
+    }
+    assert.equal(evaluateChecks(response, { "$.G.H": { present: true } }, ctx), null);
+  });
+
+  it("present fails only when a segment is absent, naming the path and <missing>", () => {
+    for (const path of ["$.Absent", "$.G.Nope", "$.A[0]", "$.F.Nope"]) {
+      const mismatch = evaluateChecks(
+        { A: [], F: null, G: { H: "x" } },
+        { [path]: { present: true } },
+        ctx,
+      );
+      assert.ok(mismatch !== null, path);
+      assert.equal(mismatch.path, path);
+      assert.equal(mismatch.expected, "the path to resolve");
+      assert.equal(mismatch.actual, "<missing>");
+    }
+  });
+
+  it("present is the negation of missing on every shape", () => {
+    for (const response of [{}, { X: null }, { X: [] }, { X: "v" }]) {
+      const present = evaluateChecks(response, { "$.X": { present: true } }, ctx) === null;
+      const missing = evaluateChecks(response, { "$.X": { missing: true } }, ctx) === null;
+      assert.notEqual(present, missing, JSON.stringify(response));
+    }
+  });
+
   it("reports the first failing check, in declaration order", () => {
     const mismatch = evaluateChecks(
       { A: "a", B: "" },

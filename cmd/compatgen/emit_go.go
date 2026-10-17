@@ -429,6 +429,8 @@ func goCheck(path string, c check, indent string) string {
 		return fmt.Sprintf("scenario.IsList(%q)", path)
 	case c.Missing:
 		return fmt.Sprintf("scenario.Missing(%q)", path)
+	case c.Present:
+		return fmt.Sprintf("scenario.Present(%q)", path)
 	case c.Matches != "":
 		return fmt.Sprintf("scenario.Matches(%q, %q)", path, c.Matches)
 	case c.hasAffix():

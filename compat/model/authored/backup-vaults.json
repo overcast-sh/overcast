@@ -212,7 +212,7 @@
           ]
         },
         {
-          "$comment": "Native: --by-shared must answer with a list that excludes the unshared vault rather than ignoring the filter, and fails if the response has no BackupVaultList. The primary call sends ByShared true and the `absent` clause says the vault is not in it. One narrowing: the IR's list form treats an absent list as empty, so a response with no BackupVaultList at all passes here where the native failed it. That was the native's guard against the unsigned S3 fall-through of #963, which a signed call cannot meet and which the cli native keeps covering until the flip.",
+          "$comment": "Native: --by-shared must answer with a list that excludes the unshared vault rather than ignoring the filter, and fails if the response has no BackupVaultList. The primary call sends ByShared true and the `absent` clause says the vault is not in it. The first clause is the native's own guard: `present` on BackupVaultList fails a response with no such member, which is what an unsigned S3 fall-through answer looked like (#963), and holds for the empty list a correct answer is here, where nonEmpty would fail it. A signed call cannot meet that fall-through, so the unsigned request itself stays covered by the cli native until the flip.",
           "name": "ListBackupVaultsByShared",
           "op": "ListBackupVaults",
           "call": {
@@ -222,6 +222,14 @@
             }
           },
           "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.BackupVaultList": {
+                  "present": true
+                }
+              }
+            },
             {
               "kind": "absent",
               "itemsPath": "$.BackupVaultList",

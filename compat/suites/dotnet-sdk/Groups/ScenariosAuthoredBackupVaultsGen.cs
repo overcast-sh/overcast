@@ -289,6 +289,9 @@ internal sealed class ScenariosAuthoredBackupVaults : IServiceGroup
         },
         Assert =
         [
+            Clause.ResponseField(
+                Check.Present("$.BackupVaultList")
+            ),
             Clause.AbsentFromList(
                 new ScenarioCall
                 {

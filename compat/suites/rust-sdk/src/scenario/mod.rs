@@ -224,6 +224,7 @@ pub enum CheckKind {
     StartsWith,
     Contains,
     Missing,
+    Present,
     EqualsJson,
 }
 
@@ -238,6 +239,7 @@ impl CheckKind {
             CheckKind::StartsWith => "startsWith",
             CheckKind::Contains => "contains",
             CheckKind::Missing => "missing",
+            CheckKind::Present => "present",
             CheckKind::EqualsJson => "equalsJSON",
         }
     }
@@ -469,6 +471,18 @@ pub fn missing(path: &'static str) -> Check {
     Check {
         path,
         kind: CheckKind::Missing,
+        value: None,
+    }
+}
+
+/// Holds when the path resolves, whatever the value: an empty list, an empty
+/// string, zero and false all resolve, and so does a member the service sent as
+/// JSON `null`. Exactly the negation of [`missing`].
+#[allow(dead_code)]
+pub fn present(path: &'static str) -> Check {
+    Check {
+        path,
+        kind: CheckKind::Present,
         value: None,
     }
 }

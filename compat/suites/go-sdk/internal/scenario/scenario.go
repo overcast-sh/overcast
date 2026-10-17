@@ -131,6 +131,7 @@ const (
 	CheckEquals   CheckKind = "equals"
 	CheckMatches  CheckKind = "matches"
 	CheckMissing  CheckKind = "missing"
+	CheckPresent  CheckKind = "present"
 	// CheckEndsWith, CheckStartsWith and CheckContains compare a string with
 	// the evaluated operand, a value expression that must yield a string.
 	CheckEndsWith   CheckKind = "endsWith"
@@ -271,6 +272,11 @@ func EqualsJSON(path, document string) Check {
 // Missing holds when the path does not resolve. A member the service sent as
 // JSON null resolves, so Missing fails on it.
 func Missing(path string) Check { return Check{Path: path, Kind: CheckMissing} }
+
+// Present holds when the path resolves, whatever the value: an empty list, an
+// empty string, zero and false all resolve, and so does a member the service
+// sent as JSON null. It is exactly the negation of Missing.
+func Present(path string) Check { return Check{Path: path, Kind: CheckPresent} }
 
 // Where is one item criterion for ListContains or AbsentFromList.
 func Where(path string, want any) WhereEntry { return WhereEntry{Path: path, Value: want} }

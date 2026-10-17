@@ -321,6 +321,9 @@ internal sealed class ScenariosAuthoredAppconfigExtensions : IServiceGroup
         Assert =
         [
             Clause.ResponseField(
+                Check.Present("$.Items")
+            ),
+            Clause.ResponseField(
                 Check.IsList("$.Items")
             )
         ],

@@ -79,6 +79,9 @@ func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsListExpe
 		},
 		Assert: []scenario.Clause{
 			scenario.ResponseField(
+				scenario.Present("$.Items"),
+			),
+			scenario.ResponseField(
 				scenario.IsList("$.Items"),
 			),
 		},
@@ -101,6 +104,9 @@ func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsListExpe
 			},
 		},
 		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Present("$.Items"),
+			),
 			scenario.ResponseField(
 				scenario.IsList("$.Items"),
 			),
@@ -125,6 +131,9 @@ func (g *authoredAppconfigExperimentsScenarios) testAppconfigExperimentsListExpe
 			},
 		},
 		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Present("$.Items"),
+			),
 			scenario.ResponseField(
 				scenario.IsList("$.Items"),
 			),

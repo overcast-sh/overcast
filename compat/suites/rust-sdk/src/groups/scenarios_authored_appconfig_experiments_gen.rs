@@ -162,6 +162,9 @@ fn test_appconfig_experiments_list_experiment_definitions(client: &aws_sdk_appco
         },
         assert: vec![
             scenario::response_field(vec![
+                scenario::present("$.Items"),
+            ]),
+            scenario::response_field(vec![
                 scenario::is_list("$.Items"),
             ]),
         ],
@@ -192,6 +195,9 @@ fn test_appconfig_experiments_list_experiment_runs(client: &aws_sdk_appconfig::C
             },
         },
         assert: vec![
+            scenario::response_field(vec![
+                scenario::present("$.Items"),
+            ]),
             scenario::response_field(vec![
                 scenario::is_list("$.Items"),
             ]),
@@ -224,6 +230,9 @@ fn test_appconfig_experiments_list_experiment_run_events(client: &aws_sdk_appcon
             },
         },
         assert: vec![
+            scenario::response_field(vec![
+                scenario::present("$.Items"),
+            ]),
             scenario::response_field(vec![
                 scenario::is_list("$.Items"),
             ]),

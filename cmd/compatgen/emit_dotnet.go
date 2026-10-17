@@ -506,6 +506,8 @@ func dotnetCheck(path string, c check) string {
 		return fmt.Sprintf("Check.IsList(%s)", csString(path))
 	case c.Missing:
 		return fmt.Sprintf("Check.Missing(%s)", csString(path))
+	case c.Present:
+		return fmt.Sprintf("Check.Present(%s)", csString(path))
 	case c.Matches != "":
 		return fmt.Sprintf("Check.Matches(%s, %s)", csString(path), csString(c.Matches))
 	case c.hasAffix():

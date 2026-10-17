@@ -402,6 +402,9 @@ fn test_appconfig_deployments_list_deployments(client: &aws_sdk_appconfig::Clien
         },
         assert: vec![
             scenario::response_field(vec![
+                scenario::present("$.Items"),
+            ]),
+            scenario::response_field(vec![
                 scenario::is_list("$.Items"),
             ]),
         ],

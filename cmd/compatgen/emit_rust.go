@@ -464,6 +464,8 @@ func rustCheck(path string, c check, indent string) (string, error) {
 		return fmt.Sprintf("scenario::is_list(%s)", rustString(path)), nil
 	case c.Missing:
 		return fmt.Sprintf("scenario::missing(%s)", rustString(path)), nil
+	case c.Present:
+		return fmt.Sprintf("scenario::present(%s)", rustString(path)), nil
 	case c.Matches != "":
 		return fmt.Sprintf("scenario::matches(%s, %s)", rustString(path), rustString(c.Matches)), nil
 	case c.hasAffix():

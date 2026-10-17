@@ -464,6 +464,11 @@ public final class Group {
                         throw checkFailed(obs, step, label, c, got, "the path not to resolve");
                     }
                 }
+                case PRESENT -> {
+                    if (!got.ok()) {
+                        throw checkFailed(obs, step, label, c, got, "the path to resolve");
+                    }
+                }
                 case IS_LIST -> {
                     // True of a present list, empty or not, and of an absent
                     // member: several AWS services omit an empty list rather than

@@ -112,6 +112,24 @@ describe("parseScenario", () => {
     );
   });
 
+  it("reads a present check, and refuses one that is not true", () => {
+    const withCheck = (check: unknown) => {
+      const raw = clone() as {
+        groups: Array<{ tests: Array<{ assert: Array<{ checks: unknown }> }> }>;
+      };
+      raw.groups[0].tests[0].assert[0].checks = { "$.Items": check };
+      return raw;
+    };
+    const parsed = parseScenario(withCheck({ present: true }), "test.json");
+    const clause = parsed.groups[0].tests[0].assert[0];
+    assert.ok(clause.kind === "responseField");
+    assert.deepEqual(clause.checks["$.Items"], { present: true });
+    assert.throws(
+      () => parseScenario(withCheck({ present: false }), "test.json"),
+      /present is always true/,
+    );
+  });
+
   it("refuses a path that is not the path grammar", () => {
     const raw = clone() as {
       groups: Array<{ tests: Array<{ assert: Array<{ checks: unknown }> }> }>;

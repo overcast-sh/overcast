@@ -216,6 +216,9 @@ public final class ScenariosAuthoredBackupVaultsGen implements ServiceGroup {
                                 .build(),
                         r -> cl().listBackupVaults((ListBackupVaultsRequest) r)),
                 List.of(
+                        Clause.responseField(
+                                Check.present("$.BackupVaultList")
+                        ),
                         Clause.absentFromList(
                                 new Call("ListBackupVaults", "{\"ByShared\":true}",
                                         b -> ListBackupVaultsRequest.builder()

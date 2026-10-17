@@ -18,7 +18,7 @@
       "setup": [],
       "tests": [
         {
-          "$comment": "The native lists the experiment definitions of the nonexistent application zzzzzzz and asserts the response has an Items member (a page, empty or not). `isList` is the nearest clause: it holds for a list, empty or not, and it also holds when the member is absent, which the native's presence check does not, so the port is marginally weaker on an omitted Items. The IR has no 'present' check and nonEmpty would fail the empty page the native accepts.",
+          "$comment": "The native lists the experiment definitions of the nonexistent application zzzzzzz and asserts the response has an Items member (a page, empty or not). Carried whole, as two clauses because a path carries one check: `present` is the native's presence check, which holds for an empty page where nonEmpty would fail it and fails an omitted Items, and `isList` says that what is there is a list.",
           "name": "ListExperimentDefinitions",
           "op": "ListExperimentDefinitions",
           "call": {
@@ -28,12 +28,16 @@
           "assert": [
             {
               "kind": "responseField",
+              "checks": { "$.Items": { "present": true } }
+            },
+            {
+              "kind": "responseField",
               "checks": { "$.Items": { "isList": true } }
             }
           ]
         },
         {
-          "$comment": "The native lists the runs of experiment definition zzzzzzz in application zzzzzzz and asserts an Items member, carried as isList for the reason ListExperimentDefinitions states.",
+          "$comment": "The native lists the runs of experiment definition zzzzzzz in application zzzzzzz and asserts an Items member, carried as present and isList for the reason ListExperimentDefinitions states.",
           "name": "ListExperimentRuns",
           "op": "ListExperimentRuns",
           "call": {
@@ -46,12 +50,16 @@
           "assert": [
             {
               "kind": "responseField",
+              "checks": { "$.Items": { "present": true } }
+            },
+            {
+              "kind": "responseField",
               "checks": { "$.Items": { "isList": true } }
             }
           ]
         },
         {
-          "$comment": "The native lists the events of run 1 of experiment definition zzzzzzz in application zzzzzzz and asserts an Items member, carried as isList for the reason ListExperimentDefinitions states. Run is the model's PositiveInteger, so it is the number 1 where the native's CLI flag is the string \"1\".",
+          "$comment": "The native lists the events of run 1 of experiment definition zzzzzzz in application zzzzzzz and asserts an Items member, carried as present and isList for the reason ListExperimentDefinitions states. Run is the model's PositiveInteger, so it is the number 1 where the native's CLI flag is the string \"1\".",
           "name": "ListExperimentRunEvents",
           "op": "ListExperimentRunEvents",
           "call": {
@@ -63,6 +71,10 @@
             }
           },
           "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "present": true } }
+            },
             {
               "kind": "responseField",
               "checks": { "$.Items": { "isList": true } }

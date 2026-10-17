@@ -176,6 +176,9 @@ public final class ScenariosAuthoredAppconfigDeploymentsGen implements ServiceGr
                         r -> cl().listDeployments((ListDeploymentsRequest) r)),
                 List.of(
                         Clause.responseField(
+                                Check.present("$.Items")
+                        ),
+                        Clause.responseField(
                                 Check.isList("$.Items")
                         )
                 ));

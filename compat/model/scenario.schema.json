@@ -222,7 +222,8 @@
           "endsWith": { "$ref": "#/definitions/Value", "description": "The path resolves to a string that ends with the evaluated operand (case-sensitive, no regex). The operand is a value expression that evaluates to a non-empty string: a literal, $name, $ref of a string export, or a $concat of those. A non-string fails the check." },
           "startsWith": { "$ref": "#/definitions/Value", "description": "The path resolves to a string that starts with the evaluated operand (case-sensitive, no regex). The operand follows the same rules as endsWith." },
           "contains": { "$ref": "#/definitions/Value", "description": "The path resolves to a string that contains the evaluated operand anywhere (case-sensitive, no regex). The operand follows the same rules as endsWith." },
-          "missing": { "const": true, "description": "The path does not resolve (any segment absent)." }
+          "missing": { "const": true, "description": "The path does not resolve (any segment absent)." },
+          "present": { "const": true, "description": "The path resolves: every segment is there. Any value satisfies it — [], {}, \"\", 0, false and JSON null included, since a member the service sent as null resolves. Exactly the negation of missing. It says nothing about the value's type; pair it with isList in a second clause to assert a list that is present." }
         }
       }
     },

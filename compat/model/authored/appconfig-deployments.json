@@ -81,7 +81,7 @@
           ]
         },
         {
-          "$comment": "The native asserts the response has an Items member. `isList` is the page check, and it is the one IR check that states a page without requiring it to be non-empty; it also accepts an absent list, because an absent list and an empty one must read alike in every backend (README § Assertions) — the choice iam-groups and iam-users made for a native presence check on a page. Whether the page holds deployment 1 is not asserted: ListDeployments has no depends, and the native claims nothing about its contents.",
+          "$comment": "The native asserts the response has an Items member. Carried whole, as two clauses because a path carries one check: `present` is the native's presence check and holds for an empty page, where nonEmpty would fail it, and `isList` says that what is there is a list. Whether the page holds deployment 1 is not asserted: ListDeployments has no depends, and the native claims nothing about its contents.",
           "name": "ListDeployments",
           "op": "ListDeployments",
           "call": {
@@ -92,6 +92,10 @@
             }
           },
           "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "present": true } }
+            },
             {
               "kind": "responseField",
               "checks": { "$.Items": { "isList": true } }

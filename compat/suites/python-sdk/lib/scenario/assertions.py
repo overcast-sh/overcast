@@ -368,6 +368,10 @@ def _check(name: str, argument: Any, value: Any,
                 isinstance(value, str) and pattern.search(value) is not None, None)
     if name == "missing":
         return "the path not to resolve", value is MISSING, None
+    if name == "present":
+        # Any value resolves: [], {}, "", 0, False and None (a member the
+        # service sent as JSON null) included. Exactly the negation of missing.
+        return "the path to resolve", value is not MISSING, None
     raise ScenarioFailure(f"unknown check {name!r}")
 
 

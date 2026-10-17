@@ -165,7 +165,7 @@
           "depends": ["CreateExtensionAssociation"]
         },
         {
-          "$comment": "The native lists unfiltered and asserts only that the response has an Items member; it claims nothing about the page's contents, and the registry gives the test no depends, so it cannot read the association's id. `isList` is the page check, and it is the one IR check that states a page without requiring it to be non-empty; it also accepts an absent list, because an absent list and an empty one must read alike in every backend (README § Assertions). It is the native's presence check, slightly weaker on an absent member.",
+          "$comment": "The native lists unfiltered and asserts only that the response has an Items member; it claims nothing about the page's contents, and the registry gives the test no depends, so it cannot read the association's id. It is carried whole, as two clauses because a path carries one check: `present` is the native's presence check and holds for an empty page, where nonEmpty would fail it, and `isList` says that what is there is a list.",
           "name": "ListExtensionAssociations",
           "op": "ListExtensionAssociations",
           "call": {
@@ -173,6 +173,10 @@
             "params": {}
           },
           "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "present": true } }
+            },
             {
               "kind": "responseField",
               "checks": { "$.Items": { "isList": true } }

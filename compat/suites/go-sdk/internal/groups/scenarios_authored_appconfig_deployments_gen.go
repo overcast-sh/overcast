@@ -217,6 +217,9 @@ func (g *authoredAppconfigDeploymentsScenarios) testAppconfigDeploymentsListDepl
 		},
 		Assert: []scenario.Clause{
 			scenario.ResponseField(
+				scenario.Present("$.Items"),
+			),
+			scenario.ResponseField(
 				scenario.IsList("$.Items"),
 			),
 		},

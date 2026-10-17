@@ -43,6 +43,7 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
         [CheckKind.Contains] = "contains",
         [CheckKind.EqualsJson] = "equalsJSON",
         [CheckKind.Missing] = "missing",
+        [CheckKind.Present] = "present",
     };
 
     /// <summary>A fresh binder for one call, so a value that failed to bind in one call cannot suppress the next one's assignments.</summary>
@@ -513,6 +514,13 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
                 if (resolved)
                 {
                     throw Mismatch("the path not to resolve");
+                }
+                return;
+
+            case CheckKind.Present:
+                if (!resolved)
+                {
+                    throw Mismatch("the path to resolve");
                 }
                 return;
 

@@ -320,6 +320,9 @@ function parseCheck(raw: unknown, at: string, fail: Fail): Check {
     case "missing":
       if (o[key] !== true) fail(`${at}/${key}`, `${key} is always true`);
       return { missing: true };
+    case "present":
+      if (o[key] !== true) fail(`${at}/${key}`, `${key} is always true`);
+      return { present: true };
     case "matches":
       return { matches: requireString(o["matches"], `${at}/matches`, fail) };
     case "equals":

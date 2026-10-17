@@ -293,6 +293,9 @@ func (g *authoredBackupVaultsScenarios) testBackupVaultsShadowListBackupVaultsBy
 			},
 		},
 		Assert: []scenario.Clause{
+			scenario.ResponseField(
+				scenario.Present("$.BackupVaultList"),
+			),
 			scenario.AbsentFromList(
 				&scenario.Call{
 					Op:     "ListBackupVaults",

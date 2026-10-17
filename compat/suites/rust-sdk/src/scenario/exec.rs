@@ -789,6 +789,11 @@ impl Execution<'_> {
                     return Err(mismatch("the path not to resolve"));
                 }
             }
+            CheckKind::Present => {
+                if resolved.is_none() {
+                    return Err(mismatch("the path to resolve"));
+                }
+            }
             CheckKind::IsList => {
                 // True of a present list, empty or not, and of an absent
                 // member: several AWS services omit an empty list rather than

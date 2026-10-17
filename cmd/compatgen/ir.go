@@ -164,7 +164,7 @@ const maxPages = 50
 const pageTokenRef = "$pageToken"
 
 // check is exactly one of: nonEmpty, isList, equals, equalsJSON, matches,
-// missing.
+// missing, present.
 //
 // isList exists because nonEmpty cannot say "this is a page of results" — a
 // single-page List* legally returns an empty one, so nonEmpty on a list the
@@ -175,6 +175,11 @@ const pageTokenRef = "$pageToken"
 // treats it the same way. A present value that is not a list still fails it —
 // isList is the strongest check that is true of a correct answer, present or
 // omitted, and false of everything else.
+//
+// present is exactly the negation of missing: it holds when the path resolves,
+// whatever the value ([], {}, "", 0, false, JSON null). It is the one check
+// that tells an omitted list from an empty one, for a guard that a member is
+// there. A path carries one check, so "present and a list" is two clauses.
 //
 // equalsJSON compares a string member that holds a JSON document by value,
 // because the SDKs disagree about what such a member is: IAM sends a policy
@@ -191,6 +196,7 @@ type check struct {
 	StartsWith any    `json:"startsWith,omitempty"`
 	Contains   any    `json:"contains,omitempty"`
 	Missing    bool   `json:"missing,omitempty"`
+	Present    bool   `json:"present,omitempty"`
 }
 
 // errorSpec names an error two ways, because SDKs disagree on which they
@@ -257,6 +263,7 @@ func contains(value any) check   { return check{Contains: value} }
 // grammar every backend reads.
 func equalsJSON(document any) check { return check{EqualsJSON: document} }
 func missing() check                { return check{Missing: true} }
+func present() check                { return check{Present: true} }
 func checks(path string, c check) map[string]check {
 	return map[string]check{path: c}
 }
@@ -413,8 +420,11 @@ func validateAssertion(a assertion) error {
 		if c.Missing {
 			set++
 		}
+		if c.Present {
+			set++
+		}
 		if set != 1 {
-			return fmt.Errorf("check on %s must be exactly one of nonEmpty, isList, equals, equalsJSON, matches, endsWith, startsWith, contains, missing", path)
+			return fmt.Errorf("check on %s must be exactly one of nonEmpty, isList, equals, equalsJSON, matches, endsWith, startsWith, contains, missing, present", path)
 		}
 	}
 	return nil

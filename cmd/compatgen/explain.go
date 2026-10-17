@@ -431,6 +431,8 @@ func (e *explainer) checkLines(root string, checks map[string]check) {
 			e.linef("assert %s matches %s", access, e.st.str(c.Matches))
 		case c.Missing:
 			e.linef("assert %s is absent", access)
+		case c.Present:
+			e.linef("assert %s is present (any value, including an empty one or null)", access)
 		}
 	}
 }

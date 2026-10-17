@@ -583,6 +583,9 @@ fn test_backup_vaults_shadow_list_backup_vaults_by_shared(client: &aws_sdk_backu
             },
         },
         assert: vec![
+            scenario::response_field(vec![
+                scenario::present("$.BackupVaultList"),
+            ]),
             scenario::absent_from_list(
                 Some(Call {
                     op: "ListBackupVaults",
