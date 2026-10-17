@@ -29,7 +29,7 @@ func TestListImages_silentlyServesTheStoreWhenTheRegistryIsUnreachable(t *testin
 	seedRepo(t, s)
 	seedImage(t, s, "sha256:aaa", "live", true)
 
-	resp, aerr := s.listImagesTyped(context.Background(), &repoRefRequest{RepositoryName: syncRepo})
+	resp, aerr := s.listImagesTyped(context.Background(), &listImagesRequest{RepositoryName: syncRepo})
 	if aerr != nil {
 		t.Fatalf("ListImages against an unreachable registry returned an error: %v — want it to serve the store silently", aerr)
 	}
@@ -113,7 +113,7 @@ func TestBatchDeleteImage_deletedImageReappearsWhenTheRegistryStillServesIt(t *t
 
 	// Then: the very next read that sweeps the registry brings it straight
 	// back, because BatchDeleteImage never told the registry to forget it.
-	resp, aerr := s.listImagesTyped(context.Background(), &repoRefRequest{RepositoryName: syncRepo})
+	resp, aerr := s.listImagesTyped(context.Background(), &listImagesRequest{RepositoryName: syncRepo})
 	if aerr != nil {
 		t.Fatalf("ListImages after delete: %v", aerr)
 	}

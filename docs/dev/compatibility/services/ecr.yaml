@@ -36,11 +36,30 @@ operations:
           container's published port, and repositories outlive the registry — a repository
           created before the registry was up otherwise advertised Overcast's API port
           forever, where docker push answers 405.
+      pagination:
+        status: fixed
+        evidence:
+          - tests/integration/ecr/pagination_test.go#TestDescribeRepositories_maxResultsPagesWithNextToken
+          - tests/integration/ecr/pagination_test.go#TestDescribeRepositories_defaultPageIs100
+          - tests/integration/ecr/pagination_test.go#TestDescribeRepositories_invalidNextToken
+          - tests/integration/ecr/pagination_test.go#TestDescribeRepositories_maxResultsWithRepositoryNames
+        notes: >-
+          maxResults is 1..1000 (default 100) and nextToken is opaque; a bad value is
+          InvalidParameterException (#2245). maxResults/nextToken with repositoryNames is
+          refused as the API Reference documents; the exact AWS error for that
+          combination is from the docs, not a captured response.
   DescribeImages:
     status: fixed
     docs:
       - https://docs.aws.amazon.com/AmazonECR/latest/APIReference/API_DescribeImages.html
     scenarios:
+      pagination:
+        status: fixed
+        evidence:
+          - tests/integration/ecr/pagination_test.go#TestDescribeImages_maxResultsPagesWithNextToken
+          - tests/integration/ecr/pagination_test.go#TestDescribeImages_invalidNextToken
+          - tests/integration/ecr/pagination_test.go#TestDescribeImages_maxResultsWithImageIds
+        notes: Same bounds and error as DescribeRepositories; paging with imageIds is refused as documented (#2245).
       requested_image_absent:
         status: fixed
         evidence:
@@ -72,6 +91,13 @@ operations:
     docs:
       - https://docs.aws.amazon.com/AmazonECR/latest/APIReference/API_ListImages.html
     scenarios:
+      pagination:
+        status: fixed
+        evidence:
+          - tests/integration/ecr/pagination_test.go#TestListImages_maxResultsPagesWithNextToken
+          - tests/integration/ecr/pagination_test.go#TestListImages_invalidNextToken
+          - tests/integration/ecr/pagination_test.go#TestListImages_maxResultsOutOfRange
+        notes: Same bounds and error as DescribeRepositories (#2245).
       registry_unreachable_is_silent:
         status: fixed
         evidence:

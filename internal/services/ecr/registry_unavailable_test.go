@@ -88,7 +88,7 @@ func TestDescribeImages_answersServerExceptionWhenTheRegistryIsUnreachable(t *te
 	s := unreachableService(t)
 	seedRepo(t, s)
 
-	_, aerr := s.describeImagesTyped(context.Background(), &imageIDSetRequest{
+	_, aerr := s.describeImagesTyped(context.Background(), &describeImagesRequest{
 		RepositoryName: syncRepo,
 		ImageIds:       []ImageIdentifier{{ImageTag: "never-swept"}},
 	})
@@ -116,7 +116,7 @@ func TestDescribeImages_stillAnswersImageNotFoundWhenTheRegistryIsReachable(t *t
 	s := syncService(t, registry.start(t))
 	seedRepo(t, s)
 
-	_, aerr := s.describeImagesTyped(context.Background(), &imageIDSetRequest{
+	_, aerr := s.describeImagesTyped(context.Background(), &describeImagesRequest{
 		RepositoryName: syncRepo,
 		ImageIds:       []ImageIdentifier{{ImageTag: "really-not-there"}},
 	})
