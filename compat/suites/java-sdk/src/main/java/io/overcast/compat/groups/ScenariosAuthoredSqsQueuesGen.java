@@ -127,6 +127,9 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                         Clause.responseField(
                                 Check.nonEmpty("$.QueueUrl")
                         ),
+                        Clause.responseField(
+                                Check.contains("$.QueueUrl", Values.name("created"))
+                        ),
                         Clause.listContains(
                                 new Call("ListQueues", "{\"QueueNamePrefix\":{\"$name\":\"created\"}}",
                                         b -> ListQueuesRequest.builder()

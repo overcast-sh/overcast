@@ -300,6 +300,24 @@ func checkAuthoredValues(model *serviceModel, g group) error {
 				}
 				continue
 			}
+			if name, operand := c.affix(); name != "" {
+				if err := checkAffixOperand(name, operand, exports, false, where+" check "+raw, ""); err != nil {
+					return err
+				}
+				if output == "" {
+					continue
+				}
+				path, err := parsePath(raw)
+				if err != nil {
+					return err
+				}
+				if target, err := model.ResolvePath(output, path); err == nil {
+					if kind := model.Kind(target); kind != "string" && kind != "enum" {
+						return fmt.Errorf("%s check %s: %s compares text, but %s is a %s", where, raw, name, target, kind)
+					}
+				}
+				continue
+			}
 			if c.Equals != nil {
 				if err := checkNotExpected(c.Equals, where+" check "+raw); err != nil {
 					return err

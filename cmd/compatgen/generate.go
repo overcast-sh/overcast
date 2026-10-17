@@ -549,8 +549,8 @@ func refsInTest(t test) []string {
 			add(a.Call.Params)
 		}
 		for _, c := range a.Checks {
-			if c.Equals != nil {
-				add(c.Equals)
+			for _, operand := range c.operands() {
+				add(operand)
 			}
 		}
 		for _, v := range a.Where {
@@ -708,6 +708,12 @@ func (gb *groupBuilder) checkCheck(output, path string, c check) error {
 			return err
 		}
 		return gb.g.binder.checkValue(c.Equals, target, gb.exports, "check "+path, gb.group.Name)
+	}
+	if name, operand := c.affix(); name != "" {
+		if kind := gb.g.model.Kind(target); kind != "string" && kind != "enum" {
+			return fmt.Errorf("check %s: %s compares text, but %s is a %s", path, name, target, kind)
+		}
+		return checkAffixOperand(name, operand, gb.exports, true, "check "+path, gb.group.Name)
 	}
 	return nil
 }
@@ -1748,6 +1754,9 @@ func cloneAssertion(a assertion) assertion {
 		out.Checks = make(map[string]check, len(a.Checks))
 		for k, v := range a.Checks {
 			v.Equals = cloneValue(v.Equals)
+			v.EndsWith = cloneValue(v.EndsWith)
+			v.StartsWith = cloneValue(v.StartsWith)
+			v.Contains = cloneValue(v.Contains)
 			v.EqualsJSON = cloneValue(v.EqualsJSON)
 			out.Checks[k] = v
 		}

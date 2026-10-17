@@ -418,6 +418,12 @@ func (e *explainer) checkLines(root string, checks map[string]check) {
 			e.linef("assert %s is absent or a list (an omitted or empty page satisfies this)", access)
 		case c.Equals != nil:
 			e.linef("assert %s == %s", access, e.st.value(c.Equals))
+		case c.EndsWith != nil:
+			e.linef("assert %s is a string ending with %s", access, e.st.value(c.EndsWith))
+		case c.StartsWith != nil:
+			e.linef("assert %s is a string starting with %s", access, e.st.value(c.StartsWith))
+		case c.Contains != nil:
+			e.linef("assert %s is a string containing %s", access, e.st.value(c.Contains))
 		case c.EqualsJSON != nil:
 			text, _ := equalsJSONText(c.EqualsJSON)
 			e.linef("assert the JSON document in %s (percent-decoded if it is a string) == %s", access, text)

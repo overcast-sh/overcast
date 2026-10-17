@@ -473,3 +473,115 @@ func setMemberPath(params map[string]any, memberPath string, value any) error {
 	current[parts[len(parts)-1]] = value
 	return nil
 }
+
+// operands returns the value expressions a check carries: the operand of
+// equals, endsWith, startsWith or contains. They are the same grammar, so every
+// walk that looks for a $ref, a $now or any expression at all reads the four
+// alike.
+func (c check) operands() []any {
+	var out []any
+	for _, v := range []any{c.Equals, c.EndsWith, c.StartsWith, c.Contains} {
+		if v != nil {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// affix names the string-operand check c carries (endsWith, startsWith or
+// contains) and its operand, or "" and nil.
+func (c check) affix() (name string, operand any) {
+	switch {
+	case c.EndsWith != nil:
+		return "endsWith", c.EndsWith
+	case c.StartsWith != nil:
+		return "startsWith", c.StartsWith
+	case c.Contains != nil:
+		return "contains", c.Contains
+	}
+	return "", nil
+}
+
+// hasAffix reports whether c is one of the string-operand checks.
+func (c check) hasAffix() bool {
+	name, _ := c.affix()
+	return name != ""
+}
+
+// upperFirst is the C#/Go spelling of an IR check name: endsWith -> EndsWith.
+func upperFirst(s string) string { return strings.ToUpper(s[:1]) + s[1:] }
+
+// snakeCase is the Rust spelling: endsWith -> ends_with.
+func snakeCase(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			b.WriteByte('_')
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+// checkAffixOperand holds the operand of endsWith, startsWith or contains to
+// "evaluates to a non-empty string". The affix checks compare text, so a number, a
+// boolean, an object, a list, a blob ($base64), a clock reading ($now) and a
+// $ref to an export the model types as anything but a string or enum are
+// refused here, in the generator, rather than failing differently in each
+// backend's runtime. An empty literal is refused too: every string ends with
+// "", so it would assert nothing.
+//
+// $index is let through, as it is inside a $concat: its element is only known
+// at run time, where every interpreter and typed runtime fails the check if it
+// is not a string. strict makes a $ref that no earlier call exported an error
+// (the recipe path, which binds against the exports it has tracked); the
+// authored path leaves an unknown one to its own ordering checks.
+func checkAffixOperand(name string, v any, exports exportKinds, strict bool, where, group string) error {
+	return checkAffixPart(name, v, exports, strict, false, where, group)
+}
+
+func checkAffixPart(name string, v any, exports exportKinds, strict, inConcat bool, where, group string) error {
+	if s, ok := v.(string); ok {
+		if s == "" && !inConcat {
+			return fmt.Errorf("%s: %s with an empty operand holds for every string and asserts nothing", where, name)
+		}
+		return nil
+	}
+	key, arg, isExpr := exprOf(v)
+	if !isExpr {
+		return fmt.Errorf("%s: %s takes a string or a value expression that evaluates to one, got %s", where, name, describeJSON(v))
+	}
+	switch key {
+	case "$lit":
+		s, ok := arg.(string)
+		if !ok {
+			return fmt.Errorf("%s: %s takes a string, but its $lit is %s", where, name, describeJSON(arg))
+		}
+		if s == "" && !inConcat {
+			return fmt.Errorf("%s: %s with an empty operand holds for every string and asserts nothing", where, name)
+		}
+	case "$ref":
+		ref := arg.(string)
+		kind, known := exports[ref]
+		if !known {
+			if strict {
+				return fmt.Errorf("%s: $ref %s is not exported before this check in group %s", where, ref, group)
+			}
+			return nil
+		}
+		if !kindsCompatible(kind, "string") {
+			return fmt.Errorf("%s: %s takes a string, but $ref %s is a %s", where, name, ref, kind)
+		}
+	case "$name", "$index":
+	case "$concat":
+		for i, part := range arg.([]any) {
+			if err := checkAffixPart(name, part, exports, strict, true, fmt.Sprintf("%s.$concat[%d]", where, i), group); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("%s: %s takes a string, but %s does not evaluate to one", where, name, key)
+	}
+	return nil
+}

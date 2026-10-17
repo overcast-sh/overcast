@@ -38,6 +38,9 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
         [CheckKind.IsList] = "isList",
         [CheckKind.EqualTo] = "equals",
         [CheckKind.Matches] = "matches",
+        [CheckKind.EndsWith] = "endsWith",
+        [CheckKind.StartsWith] = "startsWith",
+        [CheckKind.Contains] = "contains",
         [CheckKind.EqualsJson] = "equalsJSON",
         [CheckKind.Missing] = "missing",
     };
@@ -545,6 +548,43 @@ internal sealed class Execution(ScenarioGroup group, TestContext context, Contex
                 if (!resolved || !Documents.JsonEqual(got, want))
                 {
                     throw Mismatch(Documents.Render(want));
+                }
+                return;
+            }
+
+            case CheckKind.EndsWith:
+            case CheckKind.StartsWith:
+            case CheckKind.Contains:
+            {
+                object? operand;
+                try
+                {
+                    operand = NewBinder().Evaluate(check.Value);
+                }
+                catch (ScenarioValueException ex)
+                {
+                    throw Fail(observed, step, label, check.Path, "the operand to evaluate", Failures.Quote(ex.Message));
+                }
+                if (operand is not string { Length: > 0 } affix)
+                {
+                    throw Fail(observed, step, label, check.Path, "a non-empty string operand",
+                        Failures.Quote("the operand evaluated to " + Documents.Render(operand)));
+                }
+                var holds = resolved && got is string text && check.Kind switch
+                {
+                    CheckKind.EndsWith => text.EndsWith(affix, StringComparison.Ordinal),
+                    CheckKind.StartsWith => text.StartsWith(affix, StringComparison.Ordinal),
+                    _ => text.Contains(affix, StringComparison.Ordinal),
+                };
+                if (!holds)
+                {
+                    var how = check.Kind switch
+                    {
+                        CheckKind.EndsWith => "ending with",
+                        CheckKind.StartsWith => "starting with",
+                        _ => "containing",
+                    };
+                    throw Mismatch($"a string {how} {Documents.Canonical(affix)}");
                 }
                 return;
             }

@@ -204,6 +204,9 @@ The set is closed. `kind` selects the fields.
 | `{"equals": <value>}` | the path resolves and the value is equal, as JSON, to the evaluated expression — by JSON type, with no coercion, so `1` never equals `"1"` and `true` never equals `1` |
 | `{"equalsJSON": <document>}` | the path resolves to a JSON document equal, as a JSON value, to the literal object or array given: a string is percent-decoded once and parsed, an object or array is the document already. See [Documents in a string](#documents-in-a-string-equalsjson) |
 | `{"matches": "<regex>"}` | the path resolves to a string matching the regular expression (RE2-compatible syntax; anchored only where the pattern anchors itself). A pattern the interpreter's own engine will not compile fails the check as an ordinary mismatch — expected `pattern <p>`, actual `unsupported pattern: <why>` — never as an exception out of the evaluator |
+| `{"endsWith": <value>}` | the path resolves to a string that ends with the evaluated operand. See [String checks with a value operand](#string-checks-with-a-value-operand-endswith-startswith-contains) |
+| `{"startsWith": <value>}` | the same, at the start of the string |
+| `{"contains": <value>}` | the same, anywhere in the string |
 | `{"missing": true}` | the path does not resolve — any segment absent. A member the service sent as JSON `null` **resolves**, so `missing` fails on it, and so does `nonEmpty` |
 
 Everything that reads a list — `listContains`, `absent` in its list form and
@@ -232,6 +235,49 @@ to catch. A blob is compared as its document form, base64 text, against an
 never compared, and a `$now` is never an expected value. The same rule governs a
 `where` entry. A string member that holds a JSON document is compared with
 `equalsJSON` rather than `equals` — see below.
+
+#### String checks with a value operand: `endsWith`, `startsWith`, `contains`
+
+`matches` takes a literal regular expression, so it cannot say "the vault ARN
+ends in the name this run gave the vault": no pattern can embed a `$name` or a
+`$ref`. And `equals` needs the whole value, region and account included, which a
+scenario must not hard-code. These three checks fill the gap. Each takes a
+[value expression](#values), the same grammar `equals` takes, and holds when the
+path resolves to a **string** that ends with, starts with or contains the
+evaluated operand. The comparison is plain text, case-sensitive, with no regex
+and no normalisation. A path that is absent, or that holds anything but a
+string, fails the check.
+
+```json
+{ "$.BackupVaultArn": { "endsWith": { "$concat": [":backup-vault:", { "$name": "vault" }] } } }
+{ "$.tableARN":       { "startsWith": { "$concat": [{ "$ref": "bucket.arn" }, "/table/"] } } }
+{ "$.QueueUrl":       { "contains": { "$name": "q" } } }
+```
+
+Composition needs nothing new: `$concat` joins literals, `$name` and `$ref`s of
+string exports. Because a path carries exactly one check, a claim that is both a
+shape and an affix is two `responseField` clauses on the same path.
+
+**The generator refuses an operand that does not evaluate to a string**, in a
+recipe's authored clause and an authored scenario alike, naming the check and
+the path:
+
+- a number, a boolean, `null`, an object or a list, and a `$lit` of any of them;
+- `$base64` (bytes) and `$now` (a number);
+- a `$ref` to an export the model types as anything but a string or an enum;
+- an empty operand, literal or `$lit`: every string ends with `""`, so the check
+  would assert nothing. (An empty *part* of a `$concat` is fine.)
+- the check on a path whose member the model types as anything but a string or
+  an enum.
+
+`$index` is let through, as it is inside a `$concat`, because its element is
+only known at run time; every interpreter and typed runtime then fails the
+check, with `expected a non-empty string operand`, if it is not a string. The
+operand is evaluated when the check runs, so a `$ref` an earlier step exports is
+available, and an unresolvable one is the check's own failure, as for `equals`.
+The expected side of the failure message reads `a string ending with "…"` (or
+`starting with`, `containing`) and the actual side is the value the path
+resolved to, or `<missing>`.
 
 #### Documents in a string: `equalsJSON`
 

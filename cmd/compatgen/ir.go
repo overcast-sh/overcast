@@ -187,6 +187,9 @@ type check struct {
 	Equals     any    `json:"equals,omitempty"`
 	EqualsJSON any    `json:"equalsJSON,omitempty"`
 	Matches    string `json:"matches,omitempty"`
+	EndsWith   any    `json:"endsWith,omitempty"`
+	StartsWith any    `json:"startsWith,omitempty"`
+	Contains   any    `json:"contains,omitempty"`
 	Missing    bool   `json:"missing,omitempty"`
 }
 
@@ -241,6 +244,13 @@ func nonEmpty() check         { return check{NonEmpty: true} }
 func isList() check           { return check{IsList: true} }
 func equals(value any) check  { return check{Equals: value} }
 func matches(re string) check { return check{Matches: re} }
+
+// endsWith, startsWith and contains are the string-operand checks. Their
+// operand is a value expression, evaluated like an equals operand, that must
+// yield a string (checkAffixOperand).
+func endsWith(value any) check   { return check{EndsWith: value} }
+func startsWith(value any) check { return check{StartsWith: value} }
+func contains(value any) check   { return check{Contains: value} }
 
 // equalsJSON is the document check. Its operand is not a value expression, so
 // nothing here evaluates or binds it; validateEqualsJSON holds it to the
@@ -391,11 +401,20 @@ func validateAssertion(a assertion) error {
 		if c.Matches != "" {
 			set++
 		}
+		if c.EndsWith != nil {
+			set++
+		}
+		if c.StartsWith != nil {
+			set++
+		}
+		if c.Contains != nil {
+			set++
+		}
 		if c.Missing {
 			set++
 		}
 		if set != 1 {
-			return fmt.Errorf("check on %s must be exactly one of nonEmpty, isList, equals, equalsJSON, matches, missing", path)
+			return fmt.Errorf("check on %s must be exactly one of nonEmpty, isList, equals, equalsJSON, matches, endsWith, startsWith, contains, missing", path)
 		}
 	}
 	return nil

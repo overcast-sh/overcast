@@ -489,6 +489,33 @@ public final class Group {
                         throw checkFailed(obs, step, label, c, got, Json.render(want));
                     }
                 }
+                case ENDS_WITH, STARTS_WITH, CONTAINS -> {
+                    Object operand;
+                    try {
+                        operand = binder().eval(c.value());
+                    } catch (ValueException e) {
+                        throw fail(obs, step, label, c.path(), "the operand to evaluate",
+                                Failure.quote(String.valueOf(e.getMessage())));
+                    }
+                    if (!(operand instanceof String affix) || affix.isEmpty()) {
+                        throw fail(obs, step, label, c.path(), "a non-empty string operand",
+                                Failure.quote("the operand evaluated to " + Json.render(operand)));
+                    }
+                    String how = switch (c.kind()) {
+                        case ENDS_WITH -> "ending with ";
+                        case STARTS_WITH -> "starting with ";
+                        default -> "containing ";
+                    };
+                    boolean holds = got.ok() && got.value() instanceof String s
+                            && switch (c.kind()) {
+                                case ENDS_WITH -> s.endsWith(affix);
+                                case STARTS_WITH -> s.startsWith(affix);
+                                default -> s.contains(affix);
+                            };
+                    if (!holds) {
+                        throw checkFailed(obs, step, label, c, got, "a string " + how + Json.quote(affix));
+                    }
+                }
                 case EQUALS_JSON -> {
                     String actual = EqualsJson.mismatch(c.value(), got);
                     if (actual != null) {

@@ -132,6 +132,9 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
             Clause.ResponseField(
                 Check.NonEmpty("$.QueueUrl")
             ),
+            Clause.ResponseField(
+                Check.Contains("$.QueueUrl", Val.Name("created"))
+            ),
             Clause.ListContains(
                 new ScenarioCall
                 {

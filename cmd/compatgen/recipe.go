@@ -640,8 +640,13 @@ func validateAuthoredAssertion(a assertion, where string) error {
 		if _, err := parsePath(path); err != nil {
 			return fmt.Errorf("%s: %w", where, err)
 		}
-		if c.Equals != nil {
-			if err := validateValue(c.Equals, where+".checks."+path); err != nil {
+		for _, operand := range c.operands() {
+			if err := validateValue(operand, where+".checks."+path); err != nil {
+				return err
+			}
+		}
+		if name, operand := c.affix(); name != "" {
+			if err := checkAffixOperand(name, operand, nil, false, where+".checks."+path, ""); err != nil {
 				return err
 			}
 		}

@@ -90,6 +90,19 @@ func TestResponseFieldChecks(t *testing.T) {
 		// interpreters use — never an exception out of the evaluator.
 		{name: "matches reports a pattern the engine rejects", clause: field("$.Id", obj{"matches": `a(b`}), script: script, wantErr: "unsupported pattern: "},
 
+		// The affix checks take a value expression and compare plain text.
+		{name: "endsWith holds on a literal", clause: field("$.Id", obj{"endsWith": "-1"}), script: script},
+		{name: "endsWith holds on a concat", clause: field("$.Nested.Arn", obj{"endsWith": obj{"$concat": []any{"thing/", obj{"$lit": "t-1"}}}}), script: script},
+		{name: "startsWith holds", clause: field("$.Nested.Arn", obj{"startsWith": "arn:aws:"}), script: script},
+		{name: "contains holds in the middle", clause: field("$.Nested.Arn", obj{"contains": ":1234:thing/"}), script: script},
+		{name: "contains fails on a part that is not there", clause: field("$.Nested.Arn", obj{"contains": "thing/x"}), script: script, wantErr: `expected a string containing "thing/x"`},
+		{name: "endsWith is case-sensitive", clause: field("$.Id", obj{"endsWith": "T-1"}), script: script, wantErr: `expected a string ending with "T-1"`},
+		{name: "startsWith fails on another prefix", clause: field("$.Id", obj{"startsWith": "-1"}), script: script, wantErr: `expected a string starting with "-1"`},
+		{name: "endsWith fails on a non-string", clause: field("$.Count", obj{"endsWith": "0"}), script: script, wantErr: "responseField endsWith at $.Count"},
+		{name: "endsWith fails when absent", clause: field("$.Nope", obj{"endsWith": "x"}), script: script, wantErr: "actual " + missingValue},
+		{name: "endsWith refuses an operand that is not a string", clause: field("$.Id", obj{"endsWith": obj{"$lit": float64(1)}}), script: script, wantErr: "a non-empty string operand"},
+		{name: "startsWith refuses an empty operand", clause: field("$.Id", obj{"startsWith": ""}), script: script, wantErr: "a non-empty string operand"},
+
 		{name: "equalsJSON holds on percent-encoded text", clause: field("$.Policy", obj{"equalsJSON": obj{"a": "x+y", "b": []any{float64(1)}}}), script: script},
 		{name: "equalsJSON holds on a decoded object", clause: field("$.Doc", obj{"equalsJSON": obj{"a": "x+y", "b": []any{float64(1)}}}), script: script},
 		{name: "equalsJSON fails naming the document", clause: field("$.Policy", obj{"equalsJSON": obj{"a": "x y"}}),

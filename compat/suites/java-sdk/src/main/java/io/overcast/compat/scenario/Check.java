@@ -8,7 +8,8 @@ package io.overcast.compat.scenario;
  * @param path  the response path this check reads
  * @param kind  which check it is
  * @param value the expected value for {@code EQUALS}, the pattern for
- *              {@code MATCHES} and the parsed operand document for
+ *              {@code MATCHES}, the operand expression for {@code ENDS_WITH},
+ *              {@code STARTS_WITH} and {@code CONTAINS}, and the parsed operand document for
  *              {@code EQUALS_JSON}; {@code null} for the rest
  */
 public record Check(String path, Check.Kind kind, Object value) {
@@ -19,6 +20,9 @@ public record Check(String path, Check.Kind kind, Object value) {
         IS_LIST("isList"),
         EQUALS("equals"),
         MATCHES("matches"),
+        ENDS_WITH("endsWith"),
+        STARTS_WITH("startsWith"),
+        CONTAINS("contains"),
         EQUALS_JSON("equalsJSON"),
         MISSING("missing");
 
@@ -61,6 +65,25 @@ public record Check(String path, Check.Kind kind, Object value) {
     /** Holds when the path resolves to a string matching the pattern. */
     public static Check matches(String path, String pattern) {
         return new Check(path, Kind.MATCHES, pattern);
+    }
+
+    /**
+     * Holds when the path resolves to a string that ends with the evaluated
+     * operand (case-sensitive, no regex). The operand is a value expression,
+     * evaluated like an {@link #equalTo} operand, and must yield a string.
+     */
+    public static Check endsWith(String path, Object suffix) {
+        return new Check(path, Kind.ENDS_WITH, suffix);
+    }
+
+    /** {@link #endsWith} for the front of the string. */
+    public static Check startsWith(String path, Object prefix) {
+        return new Check(path, Kind.STARTS_WITH, prefix);
+    }
+
+    /** {@link #endsWith} for any position in the string. */
+    public static Check contains(String path, Object part) {
+        return new Check(path, Kind.CONTAINS, part);
     }
 
     /**

@@ -219,6 +219,9 @@
           "equals": { "$ref": "#/definitions/Value", "description": "The path resolves to a value equal (as JSON) to the evaluated expression." },
           "equalsJSON": { "type": ["object", "array"], "description": "The path resolves to a JSON document equal, as a JSON value, to this one: a string is percent-decoded once and parsed as one JSON text, an object or array is the document already (botocore decodes IAM policy documents; the other SDKs do not). Object members compare by name in any order, arrays in order, numbers by value. The operand is a literal and is never evaluated; a key starting with $ anywhere inside it is refused. Legal only on a string member." },
           "matches": { "type": "string", "description": "The path resolves to a string matching this RE2-compatible regular expression." },
+          "endsWith": { "$ref": "#/definitions/Value", "description": "The path resolves to a string that ends with the evaluated operand (case-sensitive, no regex). The operand is a value expression that evaluates to a non-empty string: a literal, $name, $ref of a string export, or a $concat of those. A non-string fails the check." },
+          "startsWith": { "$ref": "#/definitions/Value", "description": "The path resolves to a string that starts with the evaluated operand (case-sensitive, no regex). The operand follows the same rules as endsWith." },
+          "contains": { "$ref": "#/definitions/Value", "description": "The path resolves to a string that contains the evaluated operand anywhere (case-sensitive, no regex). The operand follows the same rules as endsWith." },
           "missing": { "const": true, "description": "The path does not resolve (any segment absent)." }
         }
       }

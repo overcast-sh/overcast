@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -384,6 +385,31 @@ func (e *execution) check(obs observed, c Check, kind, step string) error {
 		s, isStr := got.(string)
 		if !resolved || !isStr || !re.MatchString(s) {
 			return fail(fmt.Sprintf("a string matching %q", pattern))
+		}
+		return nil
+
+	case CheckEndsWith, CheckStartsWith, CheckContains:
+		operand, err := e.binder().eval(c.Value)
+		if err != nil {
+			return e.fail(obs, step, kind+" "+string(c.Kind), c.Path, "the operand to evaluate", quote(err.Error()))
+		}
+		affix, isStr := operand.(string)
+		if !isStr || affix == "" {
+			return e.fail(obs, step, kind+" "+string(c.Kind), c.Path,
+				"a non-empty string operand", quote("the operand evaluated to "+render(operand)))
+		}
+		s, gotStr := got.(string)
+		how, holds := "", false
+		switch c.Kind {
+		case CheckEndsWith:
+			how, holds = "ending with", resolved && gotStr && strings.HasSuffix(s, affix)
+		case CheckStartsWith:
+			how, holds = "starting with", resolved && gotStr && strings.HasPrefix(s, affix)
+		default:
+			how, holds = "containing", resolved && gotStr && strings.Contains(s, affix)
+		}
+		if !holds {
+			return fail(fmt.Sprintf("a string %s %q", how, affix))
 		}
 		return nil
 

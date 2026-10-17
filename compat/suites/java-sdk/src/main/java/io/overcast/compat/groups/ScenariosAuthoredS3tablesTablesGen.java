@@ -140,6 +140,9 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                         Clause.responseField(
                                 Check.matches("$.arn", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}$")
                         ),
+                        Clause.responseField(
+                                Check.endsWith("$.arn", Values.concat(":bucket/", Values.name("bucket")))
+                        ),
                         Clause.readback(
                                 new Call("GetTableBucket", "{\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",
                                         b -> GetTableBucketRequest.builder()
@@ -241,6 +244,9 @@ public final class ScenariosAuthoredS3tablesTablesGen implements ServiceGroup {
                         Clause.responseField(
                                 Check.matches("$.tableARN", "^arn:aws:s3tables:[-a-z0-9]*:[0-9]{12}:bucket/[a-z0-9_-]{3,63}/table/[a-zA-Z0-9_-]{1,255}$"),
                                 Check.nonEmpty("$.versionToken")
+                        ),
+                        Clause.responseField(
+                                Check.startsWith("$.tableARN", Values.concat(Values.ref("bucket.arn"), "/table/"))
                         ),
                         Clause.readback(
                                 new Call("GetTable", "{\"name\":\"orders\",\"namespace\":\"compat\",\"tableBucketARN\":{\"$ref\":\"bucket.arn\"}}",

@@ -78,6 +78,13 @@ export type Check =
    */
   | { equalsJSON: JsonValue }
   | { matches: string }
+  /**
+   * The path resolves to a string that ends with / starts with / contains the
+   * evaluated operand, a value expression that must yield a non-empty string.
+   */
+  | { endsWith: Value }
+  | { startsWith: Value }
+  | { contains: Value }
   | { missing: true };
 
 /** Response path → check. */
