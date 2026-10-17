@@ -23,6 +23,9 @@ mod scenarios_authored_appconfig_deployments_gen;
 #[path = "scenarios_authored_appconfig_environments_gen.rs"]
 mod scenarios_authored_appconfig_environments_gen;
 
+#[path = "scenarios_authored_appconfig_experiments_gen.rs"]
+mod scenarios_authored_appconfig_experiments_gen;
+
 #[path = "scenarios_authored_appconfig_extensions_gen.rs"]
 mod scenarios_authored_appconfig_extensions_gen;
 
@@ -126,6 +129,7 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
         Box::new(scenarios_authored_appconfig_deployment_strategies_gen::ScenariosAuthoredAppconfigDeploymentStrategies::new(clients)),
         Box::new(scenarios_authored_appconfig_deployments_gen::ScenariosAuthoredAppconfigDeployments::new(clients)),
         Box::new(scenarios_authored_appconfig_environments_gen::ScenariosAuthoredAppconfigEnvironments::new(clients)),
+        Box::new(scenarios_authored_appconfig_experiments_gen::ScenariosAuthoredAppconfigExperiments::new(clients)),
         Box::new(scenarios_authored_appconfig_extensions_gen::ScenariosAuthoredAppconfigExtensions::new(clients)),
         Box::new(scenarios_authored_appconfig_tags_gen::ScenariosAuthoredAppconfigTags::new(clients)),
         Box::new(scenarios_authored_backup_tags_gen::ScenariosAuthoredBackupTags::new(clients)),

@@ -20,6 +20,7 @@ internal static class ScenarioGroups
         new ScenariosAuthoredAppconfigDeploymentStrategies(clients),
         new ScenariosAuthoredAppconfigDeployments(clients),
         new ScenariosAuthoredAppconfigEnvironments(clients),
+        new ScenariosAuthoredAppconfigExperiments(clients),
         new ScenariosAuthoredAppconfigExtensions(clients),
         new ScenariosAuthoredAppconfigTags(clients),
         new ScenariosAuthoredBackupTags(clients),
