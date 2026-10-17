@@ -431,10 +431,19 @@ func dotnetWriteClause(w *sourceWriter, sp *dotnetSpeller, a assertion, indent, 
 		if a.Kind == assertAbsent {
 			name = "AbsentFromList"
 		}
+		// A paginated clause is written as its first page, then marked
+		// paginated with the settings for the walk and the call that makes
+		// every later page.
+		var next call
+		first := a.Call
+		if a.Paginate != nil {
+			f, n := pageCalls(a)
+			first, next = &f, n
+		}
 		w.linef("%sClause.%s(", indent, name)
-		if a.Call == nil {
+		if first == nil {
 			w.linef("%s    null,", indent)
-		} else if err := dotnetWriteCallTerminated(w, sp, *a.Call, indent+"    ", "", ","); err != nil {
+		} else if err := dotnetWriteCallTerminated(w, sp, *first, indent+"    ", "", ","); err != nil {
 			return err
 		}
 		paths := sortedValueKeys(a.Where)
@@ -454,7 +463,14 @@ func dotnetWriteClause(w *sourceWriter, sp *dotnetSpeller, a assertion, indent, 
 			}
 			w.linef("%s    new WhereEntry(%s, %s)%s", indent, csString(path), value, entrySuffix)
 		}
-		w.linef("%s)%s", indent, suffix)
+		if a.Paginate == nil {
+			w.linef("%s)%s", indent, suffix)
+			return nil
+		}
+		w.linef("%s).Paginated(new PageWalk(%d, %d, %s,", indent, a.Paginate.PageSize, a.Paginate.MinPages, csString(a.Paginate.OutputToken))
+		if err := dotnetWriteCallTerminated(w, sp, next, indent+"    ", "", "))"+suffix); err != nil {
+			return err
+		}
 	case assertErrorCode:
 		w.linef("%sClause.ErrorCode(new ErrorSpec(%s, %s))%s", indent, csString(a.Error.Shape), csString(a.Error.Code), suffix)
 	case assertEventually:

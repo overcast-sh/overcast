@@ -394,6 +394,69 @@ fn test_sqs_queues_list_queues(client: &aws_sdk_sqs::Client) -> Test {
                     scenario::where_entry("$", scenario::context("queue.url")),
                 ],
             ),
+            scenario::paginated(
+                scenario::list_contains(
+                    Some(Call {
+                        op: "ListQueues",
+                        params: scenario::map(vec![
+                            ("MaxResults", scenario::lit(::serde_json::json!(1))),
+                            ("QueueNamePrefix", scenario::name("q")),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .list_queues()
+                                        .max_results(1)
+                                        .queue_name_prefix(b.string("QueueNamePrefix")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    }),
+                    "$.QueueUrls",
+                    vec![
+                        scenario::where_entry("$", scenario::context("queue.url")),
+                    ],
+                ),
+                scenario::Page {
+                    size: 1,
+                    min_pages: 0,
+                    output_token: "NextToken",
+                    next: Call {
+                        op: "ListQueues",
+                        params: scenario::map(vec![
+                            ("MaxResults", scenario::lit(::serde_json::json!(1))),
+                            ("NextToken", scenario::context("$pageToken")),
+                            ("QueueNamePrefix", scenario::name("q")),
+                        ]),
+                        export: Vec::new(),
+                        invoke: {
+                            let client = client.clone();
+                            scenario::invoker(move |b| {
+                                let client = client.clone();
+                                Box::pin(async move {
+                                    let capture = scenario::Capture::new();
+                                    let request = client
+                                        .list_queues()
+                                        .max_results(1)
+                                        .next_token(b.string("NextToken")?)
+                                        .queue_name_prefix(b.string("QueueNamePrefix")?)
+                                        .customize()
+                                        .interceptor(capture.clone());
+                                    Ok(scenario::observe(request.send().await, &capture))
+                                })
+                            })
+                        },
+                    },
+                },
+            ),
         ],
     }
 }

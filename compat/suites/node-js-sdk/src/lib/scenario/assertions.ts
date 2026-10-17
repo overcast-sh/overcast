@@ -188,6 +188,38 @@ export function evaluateListAbsent(
   };
 }
 
+/**
+ * `listContains` and the list form of `absent`, over the items of a list
+ * somebody has already collected — every page of a paginated one. `walked` is
+ * how far that walk got (`walked 3 page(s), 3 item(s)`) and prefixes the
+ * actual side of a failure. There is no "missing" here: a page without the list
+ * contributed nothing, and the whole is an array.
+ */
+export function evaluateWalkedList(
+  kind: "listContains" | "absent",
+  items: unknown[],
+  itemsPath: Path,
+  where: Where,
+  ctx: EvalContext,
+  walked: string,
+): Mismatch | null {
+  const match = items.find((item) => itemMatches(item, where, ctx));
+  if (kind === "listContains") {
+    if (match !== undefined) return null;
+    return {
+      path: itemsPath,
+      expected: `an item matching ${renderWhere(where, ctx)}`,
+      actual: `${walked}: ${items.length === 0 ? "an empty list" : render(items)}`,
+    };
+  }
+  if (match === undefined) return null;
+  return {
+    path: itemsPath,
+    expected: `no item matching ${renderWhere(where, ctx)}`,
+    actual: `${walked}: ${render(match)}`,
+  };
+}
+
 function resolveItems(
   response: unknown,
   itemsPath: Path,

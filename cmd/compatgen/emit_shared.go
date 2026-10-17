@@ -33,7 +33,12 @@ func callsOf(g group) []call {
 	out = append(out, g.Setup...)
 	var fromClause func(a assertion)
 	fromClause = func(a assertion) {
-		if a.Call != nil {
+		if a.Paginate != nil && a.Call != nil {
+			// A paginated clause is emitted as the two calls it makes, so a
+			// refusal sees the page-size and token members it adds.
+			first, next := pageCalls(a)
+			out = append(out, first, next)
+		} else if a.Call != nil {
 			out = append(out, *a.Call)
 		}
 		if a.Assert != nil {
@@ -48,6 +53,31 @@ func callsOf(g group) []call {
 	}
 	out = append(out, g.Teardown...)
 	return out
+}
+
+// pageCalls returns the two calls a typed backend emits for a paginated list
+// clause: first, the clause's call with the page size added, which makes page
+// one; and next, the same with the input token set from the context path
+// pageTokenRef, which makes every later page. The runtime puts the previous
+// page's token at that path before it sends next.
+//
+// Two whole calls rather than one call with a setter keeps each backend's
+// existing machinery — its field lookup, its refusals and its speller — as the
+// only thing that decides how a member is written, so a member the pinned SDK
+// has no field for is refused exactly as it would be anywhere else.
+func pageCalls(a assertion) (first, next call) {
+	p := a.Paginate
+	first = call{Op: a.Call.Op, Params: map[string]any{}}
+	for k, v := range a.Call.Params {
+		first.Params[k] = v
+	}
+	first.Params[p.PageSizeMember] = json.Number(strconv.Itoa(p.PageSize))
+	next = call{Op: a.Call.Op, Params: map[string]any{}}
+	for k, v := range first.Params {
+		next.Params[k] = v
+	}
+	next.Params[p.InputToken] = map[string]any{"$ref": pageTokenRef}
+	return first, next
 }
 
 // valueKind names an IR value's JSON type for an error message.

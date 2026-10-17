@@ -363,6 +363,27 @@ func goWriteClause(w *sourceWriter, sp *goSpeller, a assertion, indent string) e
 		if a.Kind == assertAbsent {
 			name = "AbsentFromList"
 		}
+		if a.Paginate != nil {
+			// The clause is written as its first page, wrapped with the
+			// settings for the walk and the call that makes every later page.
+			first, next := pageCalls(a)
+			plain := a
+			plain.Paginate, plain.Call = nil, &first
+			w.linef("%sscenario.Paginated(", indent)
+			if err := goWriteClause(w, sp, plain, indent+"\t"); err != nil {
+				return err
+			}
+			w.linef("%s\tscenario.Page{", indent)
+			w.linef("%s\t\tSize:        %d,", indent, a.Paginate.PageSize)
+			w.linef("%s\t\tMinPages:    %d,", indent, a.Paginate.MinPages)
+			w.linef("%s\t\tOutputToken: %q,", indent, a.Paginate.OutputToken)
+			if err := goWriteCall(w, sp, next, indent+"\t\t", "Next: "); err != nil {
+				return err
+			}
+			w.linef("%s\t},", indent)
+			w.linef("%s),", indent)
+			return nil
+		}
 		w.linef("%sscenario.%s(", indent, name)
 		if a.Call == nil {
 			w.linef("%s\tnil,", indent)

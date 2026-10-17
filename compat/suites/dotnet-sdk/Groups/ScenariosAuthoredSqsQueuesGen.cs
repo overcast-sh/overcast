@@ -196,7 +196,40 @@ internal sealed class ScenariosAuthoredSqsQueues : IServiceGroup
                 null,
                 "$.QueueUrls",
                 new WhereEntry("$", Val.Ref("queue.url"))
-            )
+            ),
+            Clause.ListContains(
+                new ScenarioCall
+                {
+                    Op = "ListQueues",
+                    Params = "{\"MaxResults\":1,\"QueueNamePrefix\":{\"$name\":\"q\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListQueuesRequest();
+                        request.MaxResults = 1;
+                        request.QueueNamePrefix = b.Bind<string>("QueueNamePrefix", Val.Name("q"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListQueuesAsync((ListQueuesRequest)request),
+                },
+                "$.QueueUrls",
+                new WhereEntry("$", Val.Ref("queue.url"))
+            ).Paginated(new PageWalk(1, 0, "NextToken",
+                new ScenarioCall
+                {
+                    Op = "ListQueues",
+                    Params = "{\"MaxResults\":1,\"NextToken\":{\"$ref\":\"$pageToken\"},\"QueueNamePrefix\":{\"$name\":\"q\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListQueuesRequest();
+                        request.MaxResults = 1;
+                        request.NextToken = b.Bind<string>("NextToken", Val.Ref("$pageToken"));
+                        request.QueueNamePrefix = b.Bind<string>("QueueNamePrefix", Val.Name("q"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListQueuesAsync((ListQueuesRequest)request),
+                }))
         ],
     });
 

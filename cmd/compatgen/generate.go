@@ -634,6 +634,9 @@ func (gb *groupBuilder) completeAssertion(a *assertion, ownOp, producer string) 
 		}
 		*a.Call = c
 		output = gb.g.model.OutputShape(c.Op)
+		if ref, err := completePagination(gb.g.model, a); err != nil || ref != nil {
+			return ref, err
+		}
 	}
 	switch a.Kind {
 	case assertResponseField, assertReadback:
@@ -1755,6 +1758,10 @@ func cloneAssertion(a assertion) assertion {
 	if a.Error != nil {
 		e := *a.Error
 		out.Error = &e
+	}
+	if a.Paginate != nil {
+		p := *a.Paginate
+		out.Paginate = &p
 	}
 	if a.Assert != nil {
 		inner := cloneAssertion(*a.Assert)

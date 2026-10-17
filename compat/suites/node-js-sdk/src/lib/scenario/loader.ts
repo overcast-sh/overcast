@@ -29,6 +29,7 @@ import type {
   Checks,
   ClientSpec,
   EventuallyAssertion,
+  Paginate,
   Path,
   Scenario,
   ScenarioGroup,
@@ -263,9 +264,31 @@ function parseListOrError(
   const where = parseWhere(o["where"], `${at}/where`, fail);
   const call =
     o["call"] === undefined ? undefined : parseCall(o["call"], `${at}/call`, fail);
+  const paginate =
+    o["paginate"] === undefined
+      ? undefined
+      : parsePaginate(o["paginate"], `${at}/paginate`, fail);
+  if (paginate !== undefined && call === undefined) {
+    fail(`${at}/paginate`, "paginate needs a call of its own");
+  }
+  const clause = { call, itemsPath, where, ...(paginate === undefined ? {} : { paginate }) };
   return kind === "listContains"
-    ? { kind: "listContains", call, itemsPath, where }
-    : { kind: "absent", call, itemsPath, where };
+    ? { kind: "listContains", ...clause }
+    : { kind: "absent", ...clause };
+}
+
+function parsePaginate(raw: unknown, at: string, fail: Fail): Paginate {
+  const o = requireObject(raw, at, fail);
+  const out: Paginate = {
+    pageSize: requireInteger(o["pageSize"], `${at}/pageSize`, fail, 1),
+    inputToken: requireString(o["inputToken"], `${at}/inputToken`, fail),
+    outputToken: requireString(o["outputToken"], `${at}/outputToken`, fail),
+    pageSizeMember: requireString(o["pageSizeMember"], `${at}/pageSizeMember`, fail),
+  };
+  if (o["minPages"] !== undefined) {
+    out.minPages = requireInteger(o["minPages"], `${at}/minPages`, fail, 1);
+  }
+  return out;
 }
 
 function parseChecks(raw: unknown, at: string, fail: Fail): Checks {

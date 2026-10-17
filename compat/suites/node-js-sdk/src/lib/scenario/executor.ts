@@ -19,6 +19,7 @@
 
 import {
   ExpressionError,
+  describeClipped,
   evaluateParams,
   resolvePath,
   toDocument,
@@ -30,11 +31,22 @@ import {
   evaluateChecks,
   evaluateListAbsent,
   evaluateListContains,
+  evaluateWalkedList,
 } from "./assertions.ts";
 import type { Mismatch } from "./assertions.ts";
 import { describeError, failureMessage, scenarioFailure } from "./failure.ts";
 import type { FailureSite } from "./failure.ts";
-import type { Assertion, Call, ScenarioTest } from "./ir.ts";
+import type {
+  AbsentListAssertion,
+  Assertion,
+  Call,
+  ListContainsAssertion,
+  Paginate,
+  ScenarioTest,
+} from "./ir.ts";
+
+/** A list clause, `listContains` or the list form of `absent`. */
+type ListClause = ListContainsAssertion | AbsentListAssertion;
 import type { Sender } from "./client.ts";
 
 /** Everything a step needs that is not in the scenario file. */
@@ -208,6 +220,10 @@ async function runAssertion(
         await runAbsentError(env, site, clause.call, clause.error);
         return;
       }
+      if (clause.paginate !== undefined && clause.call !== undefined) {
+        await runPaginatedList(env, site, clause, clause.call, clause.paginate);
+        return;
+      }
       const source = clause.call
         ? await performCall(env, site, clause.call)
         : { params: primary.params, response: primary.response };
@@ -262,6 +278,91 @@ async function runAssertion(
       throw prefixAttempts(last, clause.maxAttempts, delayMs);
     }
   }
+}
+
+/**
+ * The most pages a paginated clause walks. A service that still returns a token
+ * after this many fails the clause instead of hanging the suite. Every backend
+ * uses the same number (compat/model/README.md § Paginating a list).
+ */
+export const MAX_PAGES = 50;
+
+/**
+ * `listContains` / `absent` over every page of the list.
+ *
+ * Page one is the clause's call with the page size added; each later page is
+ * the same call with the previous page's token sent back, until a page carries
+ * none (absent, null or ""). A page whose items are missing counts as empty.
+ * Every failure that is not a failed call quotes page one's params, so a
+ * message names the clause's own call rather than whichever page it stopped on.
+ */
+async function runPaginatedList(
+  env: ExecEnv,
+  site: FailureSite,
+  clause: ListClause,
+  call: Call,
+  paginate: Paginate,
+): Promise<void> {
+  const tokenPath = `$.${paginate.outputToken}`;
+  const items: unknown[] = [];
+  let firstParams: Record<string, unknown> = {};
+  let token: string | undefined;
+  let pages = 0;
+  for (;;) {
+    const params: Call["params"] = {
+      ...call.params,
+      [paginate.pageSizeMember]: paginate.pageSize,
+      ...(token === undefined ? {} : { [paginate.inputToken]: token }),
+    };
+    const result = await performCall(env, site, { op: call.op, params });
+    pages += 1;
+    if (pages === 1) firstParams = result.params;
+
+    const page = resolvePath(result.response, clause.itemsPath);
+    if (page.found) {
+      if (!Array.isArray(page.value)) {
+        throw fail(site, call.op, firstParams, clause.kind, {
+          path: clause.itemsPath,
+          expected: "a list",
+          actual: `walked ${pages} page(s): ${describeClipped(page.value)}`,
+        });
+      }
+      items.push(...(page.value as unknown[]));
+    }
+
+    const raw = resolvePath(result.response, tokenPath);
+    if (!raw.found || raw.value === null || raw.value === "") break;
+    if (typeof raw.value !== "string") {
+      throw fail(site, call.op, firstParams, clause.kind, {
+        path: tokenPath,
+        expected: "a string token, or none",
+        actual: `walked ${pages} page(s): ${describeClipped(raw.value)}`,
+      });
+    }
+    if (pages >= MAX_PAGES) {
+      throw fail(site, call.op, firstParams, clause.kind, {
+        path: tokenPath,
+        expected: `no ${paginate.outputToken} on a page within ${MAX_PAGES} pages`,
+        actual:
+          `walked ${pages} page(s), ${items.length} item(s), and the last ` +
+          `still returned a ${paginate.outputToken}`,
+      });
+    }
+    token = raw.value;
+  }
+
+  const walked = `walked ${pages} page(s), ${items.length} item(s)`;
+  if (paginate.minPages !== undefined && pages < paginate.minPages) {
+    throw fail(site, call.op, firstParams, clause.kind, {
+      path: clause.itemsPath,
+      expected: `at least ${paginate.minPages} page(s) at a page size of ${paginate.pageSize}`,
+      actual: walked,
+    });
+  }
+  const mismatch = guard(site, call.op, firstParams, clause.kind, () =>
+    evaluateWalkedList(clause.kind, items, clause.itemsPath, clause.where, env.ctx, walked),
+  );
+  if (mismatch !== null) throw fail(site, call.op, firstParams, clause.kind, mismatch);
 }
 
 /** `absent`, error form: the call must fail with the named error. */

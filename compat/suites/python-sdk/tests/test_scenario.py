@@ -27,6 +27,7 @@ from botocore.exceptions import ClientError  # noqa: E402
 from lib.harness import TestContext, TestGroup, run_group  # noqa: E402
 from lib.harness import TestCase as HarnessTestCase  # noqa: E402
 from lib.scenario import ScenarioInterpreter, scenario_hooks  # noqa: E402
+from lib.scenario.assertions import MAX_PAGES  # noqa: E402
 from lib.scenario.executor import (  # noqa: E402
     ClientCache,
     botocore_service,
@@ -624,6 +625,151 @@ class TestEventually(unittest.TestCase):
         with self.assertRaises(ClientError):
             run_one(self.SPEC, "SetQueueAttributes", client)
         self.assertEqual(len(client.params_for("get_queue_attributes")), 1)
+
+
+# ─── Paginating a list ────────────────────────────────────────────────────────
+
+
+def paginated_spec(kind="listContains", *, min_pages=None, eventually=False,
+                   where=None) -> ScenarioGroup:
+    """A test whose one clause walks ListQueues a page at a time."""
+    paginate = {"pageSize": 1, "inputToken": "NextToken", "outputToken": "NextToken",
+                "pageSizeMember": "MaxResults"}
+    if min_pages is not None:
+        paginate["minPages"] = min_pages
+    clause = {
+        "kind": kind,
+        "call": {"op": "ListQueues", "params": {"QueueNamePrefix": "oc-"}},
+        "itemsPath": "$.QueueUrls",
+        "where": where or {"$": "http://q"},
+        "paginate": paginate,
+    }
+    if eventually:
+        clause = {"kind": "eventually", "maxAttempts": 3, "delayMs": 0, "assert": clause}
+    return make_group(tests=[{
+        "name": "ListQueues", "op": "DeleteQueue",
+        "call": {"op": "DeleteQueue", "params": {}},
+        "assert": [clause],
+    }])
+
+
+def page(urls, token=None) -> dict:
+    out: dict = {"QueueUrls": urls} if urls is not None else {}
+    if token is not None:
+        out["NextToken"] = token
+    return out
+
+
+class TestPagination(unittest.TestCase):
+    def run_paginated(self, spec, pages, ctx=None):
+        client = FakeClient({"delete_queue": [{}], "list_queues": pages})
+        run_one(spec, "ListQueues", client, ctx)
+        return client
+
+    def test_walks_every_page_feeding_the_token_back(self):
+        client = self.run_paginated(paginated_spec(), [
+            page(["http://a"], "t1"), page(["http://b"], "t2"), page(["http://q"])])
+        self.assertEqual(client.params_for("list_queues"), [
+            {"QueueNamePrefix": "oc-", "MaxResults": 1},
+            {"QueueNamePrefix": "oc-", "MaxResults": 1, "NextToken": "t1"},
+            {"QueueNamePrefix": "oc-", "MaxResults": 1, "NextToken": "t2"},
+        ])
+
+    def test_a_single_page_stops_at_once_with_no_token(self):
+        for last in (page(["http://q"]), page(["http://q"], "")):
+            client = self.run_paginated(paginated_spec(), [last])
+            self.assertEqual(len(client.params_for("list_queues")), 1)
+        client = self.run_paginated(paginated_spec(), [{"QueueUrls": ["http://q"], "NextToken": None}])
+        self.assertEqual(len(client.params_for("list_queues")), 1)
+
+    def test_where_is_matched_against_the_union_of_the_pages(self):
+        spec = paginated_spec(where={"$.Id": "b", "$.Kind": "x"})
+        spec = make_group(tests=[{
+            **spec.tests["ListQueues"],
+            "assert": [{**spec.tests["ListQueues"]["assert"][0], "itemsPath": "$.Items"}],
+        }])
+        items = lambda *ids: {"Items": [{"Id": i, "Kind": k} for i, k in ids]}  # noqa: E731
+        # Both values are present, but never on the same item.
+        pages = [{**items(("a", "x")), "NextToken": "t"}, items(("b", "y"))]
+        with self.assertRaises(ScenarioFailure):
+            self.run_paginated(spec, pages)
+        pages = [{**items(("a", "x")), "NextToken": "t"}, items(("b", "x"))]
+        self.run_paginated(spec, pages)
+
+    def test_a_miss_says_how_many_pages_were_walked_and_what_was_found(self):
+        with self.assertRaises(ScenarioFailure) as raised:
+            self.run_paginated(paginated_spec(), [
+                page(["http://a"], "t1"), page(["http://b"], "t2"), page(["http://c"])])
+        message = str(raised.exception)
+        self.assertIn('actual=walked 3 page(s), 3 item(s): 3 item(s): ["http://a", "http://b", "http://c"]', message)
+        self.assertIn("ListQueues", message)
+        # The params quoted are page one's, not whichever page it stopped on.
+        self.assertIn("MaxResults", message.split("expected=")[0])
+        self.assertNotIn("NextToken", message.split("expected=")[0])
+
+    def test_list_contains_still_needs_a_non_empty_list(self):
+        for pages in ([page([])], [page(None)], [page(None, "t"), page([])]):
+            with self.assertRaises(ScenarioFailure):
+                self.run_paginated(paginated_spec(), pages)
+
+    def test_a_page_without_the_list_counts_as_empty(self):
+        self.run_paginated(paginated_spec(), [page(None, "t1"), page(["http://q"])])
+
+    def test_min_pages_fails_a_single_page_that_holds_everything(self):
+        spec = paginated_spec(min_pages=2)
+        with self.assertRaises(ScenarioFailure) as raised:
+            self.run_paginated(spec, [page(["http://q"])])
+        message = str(raised.exception)
+        self.assertIn("expected=at least 2 page(s) at a page size of 1", message)
+        self.assertIn("actual=walked 1 page(s), 1 item(s)", message)
+        self.run_paginated(spec, [page(["http://a"], "t"), page(["http://q"])])
+
+    def test_a_service_that_never_stops_fails_at_the_page_cap(self):
+        client = FakeClient({"delete_queue": [{}], "list_queues": [page(["http://a"], "again")]})
+        with self.assertRaises(ScenarioFailure) as raised:
+            run_one(paginated_spec(), "ListQueues", client)
+        self.assertEqual(len(client.params_for("list_queues")), MAX_PAGES)
+        message = str(raised.exception)
+        self.assertIn(f"no NextToken on a page within {MAX_PAGES} pages", message)
+        self.assertIn(f"walked {MAX_PAGES} page(s), {MAX_PAGES} item(s), and the last still returned a NextToken", message)
+
+    def test_a_found_item_ends_nothing_early_the_walk_always_reaches_the_end(self):
+        client = self.run_paginated(paginated_spec(), [
+            page(["http://q"], "t1"), page(["http://b"])])
+        self.assertEqual(len(client.params_for("list_queues")), 2)
+
+    def test_absent_looks_at_every_page(self):
+        spec = paginated_spec("absent")
+        self.run_paginated(spec, [page(["http://a"], "t"), page(["http://b"])])
+        with self.assertRaises(ScenarioFailure) as raised:
+            self.run_paginated(spec, [page(["http://a"], "t"), page(["http://q"])])
+        self.assertIn("walked 2 page(s), 2 item(s): 1 matching item(s)", str(raised.exception))
+
+    def test_a_non_string_token_fails_the_clause(self):
+        with self.assertRaises(ScenarioFailure) as raised:
+            self.run_paginated(paginated_spec(), [{"QueueUrls": ["http://q"], "NextToken": 7}])
+        self.assertIn("expected=a string token, or none", str(raised.exception))
+
+    def test_a_call_failing_on_a_later_page_is_a_call_failure_with_that_pages_params(self):
+        with self.assertRaises(ScenarioFailure) as raised:
+            self.run_paginated(paginated_spec(), [page(["http://a"], "t1"), client_error("Boom")])
+        message = str(raised.exception)
+        self.assertIn("call", message)
+        self.assertIn("t1", message)
+
+    def test_a_501_on_a_later_page_stays_unimplemented(self):
+        with self.assertRaises(ClientError):
+            self.run_paginated(paginated_spec(), [
+                page(["http://a"], "t1"), client_error("NotImplemented", status=501)])
+
+    def test_inside_eventually_every_attempt_walks_from_the_first_page(self):
+        spec = paginated_spec(eventually=True)
+        client = self.run_paginated(spec, [
+            page(["http://a"], "t1"), page(["http://b"]),       # attempt 1: no match
+            page(["http://a"], "t1"), page(["http://q"])])      # attempt 2: match
+        params = client.params_for("list_queues")
+        self.assertEqual(len(params), 4)
+        self.assertNotIn("NextToken", params[2])
 
 
 # ─── Calls, exports, unimplemented ────────────────────────────────────────────

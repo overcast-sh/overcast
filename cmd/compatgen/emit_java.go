@@ -148,6 +148,9 @@ func javaImports(sp *javaSpeller, groups []group) []string {
 	if javaUsesValues(groups) {
 		paths = append(paths, "io.overcast.compat.scenario.Values")
 	}
+	if javaAnyAssertion(groups, func(a assertion) bool { return a.Paginate != nil }) {
+		paths = append(paths, "io.overcast.compat.scenario.Page")
+	}
 	modelPackage := javaNameModelPackage(sdkID)
 	for _, g := range groups {
 		for _, c := range callsOf(g) {
@@ -394,10 +397,19 @@ func javaWriteClause(w *sourceWriter, sp *javaSpeller, a assertion, indent, suff
 		if a.Kind == assertAbsent {
 			name = "absentFromList"
 		}
+		// A paginated clause is written as its first page, then marked paged
+		// with the settings for the walk and the call that makes every later
+		// page.
+		var next call
+		first := a.Call
+		if a.Paginate != nil {
+			f, n := pageCalls(a)
+			first, next = &f, n
+		}
 		w.linef("%sClause.%s(", indent, name)
-		if a.Call == nil {
+		if first == nil {
 			w.linef("%s        null,", indent)
-		} else if err := javaWriteCall(w, sp, *a.Call, indent+"        ", ","); err != nil {
+		} else if err := javaWriteCall(w, sp, *first, indent+"        ", ","); err != nil {
 			return err
 		}
 		// The closing parenthesis is written unconditionally, on a line of its
@@ -413,7 +425,14 @@ func javaWriteClause(w *sourceWriter, sp *javaSpeller, a assertion, indent, suff
 			}
 			w.linef("%s        Where.of(%s, %s)%s", indent, javaQuote(path), value, javaComma(i < len(wheres)-1))
 		}
-		w.linef("%s)%s", indent, suffix)
+		if a.Paginate == nil {
+			w.linef("%s)%s", indent, suffix)
+			return nil
+		}
+		w.linef("%s).paged(Page.of(%d, %d, %s,", indent, a.Paginate.PageSize, a.Paginate.MinPages, javaQuote(a.Paginate.OutputToken))
+		if err := javaWriteCall(w, sp, next, indent+"        ", "))"+suffix); err != nil {
+			return err
+		}
 	case assertErrorCode:
 		w.linef("%sClause.errorCode(ErrorSpec.of(%s, %s))%s", indent, javaQuote(a.Error.Shape), javaQuote(a.Error.Code), suffix)
 	case assertEventually:

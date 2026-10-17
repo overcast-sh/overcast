@@ -110,7 +110,7 @@ func TestGenerate_lifecycleGroupCoversEveryRole(t *testing.T) {
 	// group with only the unimplemented operations. `spare` gets no group at
 	// all: the resource it requires cannot be set up.
 	want := map[string][]string{
-		"widgets-gen-widget":   {"CreateWidget", "GetWidget", "DescribeWidget", "UpdateWidget", "TagWidget", "ListWidgetTags", "UntagWidget", "PolishWidget", "ListWidgets", "DeleteWidget"},
+		"widgets-gen-widget":   {"CreateWidget", "GetWidget", "DescribeWidget", "UpdateWidget", "TagWidget", "ListWidgetTags", "UntagWidget", "PolishWidget", "PolishWidgetListed", "ListWidgets", "DeleteWidget"},
 		"widgets-gen-gauge":    {"DescribeGauge", "TagGauge", "ListGaugeTags", "UntagGauge", "CalibrateGauge"},
 		"widgets-gen-sprocket": {"CreateSprocket", "GetSprocket", "TagSprocket", "ListSprocketTags", "UntagSprocket", "DeleteSprocket"},
 		"widgets-gen-valve":    {"DescribeValve", "TagValve", "ListValveTags", "UntagValve"},

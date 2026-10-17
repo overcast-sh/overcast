@@ -9,6 +9,7 @@ import io.overcast.compat.scenario.Call;
 import io.overcast.compat.scenario.Check;
 import io.overcast.compat.scenario.Clause;
 import io.overcast.compat.scenario.Group;
+import io.overcast.compat.scenario.Page;
 import io.overcast.compat.scenario.Values;
 import io.overcast.compat.scenario.Where;
 import java.util.List;
@@ -164,7 +165,24 @@ public final class ScenariosAuthoredSqsQueuesGen implements ServiceGroup {
                                 null,
                                 "$.QueueUrls",
                                 Where.of("$", Values.ref("queue.url"))
-                        )
+                        ),
+                        Clause.listContains(
+                                new Call("ListQueues", "{\"MaxResults\":1,\"QueueNamePrefix\":{\"$name\":\"q\"}}",
+                                        b -> ListQueuesRequest.builder()
+                                                .maxResults(1)
+                                                .queueNamePrefix(b.string("QueueNamePrefix", Values.name("q")))
+                                                .build(),
+                                        r -> cl().listQueues((ListQueuesRequest) r)),
+                                "$.QueueUrls",
+                                Where.of("$", Values.ref("queue.url"))
+                        ).paged(Page.of(1, 0, "NextToken",
+                                new Call("ListQueues", "{\"MaxResults\":1,\"NextToken\":{\"$ref\":\"$pageToken\"},\"QueueNamePrefix\":{\"$name\":\"q\"}}",
+                                        b -> ListQueuesRequest.builder()
+                                                .maxResults(1)
+                                                .nextToken(b.string("NextToken", Values.ref("$pageToken")))
+                                                .queueNamePrefix(b.string("QueueNamePrefix", Values.name("q")))
+                                                .build(),
+                                        r -> cl().listQueues((ListQueuesRequest) r))))
                 ));
     }
 

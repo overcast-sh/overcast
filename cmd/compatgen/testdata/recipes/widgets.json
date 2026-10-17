@@ -45,6 +45,20 @@
               "checks": { "$.Widget.WidgetId": { "equals": { "$ref": "widget.id" } } }
             }
           ]
+        },
+        {
+          "$comment": "A list clause that walks every page. ListWidgets is @paginated, so the recipe gives the page size and the floor on how many pages must come back and the generator fills the token and page-size members in from the trait. The test is a variant of PolishWidget rather than of ListWidgets because an authored ListWidgets entry would fold the derived list test away.",
+          "op": "PolishWidget",
+          "name": "PolishWidgetListed",
+          "assert": [
+            {
+              "kind": "listContains",
+              "call": { "op": "ListWidgets", "params": { "NamePrefix": { "$name": "w" } } },
+              "itemsPath": "$.Widgets",
+              "where": { "$.WidgetId": { "$ref": "widget.id" } },
+              "paginate": { "pageSize": 1, "minPages": 1 }
+            }
+          ]
         }
       ],
       "delete": { "op": "DeleteWidget" },

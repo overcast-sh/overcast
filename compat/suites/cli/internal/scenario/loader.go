@@ -95,10 +95,24 @@ type Assertion struct {
 	Call        *Call            `json:"call"`
 	ItemsPath   string           `json:"itemsPath"`
 	Where       map[string]any   `json:"where"`
+	Paginate    *Paginate        `json:"paginate"`
 	Error       *ErrorClause     `json:"error"`
 	MaxAttempts int              `json:"maxAttempts"`
 	DelayMs     int              `json:"delayMs"`
 	Assert      *Assertion       `json:"assert"`
+}
+
+// Paginate makes a list clause walk every page of its list instead of reading
+// one response (compat/model/README.md § Paginating a list). The clause's call
+// repeats with PageSize sent as PageSizeMember and the previous page's
+// OutputToken sent back as InputToken, until a page returns no token; the items
+// of every page are searched as one list.
+type Paginate struct {
+	PageSize       int    `json:"pageSize"`
+	MinPages       int    `json:"minPages"`
+	InputToken     string `json:"inputToken"`
+	OutputToken    string `json:"outputToken"`
+	PageSizeMember string `json:"pageSizeMember"`
 }
 
 // ErrorClause carries the modeled shape name and the wire code. SDKs disagree
@@ -205,6 +219,25 @@ func refuseDollarKeys(v any) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// validatePaginate refuses a paginate the walk could not run: one with no call
+// of its own to repeat, or with a member left unnamed. Silently reading one
+// page instead would let a clause that asks for the whole list pass on a
+// fraction of it.
+func validatePaginate(a *Assertion) error {
+	if p := a.Paginate; p != nil {
+		switch {
+		case a.Call == nil:
+			return fmt.Errorf("paginate needs a call of its own")
+		case p.PageSize < 1 || p.InputToken == "" || p.OutputToken == "" || p.PageSizeMember == "":
+			return fmt.Errorf("paginate needs pageSize (at least 1), inputToken, outputToken and pageSizeMember")
+		}
+	}
+	if a.Assert != nil {
+		return validatePaginate(a.Assert)
 	}
 	return nil
 }
@@ -326,6 +359,11 @@ func validate(f *File, rel string) error {
 			if n > 1 {
 				return fmt.Errorf("scenario: %s: %s/%s carries %d errorCode clauses; the primary call has one outcome, so only the first would be checked",
 					rel, g.Name, tc.Name, n)
+			}
+			for i := range tc.Assert {
+				if err := validatePaginate(&tc.Assert[i]); err != nil {
+					return fmt.Errorf("scenario: %s: %s/%s assert[%d]: %w", rel, g.Name, tc.Name, i, err)
+				}
 			}
 		}
 	}

@@ -48,6 +48,7 @@ internal sealed class ScenariosWidgets : IServiceGroup
         ["widgets-gen-widget:ListWidgetTags"] = TestWidgetsGenWidgetListWidgetTags,
         ["widgets-gen-widget:UntagWidget"] = TestWidgetsGenWidgetUntagWidget,
         ["widgets-gen-widget:PolishWidget"] = TestWidgetsGenWidgetPolishWidget,
+        ["widgets-gen-widget:PolishWidgetListed"] = TestWidgetsGenWidgetPolishWidgetListed,
         ["widgets-gen-widget:ListWidgets"] = TestWidgetsGenWidgetListWidgets,
         ["widgets-gen-widget:DeleteWidget"] = TestWidgetsGenWidgetDeleteWidget,
         ["widgets-gen-gauge:DescribeGauge"] = TestWidgetsGenGaugeDescribeGauge,
@@ -395,6 +396,59 @@ internal sealed class ScenariosWidgets : IServiceGroup
                 },
                 Check.EqualTo("$.Widget.WidgetId", Val.Ref("widget.id"))
             )
+        ],
+    });
+
+    private Task TestWidgetsGenWidgetPolishWidgetListed(TestContext t) => GroupWidgetsGenWidget.RunTestAsync(t, "PolishWidgetListed", new ScenarioTest
+    {
+        Call = new ScenarioCall
+        {
+            Op = "PolishWidget",
+            Params = "{\"WidgetId\":{\"$ref\":\"widget.id\"}}",
+            Build = b =>
+            {
+                var request = new PolishWidgetRequest();
+                request.WidgetId = b.Bind<string>("WidgetId", Val.Ref("widget.id"));
+                return request;
+            },
+            SendAsync = async request =>
+                await Cl().PolishWidgetAsync((PolishWidgetRequest)request),
+        },
+        Assert =
+        [
+            Clause.ListContains(
+                new ScenarioCall
+                {
+                    Op = "ListWidgets",
+                    Params = "{\"MaxResults\":1,\"NamePrefix\":{\"$name\":\"w\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListWidgetsRequest();
+                        request.MaxResults = 1;
+                        request.NamePrefix = b.Bind<string>("NamePrefix", Val.Name("w"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListWidgetsAsync((ListWidgetsRequest)request),
+                },
+                "$.Widgets",
+                new WhereEntry("$.WidgetId", Val.Ref("widget.id"))
+            ).Paginated(new PageWalk(1, 1, "NextToken",
+                new ScenarioCall
+                {
+                    Op = "ListWidgets",
+                    Params = "{\"MaxResults\":1,\"NamePrefix\":{\"$name\":\"w\"},\"NextToken\":{\"$ref\":\"$pageToken\"}}",
+                    Build = b =>
+                    {
+                        var request = new ListWidgetsRequest();
+                        request.MaxResults = 1;
+                        request.NamePrefix = b.Bind<string>("NamePrefix", Val.Name("w"));
+                        request.NextToken = b.Bind<string>("NextToken", Val.Ref("$pageToken"));
+                        return request;
+                    },
+                    SendAsync = async request =>
+                        await Cl().ListWidgetsAsync((ListWidgetsRequest)request),
+                }))
         ],
     });
 

@@ -61,6 +61,9 @@ const (
 	reasonSetupRefused           = "setup-refused"
 	reasonUnsupportedTagShape    = "unsupported-tag-shape"
 	reasonNoPortableValue        = "no-portable-value"
+	reasonNotPaginated           = "not-paginated"
+	reasonPaginatedIncomplete    = "paginated-trait-incomplete"
+	reasonUnsupportedPageToken   = "unsupported-pagination-token"
 )
 
 // autoBinding records a rule-2 binding, the riskiest inference the generator

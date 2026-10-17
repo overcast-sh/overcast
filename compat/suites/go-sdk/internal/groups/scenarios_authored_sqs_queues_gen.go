@@ -191,6 +191,44 @@ func (g *authoredSqsQueuesScenarios) testSqsQueuesListQueues(ctx context.Context
 				"$.QueueUrls",
 				scenario.Where("$", scenario.Ref("queue.url")),
 			),
+			scenario.Paginated(
+				scenario.ListContains(
+					&scenario.Call{
+						Op:     "ListQueues",
+						Params: `{"MaxResults":1,"QueueNamePrefix":{"$name":"q"}}`,
+						Build: func(b *scenario.Binder) any {
+							in := &sqs.ListQueuesInput{}
+							in.MaxResults = aws.Int32(1)
+							in.QueueNamePrefix = aws.String(scenario.Bind[string](b, "QueueNamePrefix", scenario.Name("q")))
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().ListQueues(ctx, in.(*sqs.ListQueuesInput))
+						},
+					},
+					"$.QueueUrls",
+					scenario.Where("$", scenario.Ref("queue.url")),
+				),
+				scenario.Page{
+					Size:        1,
+					MinPages:    0,
+					OutputToken: "NextToken",
+					Next: scenario.Call{
+						Op:     "ListQueues",
+						Params: `{"MaxResults":1,"NextToken":{"$ref":"$pageToken"},"QueueNamePrefix":{"$name":"q"}}`,
+						Build: func(b *scenario.Binder) any {
+							in := &sqs.ListQueuesInput{}
+							in.MaxResults = aws.Int32(1)
+							in.NextToken = aws.String(scenario.Bind[string](b, "NextToken", scenario.Ref("$pageToken")))
+							in.QueueNamePrefix = aws.String(scenario.Bind[string](b, "QueueNamePrefix", scenario.Name("q")))
+							return in
+						},
+						Send: func(ctx context.Context, in any) (any, error) {
+							return g.cl().ListQueues(ctx, in.(*sqs.ListQueuesInput))
+						},
+					},
+				},
+			),
 		},
 	})
 }

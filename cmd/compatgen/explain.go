@@ -386,6 +386,27 @@ func (e *explainer) callLine(assign, op string, params map[string]any, export ma
 	}
 }
 
+// listCall writes the call a list clause reads and returns the name its
+// response is bound to. A paginated clause writes page one and says how the
+// rest are fetched; the items are then those of every page.
+func (e *explainer) listCall(a assertion) string {
+	if a.Paginate == nil {
+		e.callLine("listed = ", a.Call.Op, a.Call.Params, a.Call.Export)
+		return "listed"
+	}
+	p := a.Paginate
+	first, _ := pageCalls(a)
+	e.commentf("paginated: page size %d in %s; send each page's %s back as %s until none comes back, at most %d pages",
+		p.PageSize, p.PageSizeMember, p.OutputToken, p.InputToken, maxPages)
+	if p.MinPages > 0 {
+		e.commentf("fail unless at least %d pages come back; the items below are those of every page", p.MinPages)
+	} else {
+		e.commentf("the items below are those of every page")
+	}
+	e.callLine("listed = ", first.Op, first.Params, first.Export)
+	return "listed"
+}
+
 func (e *explainer) checkLines(root string, checks map[string]check) {
 	for _, path := range sortedCheckPaths(checks) {
 		c := checks[path]
@@ -429,8 +450,7 @@ func (e *explainer) assertion(a assertion, index int) {
 		e.commentf("assert[%d] listContains", index)
 		root := "resp"
 		if a.Call != nil {
-			e.callLine("listed = ", a.Call.Op, a.Call.Params, a.Call.Export)
-			root = "listed"
+			root = e.listCall(a)
 		}
 		e.linef("assert any(%s for item in %s)  %s non-empty, and contains the resource", e.whereText(a.Where), e.st.pathExpr(root, a.ItemsPath), e.st.comment)
 	case assertAbsent:
@@ -442,8 +462,7 @@ func (e *explainer) assertion(a assertion, index int) {
 		}
 		root := "resp"
 		if a.Call != nil {
-			e.callLine("listed = ", a.Call.Op, a.Call.Params, a.Call.Export)
-			root = "listed"
+			root = e.listCall(a)
 		}
 		e.linef("assert not any(%s for item in %s)  %s a missing list counts as empty", e.whereText(a.Where), e.st.pathExpr(root, a.ItemsPath), e.st.comment)
 	case assertErrorCode:
