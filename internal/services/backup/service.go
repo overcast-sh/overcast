@@ -5,7 +5,9 @@
 // ListBackupPlans, UpdateBackupPlan, DeleteBackupPlan,
 // CreateBackupAccessPoint, DescribeBackupAccessPoint,
 // DeleteBackupAccessPoint, ListBackupAccessPoints,
-// ListBackupAccessPointsByRecoveryPoint, ListBackupAccessPointsByResource.
+// ListBackupAccessPointsByRecoveryPoint, ListBackupAccessPointsByResource,
+// CreateBackupSelection, GetBackupSelection, ListBackupSelections,
+// DeleteBackupSelection.
 //
 // Routes are AWS's own restJson1 bindings from the pinned model
 // (backup-2018-11-15) rather than an emulator invention: vaults hang off
@@ -27,6 +29,7 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -227,6 +230,11 @@ type Service struct {
 	log   *serviceutil.ServiceLogger
 	clk   clock.Clock
 	store *backupStore
+
+	// selectionsMu serialises the check-then-write sequences that span a plan
+	// and its selections: CreateBackupSelection's CreatorRequestId lookup and
+	// DeleteBackupPlan's "no selections remain" check.
+	selectionsMu sync.Mutex
 }
 
 // New returns a configured Backup Service. Pure field assignment — no store
@@ -269,8 +277,10 @@ func (s *Service) PathPrefixes() []string {
 //	POST   /backup/plans/{BackupPlanId}      UpdateBackupPlan
 //	DELETE /backup/plans/{BackupPlanId}      DeleteBackupPlan
 //
-// The six access point bindings are registered here too; they are listed and
-// explained in handler_access_points.go, which holds their handlers.
+// The four selection bindings (/backup/plans/{BackupPlanId}/selections) and the
+// six access point bindings are registered here too; they are listed and
+// explained in handler_selections.go and handler_access_points.go, which hold
+// their handlers.
 //
 // The paths are absolute rather than nested under chi sub-routers for
 // /backup-vaults and /backup, and that is deliberate. A sub-router owns its
@@ -316,6 +326,19 @@ func (s *Service) RegisterRoutes(r chi.Router) {
 	r.Get(pathPlans+"/{BackupPlanId}/", s.getBackupPlan)
 	r.Post(pathPlans+"/{BackupPlanId}", s.updateBackupPlan)
 	r.Delete(pathPlans+"/{BackupPlanId}", s.deleteBackupPlan)
+
+	// Selections (#2308) — see handler_selections.go.
+	//
+	// Create and List are registered with and without a trailing slash: the
+	// pinned Smithy model binds them without one, but the AWS CLI sends
+	// "/selections/" — the same split GetBackupPlan and the other collections
+	// above show (#963, #971).
+	r.Put(pathPlans+"/{BackupPlanId}"+pathSelectionsSuffix, s.createBackupSelection)
+	r.Put(pathPlans+"/{BackupPlanId}"+pathSelectionsSuffix+"/", s.createBackupSelection)
+	r.Get(pathPlans+"/{BackupPlanId}"+pathSelectionsSuffix, s.listBackupSelections)
+	r.Get(pathPlans+"/{BackupPlanId}"+pathSelectionsSuffix+"/", s.listBackupSelections)
+	r.Get(pathPlans+"/{BackupPlanId}"+pathSelectionsSuffix+"/{SelectionId}", s.getBackupSelection)
+	r.Delete(pathPlans+"/{BackupPlanId}"+pathSelectionsSuffix+"/{SelectionId}", s.deleteBackupSelection)
 
 	// Access points (#1467) — see handler_access_points.go. The two static
 	// segments, "create" and "delete", are the model's own and do not collide
@@ -605,6 +628,11 @@ func (s *Service) deleteBackupPlan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "BackupPlanId")
 	region := middleware.RegionFromContext(r.Context(), s.cfg.Region)
 
+	// Shared with CreateBackupSelection, so a selection cannot be created
+	// between the "none remain" check below and the delete.
+	s.selectionsMu.Lock()
+	defer s.selectionsMu.Unlock()
+
 	plan, found, err := s.store.getPlan(r.Context(), region, id)
 	if err != nil {
 		s.storeError(w, r, "DeleteBackupPlan", err)
@@ -612,6 +640,20 @@ func (s *Service) deleteBackupPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	if !found {
 		protocol.WriteJSONError(w, r, notFoundError("Backup plan", id))
+		return
+	}
+	// AWS: a plan can only be deleted after all of its selections have been.
+	selections, err := s.store.listSelections(r.Context(), region, id)
+	if err != nil {
+		s.storeError(w, r, "DeleteBackupPlan", err)
+		return
+	}
+	if len(selections) > 0 {
+		protocol.WriteJSONError(w, r, &protocol.AWSError{
+			Code:       "InvalidRequestException",
+			Message:    fmt.Sprintf("Backup plan %s still has %d backup selection(s); delete them before deleting the plan.", id, len(selections)),
+			HTTPStatus: http.StatusBadRequest,
+		})
 		return
 	}
 	if err := s.store.deletePlan(r.Context(), region, id); err != nil {

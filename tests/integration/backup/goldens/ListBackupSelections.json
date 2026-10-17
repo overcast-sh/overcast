@@ -1,0 +1,7 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/x-amz-json-1.0"
+  },
+  "body": "{\"BackupSelectionsList\":[{\"BackupPlanId\":\"00000000-0000-0000-0000-000000000000\",\"CreationDate\":0,\"IamRoleArn\":\"arn:aws:iam::000000000000:role/service-role/AWSBackupDefaultServiceRole\",\"SelectionId\":\"00000000-0000-0000-0000-000000000000\",\"SelectionName\":\"golden-selection\"}]}"
+}

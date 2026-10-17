@@ -1,6 +1,6 @@
 {
   "generated_by": "go run -tags dev ./cmd/capgen --write-docs",
-  "total_ops": 1635,
+  "total_ops": 1639,
   "services": [
     {
       "service": "s3",
@@ -9095,9 +9095,29 @@
     {
       "service": "backup",
       "display_name": "Backup",
-      "total_ops": 18,
-      "implemented_ops": 18,
+      "total_ops": 22,
+      "implemented_ops": 22,
       "operations": [
+        {
+          "operation": "CreateBackupSelection",
+          "status": "⚠️ Partial",
+          "notes": "PUT /backup/plans/{BackupPlanId}/selections (#2308); `CreatorRequestId` is idempotent per plan (a replay with a different selection is AlreadyExistsException). `Resources`/`NotResources`/`ListOfTags`/`Conditions` are stored and echoed, never evaluated or validated against real resources or the IAM role; `LimitExceededException` is not enforced and `AlreadyExistsException` carries no `Arn`/`CreatorRequestId` members"
+        },
+        {
+          "operation": "GetBackupSelection",
+          "status": "✅ Supported",
+          "notes": "GET /backup/plans/{BackupPlanId}/selections/{SelectionId} (#2308); ResourceNotFoundException for an unknown plan or selection"
+        },
+        {
+          "operation": "ListBackupSelections",
+          "status": "✅ Supported",
+          "notes": "GET /backup/plans/{BackupPlanId}/selections (#2308); `maxResults` and `nextToken` query params; ordered by name then id"
+        },
+        {
+          "operation": "DeleteBackupSelection",
+          "status": "✅ Supported",
+          "notes": "DELETE /backup/plans/{BackupPlanId}/selections/{SelectionId} (#2308); empty 200, the modeled Unit output"
+        },
         {
           "operation": "CreateBackupVault",
           "status": "✅ Supported",
@@ -9126,7 +9146,7 @@
         {
           "operation": "DeleteBackupPlan",
           "status": "✅ Supported",
-          "notes": "DELETE /backup/plans/{BackupPlanId}; returns the modeled id, ARN, VersionId and DeletionDate"
+          "notes": "DELETE /backup/plans/{BackupPlanId}; returns the modeled id, ARN, VersionId and DeletionDate. InvalidRequestException while the plan still has backup selections (#2308)"
         },
         {
           "operation": "GetBackupPlan",

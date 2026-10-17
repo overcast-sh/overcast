@@ -769,16 +769,15 @@ func TestGetBackupPlan_trailingSlash(t *testing.T) {
 }
 
 // The trailing-slash item route must not capture the plan sub-resources Backup
-// does not implement — /backup/plans/{id}/versions/ and
-// /backup/plans/{id}/selections/ among them — which have to keep reaching the
-// generated 501. Same guard as the collection routes carry, for the same
-// reason.
+// does not implement — /backup/plans/{id}/versions/ is one (selections is
+// implemented now, #2308) — which has to keep reaching the generated 501. Same
+// guard as the collection routes carry, for the same reason.
 func TestGetBackupPlan_trailingSlashDoesNotSwallowUnimplemented(t *testing.T) {
 	srv := helpers.NewTestServer(t)
 	createVault(t, srv, "vault-a")
 	planID, _ := createPlan(t, srv, "plan-a")["BackupPlanId"].(string)
 
-	for _, suffix := range []string{"/versions/", "/selections/"} {
+	for _, suffix := range []string{"/versions/"} {
 		path := pathPlans + "/" + planID + suffix
 		resp := backupDo(t, srv, http.MethodGet, path, defaultRegion, nil)
 		if resp.StatusCode != http.StatusNotImplemented {

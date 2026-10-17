@@ -112,7 +112,7 @@
 | Glue            | 34  |
 | OpenSearch      | 8   |
 | AppRegistry     | 24  |
-| Backup          | 18  |
+| Backup          | 22  |
 | CloudTrail      | 12  |
 | EKS             | 49  |
 | ELBv2           | 22  |

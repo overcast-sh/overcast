@@ -74,7 +74,7 @@ Any credentials work; with none configured, run `eval "$(overcast env)"` first
 
 ## Operations
 
-All 18 listed operations are implemented.
+All 22 listed operations are implemented.
 Per-operation status, notes and AWS API links: [Backup operations](backup/operations.md).
 
 <!-- END overcast:capabilities -->

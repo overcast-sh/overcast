@@ -15,6 +15,7 @@ const (
 	nsVaults       = "backup:vaults"
 	nsPlans        = "backup:plans"
 	nsAccessPoints = "backup:accesspoints"
+	nsSelections   = "backup:selections"
 )
 
 // vaultRecord is a backup vault as it is persisted. It is deliberately not the

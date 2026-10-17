@@ -20,8 +20,9 @@ import "github.com/overcast-sh/overcast/internal/capabilities"
 // The three Deletes serve their modeled shapes in full and are
 // StatusSupported. Each models an InvalidRequestException for a resource that
 // still has contents — recovery points, backup selections, an S3 access point
-// to tear down — and Overcast implements none of them, so no reachable state
-// can produce one.
+// to tear down. DeleteBackupPlan produces it while selections remain (#2308);
+// the vault and access point Deletes cannot, because Overcast creates no
+// recovery points or S3 access points for them to refuse over.
 //
 // The six access point rows (#1467) are Partial for one reason throughout: an
 // access point's vault, resource and S3 access point are all properties of the
@@ -30,6 +31,14 @@ import "github.com/overcast-sh/overcast/internal/capabilities"
 // handler_access_points.go.
 func init() {
 	capabilities.Default.RegisterForService(serviceName,
+		capabilities.Capability{Operation: "CreateBackupSelection", Status: capabilities.StatusPartial,
+			Notes: "PUT /backup/plans/{BackupPlanId}/selections (#2308); `CreatorRequestId` is idempotent per plan (a replay with a different selection is AlreadyExistsException). `Resources`/`NotResources`/`ListOfTags`/`Conditions` are stored and echoed, never evaluated or validated against real resources or the IAM role; `LimitExceededException` is not enforced and `AlreadyExistsException` carries no `Arn`/`CreatorRequestId` members"},
+		capabilities.Capability{Operation: "GetBackupSelection", Status: capabilities.StatusSupported,
+			Notes: "GET /backup/plans/{BackupPlanId}/selections/{SelectionId} (#2308); ResourceNotFoundException for an unknown plan or selection"},
+		capabilities.Capability{Operation: "ListBackupSelections", Status: capabilities.StatusSupported,
+			Notes: "GET /backup/plans/{BackupPlanId}/selections (#2308); `maxResults` and `nextToken` query params; ordered by name then id"},
+		capabilities.Capability{Operation: "DeleteBackupSelection", Status: capabilities.StatusSupported,
+			Notes: "DELETE /backup/plans/{BackupPlanId}/selections/{SelectionId} (#2308); empty 200, the modeled Unit output"},
 		capabilities.Capability{Operation: "CreateBackupVault", Status: capabilities.StatusSupported,
 			Notes: "PUT /backup-vaults/{BackupVaultName}; `BackupVaultTags` is applied at create time, in the same store write as the vault (#1195)"},
 		capabilities.Capability{Operation: "DeleteBackupVault", Status: capabilities.StatusSupported,
@@ -41,7 +50,7 @@ func init() {
 		capabilities.Capability{Operation: "CreateBackupPlan", Status: capabilities.StatusPartial,
 			Notes: "PUT /backup/plans; `BackupPlanTags` is applied at create time (#1195); `AdvancedBackupSettings` is not stored or returned"},
 		capabilities.Capability{Operation: "DeleteBackupPlan", Status: capabilities.StatusSupported,
-			Notes: "DELETE /backup/plans/{BackupPlanId}; returns the modeled id, ARN, VersionId and DeletionDate"},
+			Notes: "DELETE /backup/plans/{BackupPlanId}; returns the modeled id, ARN, VersionId and DeletionDate. InvalidRequestException while the plan still has backup selections (#2308)"},
 		capabilities.Capability{Operation: "GetBackupPlan", Status: capabilities.StatusPartial,
 			Notes: "GET /backup/plans/{BackupPlanId}; only the current version is kept, so any other `versionId` is not found, and `MaxScheduledRunsPreview` yields no `ScheduledRunsPreview`"},
 		capabilities.Capability{Operation: "ListBackupPlans", Status: capabilities.StatusPartial,

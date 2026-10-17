@@ -4236,10 +4236,16 @@
           "name": "ListBackupSelections"
         },
         {
-          "name": "GetBackupSelection"
+          "name": "GetBackupSelection",
+          "depends": [
+            "CreateBackupSelection"
+          ]
         },
         {
-          "name": "DeleteBackupSelection"
+          "name": "DeleteBackupSelection",
+          "depends": [
+            "CreateBackupSelection"
+          ]
         }
       ]
     },
