@@ -45,7 +45,7 @@ Pipes, WAFv2, Shield, ElastiCache and EFS. It runs in the compat CI matrix
 | ---------- | ----------------------------------------------------------------- |
 | Language   | Java 17+ (compiled with `--release 17`; verified against a Java 25 JDK) |
 | Build tool | Maven 3.9+ (`pom.xml`), no wrapper checked in                     |
-| AWS client | `software.amazon.awssdk:*` v2, BOM-managed, pinned in `pom.xml` (`2.40.0` as of this writing) |
+| AWS client | `software.amazon.awssdk:*` v2, BOM-managed, pinned in `pom.xml` (`2.56.0` as of this writing) |
 | CI image   | `maven:3.9-eclipse-temurin-17-alpine` (build stage) → `eclipse-temurin:17-jre-alpine` (runtime) |
 
 > SDK upgrade policy: [compat/AGENTS.md § SDK version pinning](../../AGENTS.md#sdk-version-pinning--upgrade-strategy).
@@ -56,7 +56,10 @@ Pipes, WAFv2, Shield, ElastiCache and EFS. It runs in the compat CI matrix
 > **The pin has a floor the generated groups set.** `cmd/compatgen` spells a
 > generated call from the pinned *shape snapshot*, which is generated from a
 > newer revision of the AWS model than any released SDK, so the BOM has to be at
-> least as new as the operations the snapshot covers. `2.31.7` was not: five
+> least as new as the operations the snapshot covers, and as new as the snapshot's
+> `model-date` (`models/aws/VERSION`): each bump of the snapshot needs the BOM
+> release on or after that date. `2.43.0` stopped being enough once AppConfig's
+> experiment operations (first in `2.46.18`) entered the snapshot. `2.31.7` was not: five
 > Organizations operations the generated probe group calls
 > (`DescribeResponsibilityTransfer`, `ListInboundResponsibilityTransfers`,
 > `ListOutboundResponsibilityTransfers`,
