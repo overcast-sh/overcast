@@ -433,13 +433,13 @@ func (g *appconfigGroup) teardownDeploymentStrategies(_ context.Context, t *harn
 	return nil
 }
 
-// acStrategyID returns the created strategy id, or a stand-in so the remaining
-// URIs are still exercised when CreateDeploymentStrategy is unimplemented.
+// acStrategyID returns the strategy CreateDeploymentStrategy made. Every test
+// that reads it declares `depends: [CreateDeploymentStrategy]` in registry.json,
+// so the harness skips it ("dependency failed") when Create did not pass,
+// including while Create answers 501. There is no stand-in id: the scenario
+// port of this group cannot invent one, and the two have to answer alike.
 func acStrategyID(t *harness.TestContext) string {
-	if id := t.GetString("ac_ds_id"); id != "" {
-		return id
-	}
-	return acMissingID
+	return t.GetString("ac_ds_id")
 }
 
 func (g *appconfigGroup) CreateDeploymentStrategy(_ context.Context, t *harness.TestContext) error {
@@ -537,18 +537,15 @@ func (g *appconfigGroup) teardownExtensions(_ context.Context, t *harness.TestCo
 	return nil
 }
 
+// acExtensionID and acExtensionAssociationID return the ids the group's Create
+// tests made. As with acStrategyID there is no stand-in: every test that reads
+// one declares `depends` on the Create that makes it in registry.json.
 func acExtensionID(t *harness.TestContext) string {
-	if id := t.GetString("ac_ext_id"); id != "" {
-		return id
-	}
-	return acMissingID
+	return t.GetString("ac_ext_id")
 }
 
 func acExtensionAssociationID(t *harness.TestContext) string {
-	if id := t.GetString("ac_ext_assoc_id"); id != "" {
-		return id
-	}
-	return acMissingID
+	return t.GetString("ac_ext_assoc_id")
 }
 
 func (g *appconfigGroup) CreateExtension(_ context.Context, t *harness.TestContext) error {

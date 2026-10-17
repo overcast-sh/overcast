@@ -14,11 +14,17 @@ mod scenarios_authored_appconfig_applications_gen;
 #[path = "scenarios_authored_appconfig_configuration_profiles_gen.rs"]
 mod scenarios_authored_appconfig_configuration_profiles_gen;
 
+#[path = "scenarios_authored_appconfig_deployment_strategies_gen.rs"]
+mod scenarios_authored_appconfig_deployment_strategies_gen;
+
 #[path = "scenarios_authored_appconfig_deployments_gen.rs"]
 mod scenarios_authored_appconfig_deployments_gen;
 
 #[path = "scenarios_authored_appconfig_environments_gen.rs"]
 mod scenarios_authored_appconfig_environments_gen;
+
+#[path = "scenarios_authored_appconfig_extensions_gen.rs"]
+mod scenarios_authored_appconfig_extensions_gen;
 
 #[path = "scenarios_authored_appconfig_tags_gen.rs"]
 mod scenarios_authored_appconfig_tags_gen;
@@ -117,8 +123,10 @@ pub fn scenario_groups(clients: &Arc<AwsClients>) -> Vec<Box<dyn ServiceGroup>> 
     vec![
         Box::new(scenarios_authored_appconfig_applications_gen::ScenariosAuthoredAppconfigApplications::new(clients)),
         Box::new(scenarios_authored_appconfig_configuration_profiles_gen::ScenariosAuthoredAppconfigConfigurationProfiles::new(clients)),
+        Box::new(scenarios_authored_appconfig_deployment_strategies_gen::ScenariosAuthoredAppconfigDeploymentStrategies::new(clients)),
         Box::new(scenarios_authored_appconfig_deployments_gen::ScenariosAuthoredAppconfigDeployments::new(clients)),
         Box::new(scenarios_authored_appconfig_environments_gen::ScenariosAuthoredAppconfigEnvironments::new(clients)),
+        Box::new(scenarios_authored_appconfig_extensions_gen::ScenariosAuthoredAppconfigExtensions::new(clients)),
         Box::new(scenarios_authored_appconfig_tags_gen::ScenariosAuthoredAppconfigTags::new(clients)),
         Box::new(scenarios_authored_backup_tags_gen::ScenariosAuthoredBackupTags::new(clients)),
         Box::new(scenarios_authored_cognito_userpools_gen::ScenariosAuthoredCognitoUserpools::new(clients)),

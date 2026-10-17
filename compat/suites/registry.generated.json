@@ -344,6 +344,124 @@
   ],
   "groups": [
     {
+      "service": "appconfig",
+      "name": "appconfig-deployment-strategies-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-deployment-strategies.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-deployment-strategies",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk",
+        "rust-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateDeploymentStrategy"
+        },
+        {
+          "name": "GetDeploymentStrategy",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
+        },
+        {
+          "name": "ListDeploymentStrategies",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
+        },
+        {
+          "name": "UpdateDeploymentStrategy",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
+        },
+        {
+          "name": "DeleteDeploymentStrategy",
+          "depends": [
+            "CreateDeploymentStrategy"
+          ]
+        }
+      ]
+    },
+    {
+      "service": "appconfig",
+      "name": "appconfig-extensions-shadow",
+      "generated": true,
+      "scenario": "compat/model/authored/appconfig-extensions.json",
+      "state": "candidate",
+      "shadowOf": "appconfig-extensions",
+      "suites": [
+        "cli",
+        "dotnet-sdk",
+        "go-sdk",
+        "java-sdk",
+        "node-js-sdk",
+        "python-sdk"
+      ],
+      "tests": [
+        {
+          "name": "CreateExtension"
+        },
+        {
+          "name": "GetExtension",
+          "depends": [
+            "CreateExtension"
+          ]
+        },
+        {
+          "name": "ListExtensions",
+          "depends": [
+            "CreateExtension"
+          ]
+        },
+        {
+          "name": "UpdateExtension",
+          "depends": [
+            "CreateExtension"
+          ]
+        },
+        {
+          "name": "CreateExtensionAssociation",
+          "depends": [
+            "CreateExtension"
+          ]
+        },
+        {
+          "name": "GetExtensionAssociation",
+          "depends": [
+            "CreateExtensionAssociation"
+          ]
+        },
+        {
+          "name": "ListExtensionAssociations"
+        },
+        {
+          "name": "UpdateExtensionAssociation",
+          "depends": [
+            "CreateExtensionAssociation"
+          ]
+        },
+        {
+          "name": "DeleteExtensionAssociation",
+          "depends": [
+            "CreateExtensionAssociation"
+          ]
+        },
+        {
+          "name": "DeleteExtension",
+          "depends": [
+            "CreateExtension"
+          ]
+        }
+      ]
+    },
+    {
       "service": "batch",
       "name": "batch-gen-computeenvironment",
       "generated": true,

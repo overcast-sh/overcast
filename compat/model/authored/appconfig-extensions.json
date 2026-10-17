@@ -1,0 +1,280 @@
+{
+  "$comment": "Authored shadow port of the hand-written registry group appconfig-extensions (docs/plans/compat-coverage-modelgen.md §3.11, G6 wave 3, #1116). The group has one native implementation, in the cli suite (compat/suites/cli/internal/groups/appconfig.go); the other six suites carry it as parity debt, 10 rows each, which the flip will close. Overcast does not implement the extension operations, so CreateExtension and CreateExtensionAssociation answer 501 and are `unimplemented` in the native and the shadow alike. The registry gives every test that consumes an id a `depends` on the Create that makes it (#2243), so while those are unimplemented the dependants report `skip` (`dependency failed: <Create>`) in every backend, the native included, and the day they work the dependants run against the ids they returned. Before #2243 the native fell back to an invented id and reported `unimplemented`, which no scenario can say: a `$ref` to an export that was never written fails the step. #2243 also moved DeleteExtension to the end of the group: the native deleted the extension before CreateExtensionAssociation and then created the association against the stand-in id, which could never pass once Create worked, and AppConfig requires an extension's associations to be deleted before the extension. ListExtensionAssociations keeps no depends, as in the native, which asserts nothing about the association it lists. With one native the union is that native's assertions, plus read-backs of documented effects where it asserted only success, each stated in its test's $comment. Every scenario backend signs with AppConfig's own credential scope, as the cli native does.",
+  "version": 1,
+  "service": "appconfig",
+  "client": {
+    "sdkId": "AppConfig",
+    "endpointPrefix": "appconfig",
+    "signingName": "appconfig",
+    "protocol": "restJson1",
+    "apiVersion": "2019-10-09",
+    "awsQueryCompatible": false
+  },
+  "groups": [
+    {
+      "$comment": "One extension, created by CreateExtension and deleted by DeleteExtension, and one association of it, created by CreateExtensionAssociation and deleted by DeleteExtensionAssociation, as the native does and as registry.json's depends describe. The extension is named by $name, so it is {runId}-appconfig-extensions-shadow-ext and never collides with another group's. There is no setup: an extension hangs off nothing, and the association's target is the native's stand-in application (see CreateExtensionAssociation). Teardown deletes the association and then the extension in case the Delete tests never ran, as the native's hook does; a call whose id was never exported is skipped. No clause is wrapped in `eventually`: the native reads every write back immediately, and AppConfig documents no consistency window for an extension.",
+      "name": "appconfig-extensions-shadow",
+      "kind": "lifecycle",
+      "setup": [],
+      "tests": [
+        {
+          "$comment": "The native creates an extension with one PRE_START_DEPLOYMENT action (an SNS topic ARN that need not exist) and asserts the response carries an Id and that Name is the requested name. Both are carried. The Id is exported because every later test addresses the extension by it. The port also reads the extension back and asserts the name and that the action point it was created with is there.",
+          "name": "CreateExtension",
+          "op": "CreateExtension",
+          "call": {
+            "op": "CreateExtension",
+            "params": {
+              "Name": { "$name": "ext" },
+              "Actions": {
+                "PRE_START_DEPLOYMENT": [
+                  { "Name": "compat", "Uri": "arn:aws:sns:us-east-1:000000000000:compat" }
+                ]
+              }
+            },
+            "export": { "ext.id": "$.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "nonEmpty": true },
+                "$.Name": { "equals": { "$name": "ext" } }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetExtension",
+                "params": { "ExtensionIdentifier": { "$ref": "ext.id" } }
+              },
+              "checks": {
+                "$.Name": { "equals": { "$name": "ext" } },
+                "$.Actions.PRE_START_DEPLOYMENT": { "nonEmpty": true }
+              }
+            }
+          ]
+        },
+        {
+          "$comment": "The native asserts the response carries an Id. The port asserts it is the id CreateExtension returned, and that Name is the name it was created with: a Get answering with another extension is answering the wrong question, and the presence the native checks is implied.",
+          "name": "GetExtension",
+          "op": "GetExtension",
+          "call": {
+            "op": "GetExtension",
+            "params": { "ExtensionIdentifier": { "$ref": "ext.id" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "equals": { "$ref": "ext.id" } },
+                "$.Name": { "equals": { "$name": "ext" } }
+              }
+            }
+          ],
+          "depends": ["CreateExtension"]
+        },
+        {
+          "$comment": "The native lists unfiltered, requires an Items member, and, when CreateExtension exported an id, requires an item with that Id. The registry's depends (#2243) makes the export always present when this test runs, so the conditional is unconditional here: listContains holds when the page is non-empty and holds an item with the extension's Id. The page is unfiltered, so on an account with more than one page of extensions the first page need not hold it, which the native accepts as well.",
+          "name": "ListExtensions",
+          "op": "ListExtensions",
+          "call": {
+            "op": "ListExtensions",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "listContains",
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "ext.id" } }
+            }
+          ],
+          "depends": ["CreateExtension"]
+        },
+        {
+          "$comment": "The native sends only a new Description and asserts the response carries it. The port also reads the extension back, asserting the Description took and that the Name is unchanged: an omitted member must leave the stored value alone.",
+          "name": "UpdateExtension",
+          "op": "UpdateExtension",
+          "call": {
+            "op": "UpdateExtension",
+            "params": {
+              "ExtensionIdentifier": { "$ref": "ext.id" },
+              "Description": "updated by compat"
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Description": { "equals": "updated by compat" } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetExtension",
+                "params": { "ExtensionIdentifier": { "$ref": "ext.id" } }
+              },
+              "checks": {
+                "$.Description": { "equals": "updated by compat" },
+                "$.Name": { "equals": { "$name": "ext" } }
+              }
+            }
+          ],
+          "depends": ["CreateExtension"]
+        },
+        {
+          "$comment": "The native associates the extension with the application ARN arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz (an id no application has, in the region the compat runner defaults to and Overcast's account; the IR has no value for either, so both are literals, exactly as in appconfig-tags) and asserts the response carries an Id. It is carried as written, and the port also reads the association back. The native used to run this after DeleteExtension and so associated a deleted extension's stand-in id; it now runs while the extension exists (see the file's $comment). If AppConfig validates that the target application exists, this is the test that will say so.",
+          "name": "CreateExtensionAssociation",
+          "op": "CreateExtensionAssociation",
+          "call": {
+            "op": "CreateExtensionAssociation",
+            "params": {
+              "ExtensionIdentifier": { "$ref": "ext.id" },
+              "ResourceIdentifier": "arn:aws:appconfig:us-east-1:000000000000:application/zzzzzzz"
+            },
+            "export": { "assoc.id": "$.Id" }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Id": { "nonEmpty": true } }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetExtensionAssociation",
+                "params": { "ExtensionAssociationId": { "$ref": "assoc.id" } }
+              },
+              "checks": { "$.Id": { "equals": { "$ref": "assoc.id" } } }
+            }
+          ],
+          "depends": ["CreateExtension"]
+        },
+        {
+          "$comment": "The native asserts the response carries an Id. The port asserts it is the id CreateExtensionAssociation returned.",
+          "name": "GetExtensionAssociation",
+          "op": "GetExtensionAssociation",
+          "call": {
+            "op": "GetExtensionAssociation",
+            "params": { "ExtensionAssociationId": { "$ref": "assoc.id" } }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Id": { "equals": { "$ref": "assoc.id" } } }
+            }
+          ],
+          "depends": ["CreateExtensionAssociation"]
+        },
+        {
+          "$comment": "The native lists unfiltered and asserts only that the response has an Items member; it claims nothing about the page's contents, and the registry gives the test no depends, so it cannot read the association's id. `isList` is the page check, and it is the one IR check that states a page without requiring it to be non-empty; it also accepts an absent list, because an absent list and an empty one must read alike in every backend (README § Assertions). It is the native's presence check, slightly weaker on an absent member.",
+          "name": "ListExtensionAssociations",
+          "op": "ListExtensionAssociations",
+          "call": {
+            "op": "ListExtensionAssociations",
+            "params": {}
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": { "$.Items": { "isList": true } }
+            }
+          ]
+        },
+        {
+          "$comment": "The native sets the parameter compat=true and asserts the response carries an Id. The port asserts it is the association's own, that the parameter is in the response, and that a read-back holds it.",
+          "name": "UpdateExtensionAssociation",
+          "op": "UpdateExtensionAssociation",
+          "call": {
+            "op": "UpdateExtensionAssociation",
+            "params": {
+              "ExtensionAssociationId": { "$ref": "assoc.id" },
+              "Parameters": { "compat": "true" }
+            }
+          },
+          "assert": [
+            {
+              "kind": "responseField",
+              "checks": {
+                "$.Id": { "equals": { "$ref": "assoc.id" } },
+                "$.Parameters.compat": { "equals": "true" }
+              }
+            },
+            {
+              "kind": "readback",
+              "call": {
+                "op": "GetExtensionAssociation",
+                "params": { "ExtensionAssociationId": { "$ref": "assoc.id" } }
+              },
+              "checks": { "$.Parameters.compat": { "equals": "true" } }
+            }
+          ],
+          "depends": ["CreateExtensionAssociation"]
+        },
+        {
+          "$comment": "The native deletes the association and asserts GetExtensionAssociation then raises ResourceNotFoundException (and 404, which the IR cannot state: the model binds the error to exactly that status, and the code is what a caller branches on). That is carried.",
+          "name": "DeleteExtensionAssociation",
+          "op": "DeleteExtensionAssociation",
+          "call": {
+            "op": "DeleteExtensionAssociation",
+            "params": { "ExtensionAssociationId": { "$ref": "assoc.id" } }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetExtensionAssociation",
+                "params": { "ExtensionAssociationId": { "$ref": "assoc.id" } }
+              },
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            }
+          ],
+          "depends": ["CreateExtensionAssociation"]
+        },
+        {
+          "$comment": "The native deletes the extension and asserts GetExtension then raises ResourceNotFoundException (and 404, which the IR cannot state: see DeleteExtensionAssociation). That is carried. The port adds the other half of a delete's documented effect, that the extension is no longer listed, in the same unfiltered page ListExtensions reads.",
+          "name": "DeleteExtension",
+          "op": "DeleteExtension",
+          "call": {
+            "op": "DeleteExtension",
+            "params": { "ExtensionIdentifier": { "$ref": "ext.id" } }
+          },
+          "assert": [
+            {
+              "kind": "absent",
+              "call": {
+                "op": "GetExtension",
+                "params": { "ExtensionIdentifier": { "$ref": "ext.id" } }
+              },
+              "error": {
+                "shape": "ResourceNotFoundException",
+                "code": "ResourceNotFoundException"
+              }
+            },
+            {
+              "kind": "absent",
+              "call": {
+                "op": "ListExtensions",
+                "params": {}
+              },
+              "itemsPath": "$.Items",
+              "where": { "$.Id": { "$ref": "ext.id" } }
+            }
+          ],
+          "depends": ["CreateExtension"]
+        }
+      ],
+      "teardown": [
+        {
+          "op": "DeleteExtensionAssociation",
+          "params": { "ExtensionAssociationId": { "$ref": "assoc.id" } }
+        },
+        {
+          "op": "DeleteExtension",
+          "params": { "ExtensionIdentifier": { "$ref": "ext.id" } }
+        }
+      ]
+    }
+  ]
+}
