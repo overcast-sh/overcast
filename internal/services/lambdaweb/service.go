@@ -60,12 +60,32 @@ type Service struct {
 
 	// bus receives lifecycle events; nil until InitBus.
 	bus *events.Bus
+
+	// The data plane's collaborators, wired by the Init methods below. Each is
+	// nil until wired: a service built without them (unit tests, a control-plane
+	// only run) serves the control plane and answers 503 on the data plane.
+	provider environmentProvider
+	auth     invokeAuth
+	tel      telemetry
+	code     codeSource
 }
 
 // New returns a configured Lambda Web Functions Service. It does no I/O.
 func New(cfg *config.Config, st state.Store, logger *zap.Logger, clk clock.Clock) *Service {
 	return &Service{cfg: cfg, store: st, clk: clk, log: serviceutil.NewServiceLogger(logger, serviceName)}
 }
+
+// InitProvider wires the environment provider the data plane starts servers with.
+func (s *Service) InitProvider(p environmentProvider) { s.provider = p }
+
+// InitAuth wires the IamAuth authoriser.
+func (s *Service) InitAuth(a invokeAuth) { s.auth = a }
+
+// InitTelemetry wires the sink for metrics, system logs and events.
+func (s *Service) InitTelemetry(t telemetry) { s.tel = t }
+
+// InitCodeSource wires the reader of revision packages.
+func (s *Service) InitCodeSource(c codeSource) { s.code = c }
 
 // Name satisfies router.Service.
 func (s *Service) Name() string { return serviceName }
