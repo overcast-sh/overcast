@@ -68,7 +68,7 @@ commands need an AWS CLI release that includes them.
 | Serving | Host-routed requests on `{id}.{shard}.lambda-web.{region}.{host}`; the `lambda-web-request-id`, `lambda-web-logstream` and `lambda-web-error-type` headers; AWS's platform, runtime and application error types |
 | Scaling | Containers start on demand, up to `maxConcurrencyPerEnvironment` requests each, `scalingConfig.maxEnvironments` per endpoint and `LAMBDA_WEB_MAX_ENVIRONMENTS` per host; idle ones stop after `LAMBDA_WEB_IDLE_TTL` |
 | Throttling | `throttleConfig.rateLimit` per endpoint and AWS's account-level limit, refused with 429 |
-| `IamAuth` | SigV4 and SigV4a checks; the caller's IAM policy and the function's resource policy for `lambda:InvokeWebFunctionEndpoint`; CloudFront distributions with a `lambda` origin access control |
+| `IamAuth` | With `OVERCAST_SIGV4_VALIDATE` and `OVERCAST_ENFORCE_IAM` on (both off by default): SigV4 and SigV4a verification, the caller's IAM policy and the function's resource policy for `lambda:InvokeWebFunctionEndpoint`; CloudFront distributions with a `lambda` origin access control. With them off, only the shape of the signature is checked |
 | Telemetry | Application and `platform.*` logs in CloudWatch Logs; `AWS/Lambda/Web` metrics; `lambda-web:*` EventBridge events |
 | Account settings | AWS's documented default quotas and the Region's function count |
 | CloudFormation | `AWS::Lambda::WebFunction`, `WebFunctionRevision` and `WebFunctionEndpoint` |
