@@ -5785,6 +5785,117 @@
           ]
         }
       ]
+    },
+    {
+      "service": "lambdaweb",
+      "name": "lambda-web-endpoints",
+      "tests": [
+        {
+          "name": "ServeEndpointRequest",
+          "op": "CreateWebFunction",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "ForwardRequestHeaders",
+          "op": "CreateWebFunction",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "AuthorizationHeader",
+          "op": "CreateWebFunction",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "LatestRevisionServesNewRevision",
+          "op": "CreateWebFunctionRevision",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "WeightedRouting",
+          "op": "CreateWebFunctionEndpoint",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "IamAuthRefusesUnsignedRequest",
+          "op": "UpdateWebFunctionEndpoint",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "ImportCodeError",
+          "op": "CreateWebFunction",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "ListenTimeout",
+          "op": "CreateWebFunction",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "UnknownDomain",
+          "op": "GetWebFunctionEndpoint",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "UnsupportedMethod",
+          "op": "CreateWebFunction",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "EndpointDisabled",
+          "op": "UpdateWebFunctionEndpoint",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "EndpointRateLimit",
+          "op": "UpdateWebFunctionEndpoint",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "RequestTimeout",
+          "op": "CreateWebFunctionRevision",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "DeletedEndpointDomain",
+          "op": "DeleteWebFunctionEndpoint",
+          "requires": [
+            "docker"
+          ]
+        },
+        {
+          "name": "StreamedResponse",
+          "op": "CreateWebFunction",
+          "requires": [
+            "docker"
+          ]
+        }
+      ]
     }
   ]
 }
