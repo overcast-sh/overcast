@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { FunctionEndpointSummary } from "@aws-sdk/client-lambda-web"
 import {
   RATE_LIMITS,
+  defaultLogGroup,
   describeServes,
   emptyEndpointDraft,
   emptyRevisionDraft,
@@ -9,8 +10,11 @@ import {
   endpointDraftOf,
   endpointProblems,
   endpointsServing,
+  isTransitionalEndpoint,
+  isTransitionalState,
   nameProblem,
   revisionProblems,
+  systemLogGroup,
   toCreateEndpoint,
   toLimits,
   toRevisionConfig,
@@ -344,5 +348,59 @@ describe("describeServes", () => {
     ).toBe("rev-ab12c 90% · rev-de34f 10%")
     expect(describeServes([])).toBe("no revision")
     expect(describeServes(undefined)).toBe("no revision")
+  })
+})
+
+describe("logging configuration", () => {
+  const filled = {
+    ...emptyRevisionDraft(),
+    bucket: "code",
+    key: "app.zip",
+    executionRoleArn: "arn:aws:iam::000000000000:role/web-role",
+  }
+
+  it("names the log groups: application logs, and the .local twin for system logs", () => {
+    expect(defaultLogGroup("shop")).toBe("/aws/lambda/web/shop")
+    expect(systemLogGroup("/aws/lambda/web/shop")).toBe("/aws/lambda/web/shop.local")
+  })
+
+  it("sends no telemetryConfig when nothing was chosen", () => {
+    expect(toRevisionConfig(filled).serviceConfig?.telemetryConfig).toBeUndefined()
+  })
+
+  it("sends only the members that were chosen", () => {
+    expect(
+      toRevisionConfig({ ...filled, applicationLogLevel: "ERROR" }).serviceConfig?.telemetryConfig,
+    ).toEqual({ loggingConfig: { applicationLogLevel: "ERROR" } })
+    expect(
+      toRevisionConfig({ ...filled, logGroup: " /custom/shop ", systemLogLevel: "DEBUG" })
+        .serviceConfig?.telemetryConfig,
+    ).toEqual({ loggingConfig: { logGroup: "/custom/shop", systemLogLevel: "DEBUG" } })
+  })
+
+  it("refuses a log group CloudWatch Logs would not accept", () => {
+    expect(revisionProblems({ ...filled, logGroup: "has spaces" }).logGroup).toBeDefined()
+    expect(
+      revisionProblems({ ...filled, logGroup: "/ok/group.name-1_2#x" }).logGroup,
+    ).toBeUndefined()
+    expect(revisionProblems({ ...filled, logGroup: "" }).logGroup).toBeUndefined()
+  })
+})
+
+describe("transitional states", () => {
+  it.each([
+    ["Pending", true],
+    ["Deleting", true],
+    ["Active", false],
+    ["Failed", false],
+    [undefined, false],
+  ])("%s is transitional: %s", (state, expected) => {
+    expect(isTransitionalState(state)).toBe(expected)
+  })
+
+  it("keeps polling an endpoint whose update is still in progress", () => {
+    expect(isTransitionalEndpoint({ state: "Active", updateStatus: "InProgress" })).toBe(true)
+    expect(isTransitionalEndpoint({ state: "Active", updateStatus: "Successful" })).toBe(false)
+    expect(isTransitionalEndpoint({ state: "Pending" })).toBe(true)
   })
 })

@@ -58,13 +58,7 @@ import {
 // ── Category types ─────────────────────────────────────────────────────────
 
 export type ServiceCategory =
-  | "storage"
-  | "analytics"
-  | "compute"
-  | "messaging"
-  | "security"
-  | "networking"
-  | "monitoring"
+  "storage" | "analytics" | "compute" | "messaging" | "security" | "networking" | "monitoring"
 
 export const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   storage: "Storage & Database",
@@ -375,7 +369,7 @@ export const SERVICES = {
     category: "compute",
     description: "HTTP servers with revisions and endpoints",
     dashboardDescription:
-      "Web functions — revisions, endpoints and traffic splits. The control plane only: nothing serves requests yet.",
+      "Web functions — revisions, endpoints and traffic splits. Endpoints serve HTTP from Docker, scaling to zero when idle.",
     docKey: "lambda-web",
   },
   ec2: {
@@ -507,7 +501,8 @@ export const SERVICES = {
     to: "/ses",
     category: "messaging",
     description: "Email sending service",
-    dashboardDescription: "Email identities — verify addresses and domains; mail lands in the Inbox.",
+    dashboardDescription:
+      "Email identities — verify addresses and domains; mail lands in the Inbox.",
     docKey: "ses",
   },
   pipes: {

@@ -15,6 +15,10 @@
  *   lambdaWebKeys.tags(arn)              -> [...all(), "tags", arn]
  *   lambdaWebKeys.settings()             -> [...all(), "settings"]
  *
+ * A revision is `Pending` while its package is prepared, an endpoint `Pending`
+ * (or `Deleting`, or mid-update) while it settles: those queries poll every
+ * `TRANSITION_POLL_MS` until nothing is transitional.
+ *
  * Revisions and endpoints each hang under one prefix, the one the
  * `lambda-web:Revision*` and `lambda-web:Endpoint*` events invalidate: a new
  * revision can move an endpoint's weights (`LatestRevision`), so a revision
@@ -27,9 +31,11 @@ import type {
   CreateEndpointInput,
   CreateRevisionInput,
   CreateWebFunctionInput,
+  EndpointRequest,
   UpdateEndpointInput,
 } from "@/services/api/lambda-web"
 import { endpointStore } from "@/services/endpoint-store"
+import { isTransitionalEndpoint, isTransitionalState, TRANSITION_POLL_MS } from "./models"
 
 /** The detail page's tabs. */
 export const WEB_FUNCTION_TABS = ["overview", "revisions", "endpoints", "policy"] as const
@@ -64,6 +70,8 @@ export function webFunctionQueryOptions(name: string) {
     queryKey: lambdaWebKeys.function(name),
     queryFn: () => lambdaWeb.getFunction(name),
     enabled: name !== "",
+    refetchInterval: (query) =>
+      isTransitionalState(query.state.data?.state) ? TRANSITION_POLL_MS : false,
   })
 }
 
@@ -72,6 +80,9 @@ export function webRevisionsQueryOptions(name: string) {
     queryKey: lambdaWebKeys.functionRevisions(name),
     queryFn: () => lambdaWeb.listRevisions(name),
     enabled: name !== "",
+    // A revision is Pending while its package is prepared: poll until it settles.
+    refetchInterval: (query) =>
+      query.state.data?.some((r) => isTransitionalState(r.state)) ? TRANSITION_POLL_MS : false,
   })
 }
 
@@ -80,6 +91,8 @@ export function webRevisionQueryOptions(name: string, id: string) {
     queryKey: lambdaWebKeys.revision(name, id),
     queryFn: () => lambdaWeb.getRevision(name, id),
     enabled: name !== "" && id !== "",
+    refetchInterval: (query) =>
+      isTransitionalState(query.state.data?.state) ? TRANSITION_POLL_MS : false,
   })
 }
 
@@ -88,6 +101,9 @@ export function webEndpointsQueryOptions(name: string) {
     queryKey: lambdaWebKeys.functionEndpoints(name),
     queryFn: () => lambdaWeb.listEndpoints(name),
     enabled: name !== "",
+    // An endpoint is Pending until its revision is, and an update is InProgress: poll until both settle.
+    refetchInterval: (query) =>
+      query.state.data?.some(isTransitionalEndpoint) ? TRANSITION_POLL_MS : false,
   })
 }
 
@@ -127,6 +143,14 @@ export function deleteWebFunctionMutationOptions() {
   return mutationOptions({
     mutationKey: [...lambdaWebKeys.functions(), "delete"] as const,
     mutationFn: (name: string) => lambdaWeb.deleteFunction(name),
+  })
+}
+
+/** Sends one request to an endpoint through the invoke path. A failed status is a result, not an error. */
+export function invokeEndpointMutationOptions() {
+  return mutationOptions({
+    mutationKey: [...lambdaWebKeys.endpoints(), "invoke"] as const,
+    mutationFn: (request: EndpointRequest) => lambdaWeb.invokeEndpoint(request),
   })
 }
 

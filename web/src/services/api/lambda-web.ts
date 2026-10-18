@@ -30,6 +30,7 @@ import {
 } from "@aws-sdk/client-lambda-web"
 import { nullWhen } from "@/lib/aws-error"
 import { awsClients } from "../aws-clients"
+import { endpointResolver } from "./base"
 import { collectPages } from "./paginate"
 
 export type WebFunction = FunctionSummary
@@ -48,12 +49,62 @@ export interface WebPolicy {
   revisionId: string
 }
 
+/** One request to an endpoint, through the invoke path (`/_overcast/lambdaweb/invoke/…`). */
+export interface EndpointRequest {
+  /** The invoke path of the endpoint, without a trailing slash (see `invokePath`). */
+  invokePath: string
+  method: string
+  /** The path and query to request on the endpoint, starting with `/`. */
+  target: string
+  headers: Record<string, string>
+  body?: string
+}
+
+/** What an endpoint answered. Header names are lower case. */
+export interface EndpointResponse {
+  status: number
+  statusText: string
+  headers: [name: string, value: string][]
+  body: Uint8Array
+  /** Milliseconds from sending the request to reading the whole body. */
+  durationMs: number
+}
+
 /** An optional configuration's absence is `ResourceNotFoundException`, not an empty answer. */
 const orNone = <T>(call: Promise<T>) => nullWhen("ResourceNotFoundException", call)
 
 const client = () => awsClients.lambdaWeb()
 
 export const lambdaWeb = {
+  /**
+   * Sends a request to an endpoint through the invoke path, which works with
+   * any Host (a browser cannot set one): the server forwards the endpoint's
+   * own domain to the application. Any status is an answer, not an error — a
+   * 502 is what a broken revision is expected to give — so only a network
+   * failure throws. This is the emulator's own `/_overcast/` surface, which
+   * has no SDK client, so it is `fetch`.
+   */
+  invokeEndpoint: async (request: EndpointRequest): Promise<EndpointResponse> => {
+    const { baseUrl } = endpointResolver.get()
+    const started = performance.now()
+    const res = await fetch(
+      `${baseUrl.replace(/\/+$/, "")}${request.invokePath}${request.target}`,
+      {
+        method: request.method,
+        headers: request.headers,
+        body: request.body === undefined || request.body === "" ? undefined : request.body,
+      },
+    )
+    const body = new Uint8Array(await res.arrayBuffer())
+    return {
+      status: res.status,
+      statusText: res.statusText,
+      headers: [...res.headers.entries()],
+      body,
+      durationMs: performance.now() - started,
+    }
+  },
+
   listFunctions: (): Promise<WebFunction[]> =>
     collectPages(paginateListWebFunctions({ client: client() }, {}), (page) => page.functions),
 

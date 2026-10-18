@@ -97,7 +97,18 @@ export function RevisionsTab({ functionName }: { functionName: string }) {
               </span>
             ),
           },
-          { header: "State", cell: (r) => <StateBadge state={r.state} /> },
+          {
+            header: "State",
+            prose: true,
+            cell: (r) => (
+              <span className="flex flex-col items-start gap-1">
+                <StateBadge state={r.state} />
+                {r.state === "Failed" && r.stateReason && (
+                  <span className="text-xs text-danger">{r.stateReason}</span>
+                )}
+              </span>
+            ),
+          },
           {
             header: "Serving",
             cell: (r) => {

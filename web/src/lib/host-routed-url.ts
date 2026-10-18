@@ -19,6 +19,7 @@ export const HOST_ROUTE_LABELS = {
   lambdaUrl: "lambda-url",
   appsyncApi: "appsync-api",
   cloudfront: "cloudfront",
+  lambdaWeb: "lambda-web",
 } as const
 
 export type HostRouteLabel = (typeof HOST_ROUTE_LABELS)[keyof typeof HOST_ROUTE_LABELS]

@@ -8,6 +8,8 @@ import {
   webEndpointsQueryOptions,
   webRevisionsQueryOptions,
 } from "../data"
+import { defaultLogGroup } from "../models"
+import { LogLinks } from "./log-links"
 import { StateBadge } from "./state-badge"
 import { TagsSection } from "./tags-section"
 
@@ -42,6 +44,7 @@ export function OverviewTab({ fn }: { fn: WebFunction }) {
               : endpoints?.length
           }
         />
+        <Definition label="Logs" value={<LogLinks logGroup={defaultLogGroup(name)} />} full />
       </DefinitionCard>
       {settings && (
         <DefinitionCard title="Account in this Region">

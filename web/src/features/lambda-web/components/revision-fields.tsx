@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { Advisory } from "@/components/ui/advisory"
 import { Combobox } from "@/components/ui/combobox"
 import { FormField, FormRow } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
@@ -6,8 +7,10 @@ import { ResourceArnCombobox } from "@/components/ui/resource-arn-combobox"
 import { Select } from "@/components/ui/select"
 import { s3BucketsQueryOptions } from "@/features/s3/data"
 import {
+  APPLICATION_LOG_LEVELS,
   CONCURRENCY_RANGE,
   RUNTIMES,
+  SYSTEM_LOG_LEVELS,
   TIMEOUT_RANGE,
   type RevisionDraft,
   type RevisionProblems,
@@ -56,6 +59,11 @@ export function RevisionFields({ draft, onChange, problems }: RevisionFieldsProp
           />
         </FormField>
       </FormRow>
+      <Advisory tone="info" title="The package is read from S3 now">
+        The bucket must have versioning enabled and the object must exist. Overcast pins the
+        object&apos;s current version when it creates the revision, and rejects the request
+        otherwise.
+      </Advisory>
       <FormField
         label="Object version"
         hint="Optional. Pins the revision to one version of a versioned bucket's object."
@@ -67,7 +75,7 @@ export function RevisionFields({ draft, onChange, problems }: RevisionFieldsProp
       </FormField>
       <FormField
         label="Runtime"
-        hint="Web functions run Node.js only. The package is stored, not unpacked."
+        hint="Web functions run Node.js only. The package runs in a container started on the first request."
       >
         <Select value={draft.runtime} onChange={(event) => set({ runtime: event.target.value })}>
           {RUNTIMES.map((runtime) => (
@@ -125,6 +133,52 @@ export function RevisionFields({ draft, onChange, problems }: RevisionFieldsProp
           addLabel="Add variable"
         />
       </FormField>
+      <FormField
+        label="Log group"
+        error={problems.logGroup}
+        hint="Optional. Application and system logs go to CloudWatch Logs; system logs to the group's .local twin. Default /aws/lambda/web/{function}."
+      >
+        <Input
+          value={draft.logGroup}
+          placeholder="/aws/lambda/web/my-function"
+          className="font-mono"
+          onChange={(event) => set({ logGroup: event.target.value })}
+        />
+      </FormField>
+      <FormRow>
+        <FormField label="Application log level" hint="Console output below this level is dropped.">
+          <Select
+            value={draft.applicationLogLevel}
+            onChange={(event) =>
+              set({
+                applicationLogLevel: event.target.value as RevisionDraft["applicationLogLevel"],
+              })
+            }
+          >
+            <option value="">Default (INFO)</option>
+            {APPLICATION_LOG_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+        <FormField label="System log level" hint="Platform events: starts, stops, requests.">
+          <Select
+            value={draft.systemLogLevel}
+            onChange={(event) =>
+              set({ systemLogLevel: event.target.value as RevisionDraft["systemLogLevel"] })
+            }
+          >
+            <option value="">Default (INFO)</option>
+            {SYSTEM_LOG_LEVELS.map((level) => (
+              <option key={level} value={level}>
+                {level}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      </FormRow>
     </>
   )
 }

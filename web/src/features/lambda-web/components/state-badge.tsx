@@ -5,9 +5,11 @@ const VARIANTS: Record<string, NonNullable<BadgeProps["variant"]>> = {
   Pending: "info",
   Deleting: "warning",
   Failed: "danger",
+  InProgress: "info",
+  Successful: "success",
 }
 
-/** A web function's, revision's or endpoint's state. */
+/** A web function's, revision's or endpoint's state, or an endpoint's update status. */
 export function StateBadge({ state }: { state: string | undefined }) {
   if (!state) return null
   return <Badge variant={VARIANTS[state] ?? "default"}>{state}</Badge>

@@ -1,8 +1,19 @@
 import { http, HttpResponse } from "msw"
 import { server } from "@/test/server"
-import { createTestQueryClient, renderWithRouter, screen, waitFor, within } from "@/test/render"
+import {
+  act,
+  createTestQueryClient,
+  renderWithRouter,
+  screen,
+  waitFor,
+  within,
+} from "@/test/render"
+import { useFakeTimers } from "@/test/fake-timers"
+import type { TopologyResponse } from "@/types"
 import type { WebEndpoint, WebRevision } from "@/services/api/lambda-web"
 import { webEndpointsQueryOptions, webRevisionsQueryOptions } from "../data"
+import { TRANSITION_POLL_MS } from "../models"
+import { endpointTrafficQueryOptions } from "../use-endpoint-traffic"
 import { EndpointsTab } from "./endpoints-tab"
 
 const FN_ARN = "arn:aws:lambda:us-east-1:000000000000:web-function/shop"
@@ -20,7 +31,7 @@ const prod: WebEndpoint = {
   endpointName: "prod",
   description: "customers",
   endpointType: "HomeRegion",
-  domainName: "abc123.lambda-url.us-east-1.on.aws",
+  domainName: "abcd1234abcd1234.b7t.lambda-web.us-east-1.localhost",
   authType: "ApplicationManaged",
   autoDeploymentMode: "Disabled",
   revisionWeights: [{ revisionId: "rev-ab12c", weight: 100 }],
@@ -32,10 +43,44 @@ const prod: WebEndpoint = {
   updatedAt: new Date("2026-10-01T10:00:00Z"),
 }
 
+/** The map's node for `shop`, with `environments` running behind `prod`. */
+function topologyWith(environments: number): TopologyResponse {
+  return {
+    regions: ["us-east-1"],
+    edges: [],
+    nodes: [
+      {
+        id: "us-east-1::lambdaweb::shop",
+        service: "lambdaweb",
+        label: "shop",
+        region: "us-east-1",
+        webEndpoints: [
+          {
+            name: "prod",
+            type: "HomeRegion",
+            authType: "ApplicationManaged",
+            autoDeployment: "Disabled",
+            domainName: "",
+            serves: [],
+            environments,
+          },
+        ],
+      },
+    ],
+  }
+}
+
 function renderTab(endpoints: WebEndpoint[] = [prod]) {
   const queryClient = createTestQueryClient()
   queryClient.setQueryData(webEndpointsQueryOptions("shop").queryKey, endpoints)
   queryClient.setQueryData(webRevisionsQueryOptions("shop").queryKey, revisions)
+  // The Traffic column reads CloudWatch; an hour of silence.
+  for (const e of endpoints) {
+    queryClient.setQueryData(
+      endpointTrafficQueryOptions("shop", e.endpointName ?? "", "ExecutedRequests").queryKey,
+      { datapoints: [] },
+    )
+  }
   return renderWithRouter(() => <EndpointsTab functionName="shop" homeRegion="us-east-1" />, {
     queryClient,
   })
@@ -63,12 +108,91 @@ describe("EndpointsTab", () => {
     expect(within(row).getByText("500 req/s")).toBeInTheDocument()
   })
 
-  it("shows the domain as text with a copy button, and says it is not served", async () => {
+  it("links to the endpoint through the invoke path, which works with any Host", async () => {
+    // The console reaches the emulator on localhost, which takes no subdomains here.
     renderTab()
-    const domain = await screen.findByText("abc123.lambda-url.us-east-1.on.aws")
-    expect(domain.closest("a")).toBeNull()
-    expect(screen.getByRole("button", { name: "Copy domain name" })).toBeInTheDocument()
-    expect(screen.getByText("Endpoint domains are not served yet")).toBeInTheDocument()
+    const row = (await screen.findByText("prod")).closest("tr") as HTMLElement
+    const link = within(row).getByRole("link", {
+      name: /_overcast\/lambdaweb\/invoke\/abcd1234abcd1234\.b7t\/us-east-1\//,
+    })
+    expect(link).toHaveAttribute(
+      "href",
+      "http://localhost:4566/_overcast/lambdaweb/invoke/abcd1234abcd1234.b7t/us-east-1/",
+    )
+    expect(link).toHaveAttribute("target", "_blank")
+    expect(within(row).getByRole("button", { name: "Copy invoke URL" })).toBeInTheDocument()
+    expect(screen.queryByText(/not served/i)).not.toBeInTheDocument()
+  })
+
+  it("shows an IAM auth endpoint's address as text: a browser cannot sign", async () => {
+    renderTab([{ ...prod, authType: "IamAuth" }])
+    const row = (await screen.findByText("prod")).closest("tr") as HTMLElement
+    expect(within(row).queryByRole("link")).not.toBeInTheDocument()
+    expect(within(row).getByText(/_overcast\/lambdaweb\/invoke/)).toHaveAttribute(
+      "title",
+      expect.stringContaining("SigV4"),
+    )
+  })
+
+  it("shows how many environments each endpoint has, from the map's topology", async () => {
+    server.use(http.get("/api/topology", () => HttpResponse.json(topologyWith(3))))
+    renderTab()
+    const row = (await screen.findByText("prod")).closest("tr") as HTMLElement
+    expect(await within(row).findByText("3")).toBeInTheDocument()
+  })
+
+  it("says an endpoint with no environments is scaled to zero", async () => {
+    server.use(http.get("/api/topology", () => HttpResponse.json(topologyWith(0))))
+    renderTab()
+    const row = (await screen.findByText("prod")).closest("tr") as HTMLElement
+    expect(await within(row).findByText("scaled to zero")).toBeInTheDocument()
+  })
+
+  it("shows a failed endpoint's reason and an update still in progress", async () => {
+    renderTab([
+      { ...prod, state: "Failed", stateReason: "The endpoint could not be registered: boom" },
+      {
+        ...prod,
+        endpointName: "dev",
+        endpointArn: `${FN_ARN}/endpoint/dev`,
+        updateStatus: "InProgress",
+        updateStatusReason: "Routing traffic",
+      },
+    ])
+    expect(
+      await screen.findByText("The endpoint could not be registered: boom"),
+    ).toBeInTheDocument()
+    const dev = screen.getByText("dev").closest("tr") as HTMLElement
+    expect(within(dev).getByText("InProgress")).toBeInTheDocument()
+    expect(within(dev).getByText("Routing traffic")).toBeInTheDocument()
+  })
+
+  describe("while an endpoint settles", () => {
+    useFakeTimers()
+
+    it("polls until it is Active", async () => {
+      let reads = 0
+      server.use(
+        http.post("*/2025-03-07/web-functions/shop/list-endpoints", () => {
+          reads++
+          return HttpResponse.json({
+            endpoints: [{ ...prod, state: "Active", createdAt: "2026-10-01T10:00:00Z" }],
+          })
+        }),
+      )
+      renderTab([{ ...prod, state: "Pending" }])
+      expect(await screen.findByText("Pending")).toBeInTheDocument()
+      await act(() => vi.advanceTimersByTimeAsync(TRANSITION_POLL_MS + 100))
+      expect(await screen.findByText("Active")).toBeInTheDocument()
+      expect(reads).toBeGreaterThan(0)
+    })
+  })
+
+  it("opens the endpoint's detail from its row, with a test request form", async () => {
+    const { user } = renderTab()
+    await user.click(await screen.findByRole("button", { name: "Test prod" }))
+    expect(await screen.findByRole("heading", { name: "Test request" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Send request" })).toBeInTheDocument()
   })
 
   it("explains what an empty function needs", async () => {
