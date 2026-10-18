@@ -717,3 +717,53 @@ func TestListRevisions_pagesSurviveNewRevisions(t *testing.T) {
 		t.Error("a foreign token was accepted")
 	}
 }
+
+func TestListWebFunctions_resumesPastADeletedBoundaryItem(t *testing.T) {
+	// Given: four functions listed two at a time, and a client that deletes
+	// what it has seen
+	f := newLifecycleFixture(t)
+	f.code.put("code", "v1.zip", goodPackage(t))
+	ctx := context.Background()
+	for _, n := range []string{"alpha", "bravo", "charlie", "delta"} {
+		f.createApp(n)
+	}
+	two := 2
+	first, aerr := f.s.listWebFunctionsTyped(ctx, &listRequest{MaxResults: &two})
+	if aerr != nil || len(first.Functions) != 2 || first.NextToken == "" {
+		t.Fatalf("first page = %+v %v", first, aerr)
+	}
+	for _, fn := range first.Functions {
+		if _, aerr := f.s.deleteWebFunctionTyped(ctx, &functionRequest{FunctionName: fn.FunctionName}); aerr != nil {
+			t.Fatalf("delete: %s", aerr.Message)
+		}
+	}
+
+	// When: it asks for the next page with the token it was given
+	second, aerr := f.s.listWebFunctionsTyped(ctx, &listRequest{MaxResults: &two, NextToken: first.NextToken})
+
+	// Then: the list continues with what is left, and nothing is repeated
+	if aerr != nil {
+		t.Fatalf("second page: %s", aerr.Message)
+	}
+	if len(second.Functions) != 2 || second.Functions[0].FunctionName != "charlie" || second.Functions[1].FunctionName != "delta" {
+		t.Errorf("second page = %+v", second.Functions)
+	}
+}
+
+func TestSettleEndpoints_removesAnOrphan(t *testing.T) {
+	// Given: an endpoint left Deleting whose function is already gone
+	f := newLifecycleFixture(t)
+	ctx := context.Background()
+	orphan := &endpoint{Function: "gone", Region: f.s.cfg.Region, Name: "dev", State: stateDeleting}
+	if aerr := putRecord(ctx, f.s, nsEndpoints, childKey(orphan.Region, "gone", "dev"), orphan); aerr != nil {
+		t.Fatal(aerr)
+	}
+
+	// When: the service settles
+	f.s.settleEndpoints(ctx)
+
+	// Then: the orphan is removed, so it is not rescanned on every boot
+	if _, found, _ := getRecord[endpoint](ctx, f.s, nsEndpoints, childKey(orphan.Region, "gone", "dev")); found {
+		t.Error("the orphan endpoint survived")
+	}
+}

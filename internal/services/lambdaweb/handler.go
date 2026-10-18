@@ -423,9 +423,16 @@ func modifyResponse(resp *http.Response) error {
 		// The emulator's permissive CORS headers are already on the writer, and
 		// the proxy would add the application's own beside them. An application
 		// that speaks CORS replaces them.
+		// Any CORS header from the application means it speaks CORS: drop the whole
+		// preset, or a preset `*` would sit beside its own credentials header.
 		for k := range resp.Header {
 			if strings.HasPrefix(k, "Access-Control-") {
-				st.w.Header().Del(k)
+				for pk := range st.w.Header() {
+					if strings.HasPrefix(pk, "Access-Control-") {
+						st.w.Header().Del(pk)
+					}
+				}
+				break
 			}
 		}
 	}

@@ -939,3 +939,27 @@ func TestServe_upgradeHeadersAreRemovedFromTheRequest(t *testing.T) {
 		t.Errorf("application saw an Upgrade header: %s", body)
 	}
 }
+
+func TestServe_anApplicationsCORSHeadersReplaceTheWholePreset(t *testing.T) {
+	// Given: an application that sets only a credentials header
+	f := newDPFixture(t, dpOptions{
+		wrap: middleware.CORS,
+		handler: func(envSpec) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			})
+		},
+	})
+	d := f.deploy(deployOpts{})
+
+	// When: a request goes through the invoke path
+	resp, _ := f.do(d, "GET", "/", nil, nil)
+
+	// Then: the preset wildcard origin is gone, since it cannot accompany credentials
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want none", got)
+	}
+	if resp.Header.Get("Access-Control-Allow-Credentials") != "true" {
+		t.Error("the application's header was lost")
+	}
+}

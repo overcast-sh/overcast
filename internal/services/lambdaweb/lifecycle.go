@@ -323,7 +323,12 @@ func (s *Service) settleEndpoints(ctx context.Context) {
 			continue
 		}
 		fn, found, aerr := getRecord[webFunction](ctx, s, nsFunctions, functionKey(ep.Region, ep.Function))
-		if aerr != nil || !found {
+		if aerr != nil {
+			continue
+		}
+		if !found {
+			// An orphan: its function is gone, so nothing can finish or use it.
+			_ = deleteRecord(ctx, s, nsEndpoints, childKey(ep.Region, ep.Function, ep.Name))
 			continue
 		}
 		switch {

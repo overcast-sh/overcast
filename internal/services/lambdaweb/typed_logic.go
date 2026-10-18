@@ -12,6 +12,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -247,9 +248,46 @@ func encodeToken(key string) string {
 	return x[0:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:32]
 }
 
+// tokenBook remembers, for the most recent tokens, the key of the item each
+// ended on. When that item has been deleted by the time the next page is read,
+// the page resumes at the first item that sorts after it.
+type tokenBook struct {
+	mu    sync.Mutex
+	keys  map[string]string
+	order []string
+}
+
+const tokenBookSize = 4096
+
+func (b *tokenBook) put(token, key string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.keys == nil {
+		b.keys = make(map[string]string, tokenBookSize)
+	}
+	if _, ok := b.keys[token]; !ok {
+		if len(b.order) >= tokenBookSize {
+			delete(b.keys, b.order[0])
+			b.order = b.order[1:]
+		}
+		b.order = append(b.order, token)
+	}
+	b.keys[token] = key
+}
+
+func (b *tokenBook) get(token string) (string, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	k, ok := b.keys[token]
+	return k, ok
+}
+
 // page returns the maxResults items of items that follow token, and the token
-// for the next page when there are more. key is the item's stable identity.
-func page[T any](items []T, key func(T) string, maxResults *int, token string) ([]T, string, *protocol.AWSError) {
+// for the next page when there are more. key is an item's stable identity.
+// after reports whether an item sorts after a boundary key in the list's own
+// order; it lets a page resume past a deleted boundary item, and is nil for a
+// list with no such order (a token for a vanished item is then refused).
+func page[T any](book *tokenBook, items []T, key func(T) string, after func(T, string) bool, maxResults *int, token string) ([]T, string, *protocol.AWSError) {
 	size := defaultListPageSize
 	if maxResults != nil {
 		if *maxResults < 1 || *maxResults > 50 {
@@ -267,13 +305,25 @@ func page[T any](items []T, key func(T) string, maxResults *int, token string) (
 			}
 		}
 		if start < 0 {
-			return nil, "", errBadToken
+			boundary, known := book.get(token)
+			if !known || after == nil {
+				return nil, "", errBadToken
+			}
+			start = len(items)
+			for i, it := range items {
+				if after(it, boundary) {
+					start = i
+					break
+				}
+			}
 		}
 	}
 	end := min(start+size, len(items))
 	next := ""
-	if end < len(items) {
-		next = encodeToken(key(items[end-1]))
+	if end < len(items) && end > start {
+		last := key(items[end-1])
+		next = encodeToken(last)
+		book.put(next, last)
 	}
 	return items[start:end], next, nil
 }
@@ -595,7 +645,7 @@ func (s *Service) listWebFunctionsTyped(ctx context.Context, in *listRequest) (*
 			sums = append(sums, s.functionSummary(fn, false))
 		}
 	}
-	items, next, aerr := page(sums, func(f functionSummary) string { return f.FunctionName }, in.MaxResults, in.NextToken)
+	items, next, aerr := page(&s.tokens, sums, func(f functionSummary) string { return f.FunctionName }, func(f functionSummary, b string) bool { return f.FunctionName > b }, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -729,7 +779,7 @@ func (s *Service) listWebFunctionRevisionsTyped(ctx context.Context, in *listReq
 			sums = append(sums, sum)
 		}
 	}
-	items, next, aerr := page(sums, func(r revisionSummary) string { return r.RevisionID }, in.MaxResults, in.NextToken)
+	items, next, aerr := page(&s.tokens, sums, func(r revisionSummary) string { return r.RevisionID }, nil, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -867,7 +917,7 @@ func (s *Service) listWebFunctionEndpointsTyped(ctx context.Context, in *listReq
 			sums = append(sums, sum)
 		}
 	}
-	items, next, aerr := page(sums, func(e endpointSummary) string { return e.EndpointName }, in.MaxResults, in.NextToken)
+	items, next, aerr := page(&s.tokens, sums, func(e endpointSummary) string { return e.EndpointName }, func(e endpointSummary, b string) bool { return e.EndpointName > b }, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
