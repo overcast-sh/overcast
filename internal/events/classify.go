@@ -22,6 +22,9 @@ package events
 // from this set.
 var noiseTypes = map[Type]struct{}{
 	RequestReceived: {},
+	// Per-request web function telemetry, coalesced by the publisher but
+	// still one event per endpoint per second under load.
+	LambdaWebRequestCompleted: {},
 }
 
 // IsNoise reports whether t is classified as noise. See noiseTypes for the
