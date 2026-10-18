@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/overcast-sh/overcast/internal/events"
 	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
@@ -120,14 +122,24 @@ func stateReason(st, kind string) string {
 		return "The " + kind + " is being created."
 	case stateDeleting:
 		return "The " + kind + " is being deleted."
+	case stateFailed:
+		return "The " + kind + " failed."
 	}
 	return "The " + kind + " is active."
 }
 
-// stateOf is what a resource reports. A resource is Active from the moment it
-// exists, but the response to the call that creates it reports Pending, as
-// AWS's does: that is the state clients of the create call are written to
-// wait out.
+// reasonOf is the stored reason for a state, or the generic text for it.
+func reasonOf(stored, st, kind string) string {
+	if stored != "" {
+		return stored
+	}
+	return stateReason(st, kind)
+}
+
+// stateOf is what a web function reports. A function is Active from the moment
+// it exists, but the response to the call that creates it reports Pending, as
+// AWS's does: that is the state clients of the create call are written to wait
+// out. (Revisions and endpoints report their stored state: lifecycle.go.)
 func stateOf(pending bool) string {
 	if pending {
 		return statePending
@@ -143,11 +155,11 @@ func (s *Service) functionSummary(fn *webFunction, pending bool) functionSummary
 	}
 }
 
-func (s *Service) revisionSummary(rev *revision, pending bool) revisionSummary {
-	st := stateOf(pending)
+func (s *Service) revisionSummary(rev *revision) revisionSummary {
+	st := revState(rev)
 	return revisionSummary{
 		RevisionARN: rev.ARN, RevisionID: rev.ID, Description: rev.Description, State: st,
-		StateReason: stateReason(st, "revision"), CreatedAt: timestamp(rev.CreatedAt),
+		StateReason: reasonOf(rev.StateReason, st, "revision"), CreatedAt: timestamp(rev.CreatedAt),
 	}
 }
 
@@ -158,19 +170,16 @@ func weightsOrEmpty(w []revisionWt) []revisionWt {
 	return w
 }
 
-func (s *Service) endpointSummary(ep *endpoint, pending bool) endpointSummary {
-	st := stateOf(pending)
-	out := endpointSummary{
+func (s *Service) endpointSummary(ep *endpoint) endpointSummary {
+	st := epState(ep)
+	return endpointSummary{
 		EndpointARN: ep.ARN, EndpointName: ep.Name, Description: ep.Description, EndpointType: ep.Type,
 		DomainName: ep.DomainName, AuthType: ep.AuthType, AutoDeploymentMode: ep.AutoDeploy,
 		RevisionWeights: weightsOrEmpty(ep.Weights), Regions: ep.Regions, ScalingConfig: ep.Scaling,
-		ThrottleConfig: ep.Throttle, State: st, StateReason: stateReason(st, "endpoint"),
+		ThrottleConfig: ep.Throttle, State: st, StateReason: reasonOf(ep.StateReason, st, "endpoint"),
+		UpdateStatus: epUpdateStatus(ep), UpdateStatusReason: ep.UpdateStatusReason,
 		CreatedAt: timestamp(ep.CreatedAt), UpdatedAt: timestamp(ep.UpdatedAt),
 	}
-	if !pending {
-		out.UpdateStatus = updateSuccessful
-	}
-	return out
 }
 
 // endpointView is the full endpoint shape Create, Get and UpdateWebFunctionEndpoint
@@ -181,13 +190,17 @@ type endpointView struct {
 	RegionalEndpoints map[string]regionalEndpoint `json:"regionalEndpoints"`
 }
 
-func (s *Service) endpointView(fn *webFunction, ep *endpoint, pending bool) *endpointView {
-	sum := s.endpointSummary(ep, pending)
+// endpointView renders ep. Every Region of a MultiRegion or PerRegion endpoint
+// is applied together here, so each carries the endpoint's own state and update
+// status.
+func (s *Service) endpointView(fn *webFunction, ep *endpoint) *endpointView {
+	sum := s.endpointSummary(ep)
 	regional := make(map[string]regionalEndpoint, len(ep.Regions))
 	for _, r := range ep.Regions {
 		re := regionalEndpoint{
 			AuthType: ep.AuthType, RevisionWeights: weightsOrEmpty(ep.Weights), ScalingConfig: ep.Scaling,
-			ThrottleConfig: ep.Throttle, State: sum.State, StateReason: sum.StateReason, UpdateStatus: sum.UpdateStatus,
+			ThrottleConfig: ep.Throttle, State: sum.State, StateReason: sum.StateReason,
+			UpdateStatus: sum.UpdateStatus, UpdateStatusReason: sum.UpdateStatusReason,
 		}
 		if ep.Type != endpointMultiRegion {
 			re.DomainName = ep.RegionDomain[r]
@@ -199,24 +212,25 @@ func (s *Service) endpointView(fn *webFunction, ep *endpoint, pending bool) *end
 
 // revisionView is the full revision shape Create and GetWebFunctionRevision share.
 type revisionView struct {
-	FunctionARN string        `json:"functionArn"`
-	RevisionARN string        `json:"revisionArn"`
-	RevisionID  string        `json:"revisionId"`
-	Description string        `json:"description,omitempty"`
-	KMSKeyARN   string        `json:"kmsKeyArn,omitempty"`
-	BuildConfig buildConfig   `json:"buildConfig"`
-	Service     serviceConfig `json:"serviceConfig"`
-	State       string        `json:"state"`
-	StateReason string        `json:"stateReason"`
-	CreatedAt   string        `json:"createdAt"`
+	FunctionARN string          `json:"functionArn"`
+	RevisionARN string          `json:"revisionArn"`
+	RevisionID  string          `json:"revisionId"`
+	Description string          `json:"description,omitempty"`
+	KMSKeyARN   string          `json:"kmsKeyArn,omitempty"`
+	BuildConfig buildConfig     `json:"buildConfig"`
+	Service     serviceConfig   `json:"serviceConfig"`
+	State       string          `json:"state"`
+	StateReason string          `json:"stateReason"`
+	Errors      []revisionError `json:"errors,omitempty"`
+	CreatedAt   string          `json:"createdAt"`
 }
 
-func (s *Service) revisionView(fn *webFunction, rev *revision, pending bool) *revisionView {
-	st := stateOf(pending)
+func (s *Service) revisionView(fn *webFunction, rev *revision) *revisionView {
+	st := revState(rev)
 	return &revisionView{
 		FunctionARN: fn.ARN, RevisionARN: rev.ARN, RevisionID: rev.ID, Description: rev.Description,
 		KMSKeyARN: rev.KMSKeyARN, BuildConfig: rev.BuildConfig, Service: rev.Service, State: st,
-		StateReason: stateReason(st, "revision"), CreatedAt: timestamp(rev.CreatedAt),
+		StateReason: reasonOf(rev.StateReason, st, "revision"), Errors: rev.Errors, CreatedAt: timestamp(rev.CreatedAt),
 	}
 }
 
@@ -311,6 +325,11 @@ func (s *Service) validateWeights(ctx context.Context, fn *webFunction, epType s
 		if !found {
 			return nil, notFound("Revision not found: %s", s.revisionARN(fn.Region, fn.Name, id))
 		}
+		// Per AWS docs (web-functions-deployment.md, "Revision weights"): each
+		// revision in the weights must be Active when you set them.
+		if st := revState(rev); st != stateActive {
+			return nil, validationError("Revision %s is %s: a revision must be Active to receive traffic.", id, st)
+		}
 		if rev.Service.EgressNetworkConnectorARN != "" && epType != endpointHomeRegion {
 			return nil, validationError("Revision %s uses a network connector, so it supports HomeRegion endpoints only.", id)
 		}
@@ -323,10 +342,13 @@ func (s *Service) validateWeights(ctx context.Context, fn *webFunction, epType s
 	return out, nil
 }
 
-// latestWeights routes all traffic to the newest revision of revs (oldest
-// first) that can serve a type of endpoint, or to none.
+// latestWeights routes all traffic to the newest Active revision of revs
+// (oldest first) that can serve a type of endpoint, or to none.
 func latestWeights(revs []*revision, epType string) []revisionWt {
 	for i := len(revs) - 1; i >= 0; i-- {
+		if revState(revs[i]) != stateActive {
+			continue
+		}
 		if revs[i].Service.EgressNetworkConnectorARN != "" && epType != endpointHomeRegion {
 			continue
 		}
@@ -337,59 +359,6 @@ func latestWeights(revs []*revision, epType string) []revisionWt {
 
 func routesTo(ep *endpoint, revisionID string) bool {
 	return slices.ContainsFunc(ep.Weights, func(w revisionWt) bool { return w.RevisionID == revisionID && w.Weight > 0 })
-}
-
-// routeNewRevision points every LatestRevision endpoint of fn at rev, which is
-// Active as soon as it exists.
-func (s *Service) routeNewRevision(ctx context.Context, fn *webFunction, rev *revision) *protocol.AWSError {
-	eps, aerr := s.listEndpoints(ctx, fn.Region, fn.Name)
-	if aerr != nil {
-		return aerr
-	}
-	for _, ep := range eps {
-		if ep.AutoDeploy != deployLatestRevision {
-			continue
-		}
-		ep.Weights = []revisionWt{{RevisionID: rev.ID, Weight: 100}}
-		ep.UpdatedAt = s.now()
-		if aerr := putRecord(ctx, s, nsEndpoints, childKey(fn.Region, fn.Name, ep.Name), ep); aerr != nil {
-			return aerr
-		}
-		s.publish(ctx, events.LambdaWebEndpointUpdated, fn, "", ep.Name)
-	}
-	return nil
-}
-
-// cleanupRevisions deletes the oldest revisions that no endpoint routes to
-// once a function holds more than its 50, as AWS does when a new revision
-// becomes Active. The revision that just became Active is never deleted.
-func (s *Service) cleanupRevisions(ctx context.Context, fn *webFunction, keep string) *protocol.AWSError {
-	revs, aerr := s.listRevisions(ctx, fn.Region, fn.Name)
-	if aerr != nil {
-		return aerr
-	}
-	if len(revs) <= maxRevisionsPerFn {
-		return nil
-	}
-	eps, aerr := s.listEndpoints(ctx, fn.Region, fn.Name)
-	if aerr != nil {
-		return aerr
-	}
-	excess := len(revs) - maxRevisionsPerFn
-	for _, rev := range revs {
-		if excess == 0 {
-			break
-		}
-		if rev.ID == keep || slices.ContainsFunc(eps, func(ep *endpoint) bool { return routesTo(ep, rev.ID) }) {
-			continue
-		}
-		if aerr := deleteRecord(ctx, s, nsRevisions, childKey(fn.Region, fn.Name, rev.ID)); aerr != nil {
-			return aerr
-		}
-		s.publish(ctx, events.LambdaWebRevisionDeleted, fn, rev.ID, "")
-		excess--
-	}
-	return nil
 }
 
 // ─── CreateWebFunction ───────────────────────────────────────────────────────
@@ -449,6 +418,7 @@ func (s *Service) newRevision(fn *webFunction, in *revisionConfigIn, seq int) (*
 	return &revision{
 		Function: fn.Name, Region: fn.Region, ID: id, ARN: s.revisionARN(fn.Region, fn.Name, id),
 		Description: in.Description, KMSKeyARN: in.KMSKeyARN, BuildConfig: *in.BuildConfig, Service: sc, CreatedAt: s.now(), Seq: seq,
+		State: statePending,
 	}, nil
 }
 
@@ -487,7 +457,7 @@ func (s *Service) newEndpoint(fn *webFunction, in *endpointConfigIn) (*endpoint,
 		Function: fn.Name, Region: fn.Region, Name: in.EndpointName, ARN: s.endpointARN(fn.Region, fn.Name, in.EndpointName),
 		Description: in.Description, Type: in.EndpointType, AuthType: in.AuthType, AutoDeploy: deploy, Regions: regions,
 		Scaling: in.ScalingConfig, Throttle: in.ThrottleConfig, RegionDomain: map[string]string{},
-		CreatedAt: s.now(), UpdatedAt: s.now(),
+		CreatedAt: s.now(), UpdatedAt: s.now(), State: statePending,
 	}
 	if in.EndpointType == endpointMultiRegion {
 		ep.DomainName = newDomainName(true, "")
@@ -505,6 +475,7 @@ func (s *Service) newEndpoint(fn *webFunction, in *endpointConfigIn) (*endpoint,
 }
 
 func (s *Service) createWebFunctionTyped(ctx context.Context, in *createWebFunctionRequest) (*createWebFunctionResponse, *protocol.AWSError) {
+	s.ensureResumed()
 	defer s.lock()()
 	if aerr := validateName("functionName", in.FunctionName, maxFunctionNameLength); aerr != nil {
 		return nil, aerr
@@ -529,15 +500,15 @@ func (s *Service) createWebFunctionTyped(ctx context.Context, in *createWebFunct
 		if rev, aerr = s.newRevision(fn, in.RevisionConfig, 1); aerr != nil {
 			return nil, aerr
 		}
+		if aerr = s.pinRevision(ctx, rev); aerr != nil {
+			return nil, aerr
+		}
 	}
 	var ep *endpoint
 	if in.EndpointConfig != nil {
 		var aerr *protocol.AWSError
 		if ep, aerr = s.newEndpoint(fn, in.EndpointConfig); aerr != nil {
 			return nil, aerr
-		}
-		if ep.AutoDeploy == deployLatestRevision && rev != nil {
-			ep.Weights = latestWeights([]*revision{rev}, ep.Type)
 		}
 		// Per AWS docs (web-functions-endpoints.md): MultiRegion and PerRegion
 		// endpoints require revision weights, which this call has no member for.
@@ -561,17 +532,26 @@ func (s *Service) createWebFunctionTyped(ctx context.Context, in *createWebFunct
 		if aerr := putRecord(ctx, s, nsRevisions, childKey(region, fn.Name, rev.ID), rev); aerr != nil {
 			return nil, aerr
 		}
-		sum := s.revisionSummary(rev, true)
+		sum := s.revisionSummary(rev) // Pending: the state the create call reports
 		out.Revision = &sum
-		s.publish(ctx, events.LambdaWebRevisionCreated, fn, rev.ID, "")
 	}
 	if ep != nil {
 		if aerr := putRecord(ctx, s, nsEndpoints, childKey(region, fn.Name, ep.Name), ep); aerr != nil {
 			return nil, aerr
 		}
-		sum := s.endpointSummary(ep, true)
+		sum := s.endpointSummary(ep) // Pending, as stored
 		out.Endpoint = &sum
 		s.publish(ctx, events.LambdaWebEndpointCreated, fn, "", ep.Name)
+		if aerr := s.registerEndpoint(ctx, fn, ep); aerr != nil {
+			return nil, aerr
+		}
+	}
+	// The revision starts last, so a LatestRevision endpoint that is already
+	// registered is routed to it the moment it is Active.
+	if rev != nil {
+		if aerr := s.startRevision(ctx, fn, rev); aerr != nil {
+			return nil, aerr
+		}
 	}
 	return out, nil
 }
@@ -659,6 +639,9 @@ func (s *Service) deleteWebFunctionTyped(ctx context.Context, in *functionReques
 		return nil, aerr
 	}
 	s.publish(ctx, events.LambdaWebFunctionDeleted, fn, "", "")
+	if err := s.onChange(ctx, fn.Region, fn.Name); err != nil {
+		s.log.Warn("lambda-web: change hook failed after a function was deleted", zap.String("function", fn.Name), zap.Error(err))
+	}
 	return nil, nil
 }
 
@@ -670,6 +653,7 @@ type createRevisionRequest struct {
 }
 
 func (s *Service) createWebFunctionRevisionTyped(ctx context.Context, in *createRevisionRequest) (*revisionView, *protocol.AWSError) {
+	s.ensureResumed()
 	defer s.lock()()
 	fn, aerr := s.resolveFunction(ctx, in.FunctionName)
 	if aerr != nil {
@@ -687,17 +671,19 @@ func (s *Service) createWebFunctionRevisionTyped(ctx context.Context, in *create
 	if aerr != nil {
 		return nil, aerr
 	}
+	// The package is pinned and checked to exist now; its contents are checked
+	// by the worker, which moves the revision to Active or Failed.
+	if aerr := s.pinRevision(ctx, rev); aerr != nil {
+		return nil, aerr
+	}
 	if aerr := putRecord(ctx, s, nsRevisions, childKey(fn.Region, fn.Name, rev.ID), rev); aerr != nil {
 		return nil, aerr
 	}
-	s.publish(ctx, events.LambdaWebRevisionCreated, fn, rev.ID, "")
-	if aerr := s.routeNewRevision(ctx, fn, rev); aerr != nil {
+	out := s.revisionView(fn, rev) // Pending: the state the create call reports
+	if aerr := s.startRevision(ctx, fn, rev); aerr != nil {
 		return nil, aerr
 	}
-	if aerr := s.cleanupRevisions(ctx, fn, rev.ID); aerr != nil {
-		return nil, aerr
-	}
-	return s.revisionView(fn, rev, true), nil
+	return out, nil
 }
 
 type revisionRequest struct {
@@ -706,6 +692,7 @@ type revisionRequest struct {
 }
 
 func (s *Service) getWebFunctionRevisionTyped(ctx context.Context, in *revisionRequest) (*revisionView, *protocol.AWSError) {
+	s.ensureResumed()
 	fn, aerr := s.resolveFunction(ctx, in.FunctionName)
 	if aerr != nil {
 		return nil, aerr
@@ -714,7 +701,7 @@ func (s *Service) getWebFunctionRevisionTyped(ctx context.Context, in *revisionR
 	if aerr != nil {
 		return nil, aerr
 	}
-	return s.revisionView(fn, rev, false), nil
+	return s.revisionView(fn, rev), nil
 }
 
 type listRevisionsResponse struct {
@@ -723,6 +710,7 @@ type listRevisionsResponse struct {
 }
 
 func (s *Service) listWebFunctionRevisionsTyped(ctx context.Context, in *listRequest) (*listRevisionsResponse, *protocol.AWSError) {
+	s.ensureResumed()
 	if aerr := validateFilters(in.Filters, revisionFilterNames); aerr != nil {
 		return nil, aerr
 	}
@@ -734,10 +722,13 @@ func (s *Service) listWebFunctionRevisionsTyped(ctx context.Context, in *listReq
 	if aerr != nil {
 		return nil, aerr
 	}
+	// Per AWS docs (web-functions-deployment.md): revisions are listed in
+	// descending order of createdAt, newest first.
 	sums := make([]revisionSummary, 0, len(revs))
-	for _, rev := range revs {
-		if matches(in.Filters, map[string]string{"state": stateActive}) {
-			sums = append(sums, s.revisionSummary(rev, false))
+	for _, rev := range slices.Backward(revs) {
+		sum := s.revisionSummary(rev)
+		if matches(in.Filters, map[string]string{"state": sum.State}) {
+			sums = append(sums, sum)
 		}
 	}
 	items, next, aerr := page(sums, in.MaxResults, in.NextToken)
@@ -826,7 +817,11 @@ func (s *Service) createWebFunctionEndpointTyped(ctx context.Context, in *create
 		return nil, aerr
 	}
 	s.publish(ctx, events.LambdaWebEndpointCreated, fn, "", ep.Name)
-	return s.endpointView(fn, ep, true), nil
+	out := s.endpointView(fn, ep) // Pending: the state the create call reports
+	if aerr := s.registerEndpoint(ctx, fn, ep); aerr != nil {
+		return nil, aerr
+	}
+	return out, nil
 }
 
 type endpointRequest struct {
@@ -843,7 +838,7 @@ func (s *Service) getWebFunctionEndpointTyped(ctx context.Context, in *endpointR
 	if aerr != nil {
 		return nil, aerr
 	}
-	return s.endpointView(fn, ep, false), nil
+	return s.endpointView(fn, ep), nil
 }
 
 type listEndpointsResponse struct {
@@ -865,7 +860,7 @@ func (s *Service) listWebFunctionEndpointsTyped(ctx context.Context, in *listReq
 	}
 	sums := make([]endpointSummary, 0, len(eps))
 	for _, ep := range eps {
-		sum := s.endpointSummary(ep, false)
+		sum := s.endpointSummary(ep)
 		attrs := map[string]string{
 			"authType": sum.AuthType, "autoDeploymentMode": sum.AutoDeploymentMode, "endpointType": sum.EndpointType,
 			"state": sum.State, "updateStatus": sum.UpdateStatus,
@@ -943,6 +938,12 @@ func (s *Service) updateWebFunctionEndpointTyped(ctx context.Context, in *update
 		if aerr != nil {
 			return nil, aerr
 		}
+		// Per AWS docs (web-functions-deployment.md, "Switching between
+		// modes"): switching from Disabled needs the latest revision Active;
+		// Pending or Failed fails the request with a conflict error.
+		if n := len(revs); ep.AutoDeploy == deployDisabled && n > 0 && revState(revs[n-1]) != stateActive {
+			return nil, conflict("The latest revision %s is %s: it must be Active before the endpoint can follow the latest revision.", revs[n-1].ID, revState(revs[n-1]))
+		}
 		if latest := latestWeights(revs, ep.Type); latest != nil {
 			weights = latest
 		}
@@ -963,12 +964,17 @@ func (s *Service) updateWebFunctionEndpointTyped(ctx context.Context, in *update
 			ep.Throttle = in.ThrottleConfig
 		}
 	}
-	ep.UpdatedAt = s.now()
-	if aerr := putRecord(ctx, s, nsEndpoints, childKey(fn.Region, fn.Name, ep.Name), ep); aerr != nil {
+	// An update is visible: InProgress is persisted, the data plane is told,
+	// and only then is the update Successful (or Failed, when it refuses). The
+	// response reports the update as accepted, still InProgress.
+	if aerr := s.beginEndpointUpdate(ctx, fn, []*endpoint{ep}); aerr != nil {
 		return nil, aerr
 	}
-	s.publish(ctx, events.LambdaWebEndpointUpdated, fn, "", ep.Name)
-	return s.endpointView(fn, ep, false), nil
+	out := s.endpointView(fn, ep)
+	if aerr := s.finishEndpointUpdate(ctx, fn, []*endpoint{ep}, s.onChange(ctx, fn.Region, fn.Name)); aerr != nil {
+		return nil, aerr
+	}
+	return out, nil
 }
 
 func (s *Service) deleteWebFunctionEndpointTyped(ctx context.Context, in *endpointRequest) (any, *protocol.AWSError) {
@@ -981,10 +987,23 @@ func (s *Service) deleteWebFunctionEndpointTyped(ctx context.Context, in *endpoi
 	if aerr != nil {
 		return nil, aerr
 	}
+	// Deleting: persisted first, so the data plane (told by the hook) stops
+	// routing new requests, drains the ones in flight, and only then is the
+	// endpoint removed.
+	ep.State, ep.StateReason, ep.UpdatedAt = stateDeleting, "", s.now()
+	if aerr := putRecord(ctx, s, nsEndpoints, childKey(fn.Region, fn.Name, ep.Name), ep); aerr != nil {
+		return nil, aerr
+	}
+	if err := s.onChange(ctx, fn.Region, fn.Name); err != nil {
+		s.log.Warn("lambda-web: change hook failed while draining an endpoint", zap.String("endpoint", ep.Name), zap.Error(err))
+	}
 	if aerr := deleteRecord(ctx, s, nsEndpoints, childKey(fn.Region, fn.Name, ep.Name)); aerr != nil {
 		return nil, aerr
 	}
 	s.publish(ctx, events.LambdaWebEndpointDeleted, fn, "", ep.Name)
+	if err := s.onChange(ctx, fn.Region, fn.Name); err != nil {
+		s.log.Warn("lambda-web: change hook failed after an endpoint was deleted", zap.String("endpoint", ep.Name), zap.Error(err))
+	}
 	return nil, nil
 }
 

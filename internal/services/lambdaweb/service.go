@@ -58,6 +58,10 @@ type Service struct {
 	// a single step. Writes are small and in-process.
 	mu sync.Mutex
 
+	// lifecycleState holds the change hook and the revision worker
+	// (hooks.go, lifecycle.go).
+	lifecycleState
+
 	// bus receives lifecycle events; nil until InitBus.
 	bus *events.Bus
 
