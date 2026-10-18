@@ -198,7 +198,7 @@ func (t *Telemetry) flushRequestMetrics(now time.Time) {
 }
 
 // observeEnvWindow publishes one environment's once-a-minute data points.
-func (t *Telemetry) observeEnvWindow(st *envState, now time.Time, cpu time.Duration) {
+func (t *Telemetry) observeEnvWindow(st *telEnv, now time.Time, cpu time.Duration) {
 	d := fnDims(st.ref.Function)
 	t.observe("EnvironmentActiveTime", metricsNSWeb, "Milliseconds", d, now, ms(now.Sub(st.lastActive)))
 	t.observe("EnvironmentCPUTime", metricsNSWeb, "Milliseconds", d, now, ms(cpu))
@@ -208,7 +208,7 @@ func (t *Telemetry) observeEnvWindow(st *envState, now time.Time, cpu time.Durat
 }
 
 // observeEnvFinal publishes the last data points when an environment stops.
-func (t *Telemetry) observeEnvFinal(st *envState, e spinDownEvent, end time.Time) {
+func (t *Telemetry) observeEnvFinal(st *telEnv, e spinDownEvent, end time.Time) {
 	cpu := e.Stats.CPUTime - st.cpuSent
 	if cpu < 0 {
 		cpu = 0

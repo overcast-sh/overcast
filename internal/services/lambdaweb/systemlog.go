@@ -140,8 +140,8 @@ type recLogsDropped struct {
 func ms(d time.Duration) float64 { return math.Round(float64(d)/float64(time.Millisecond)*1000) / 1000 }
 func mb(v float64) int           { return int(math.Round(v)) }
 
-// envState is the worker's record of one live environment.
-type envState struct {
+// telEnv is the worker's record of one live environment.
+type telEnv struct {
 	ref        envRef
 	handle     environment // optional, for Stats
 	servingAt  time.Time   // invokeStart
@@ -174,7 +174,7 @@ func (t *Telemetry) handleInit(e envInitEvent) {
 		t.observeEnvActive(e.Env, e.Duration, end)
 		return
 	}
-	st := &envState{ref: e.Env, handle: e.Handle, servingAt: end, lastTick: end, lastActive: e.Started}
+	st := &telEnv{ref: e.Env, handle: e.Handle, servingAt: end, lastTick: end, lastActive: e.Started}
 	t.envs[e.Env.Environment] = st
 	t.emit(e.Env, sysInfo, "platform.invokeStart", end, recIdentity{
 		FunctionName: e.Env.Function, RevisionID: e.Env.RevisionID, InstanceID: e.Env.Environment,
@@ -185,7 +185,7 @@ func (t *Telemetry) handleInit(e envInitEvent) {
 func (t *Telemetry) handleSpinDown(e spinDownEvent) {
 	st := t.envs[e.Env.Environment]
 	if st == nil {
-		st = &envState{ref: e.Env, servingAt: e.Started, lastTick: e.Started, lastActive: e.Started}
+		st = &telEnv{ref: e.Env, servingAt: e.Started, lastTick: e.Started, lastActive: e.Started}
 	}
 	delete(t.envs, e.Env.Environment)
 	end := e.Started.Add(e.Duration)
@@ -250,7 +250,7 @@ func (t *Telemetry) summarize(now time.Time) {
 	}
 }
 
-func (t *Telemetry) sample(st *envState) envStats {
+func (t *Telemetry) sample(st *telEnv) envStats {
 	if st.handle == nil {
 		return envStats{MaxMemoryMB: st.maxMem, CPUTime: st.cpuSent}
 	}

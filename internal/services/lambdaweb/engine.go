@@ -409,7 +409,7 @@ func (s *Service) newEnv(rt *endpointRT, p *pool, rev *revision) (*envState, *pl
 		started: s.clk.Now(),
 		ref: envRef{
 			Region: rt.region, Function: rt.function, Endpoint: rt.endpoint, RevisionID: rev.ID,
-			LogGroup: logGroupFor(rt.function, rev), LogStream: newEnvLogStream(s.clk, rev.ID),
+			LogGroup: logGroupFor(rt.function, rev), LogStream: NewLogStreamName(s.clk, rev.ID),
 			SysLogLevel: sysLogLevelFor(rev),
 		},
 	}
@@ -546,7 +546,7 @@ func (s *Service) finishStart(es *envState, env environment, fail *initFailure) 
 	es.ref.Environment = env.ID()
 	es.proxy, es.tr = s.newEnvProxy(env.Addr(), int(es.limit))
 	close(es.ready)
-	s.telemetry().EnvironmentInit(envInitEvent{Env: es.ref, Started: es.started, Duration: dur})
+	s.telemetry().EnvironmentInit(envInitEvent{Env: es.ref, Started: es.started, Duration: dur, Handle: env})
 }
 
 // environmentExited handles an environment whose process ended on its own.

@@ -109,7 +109,7 @@ type Telemetry struct {
 	droppedEvents atomic.Int64
 
 	// Worker-owned state: touched only by the worker goroutine.
-	envs  map[string]*envState
+	envs  map[string]*telEnv
 	aggs  map[aggKey]*agg
 	bcast map[aggKey]*coalesced
 	drops map[logKey]*dropState
@@ -157,7 +157,7 @@ func NewTelemetry(opts TelemetryOptions) *Telemetry {
 		ctrlCh: make(chan barrier),
 		logCh:  make(chan logItem, opts.LogQueue),
 		stopCh: make(chan struct{}),
-		envs:   map[string]*envState{},
+		envs:   map[string]*telEnv{},
 		aggs:   map[aggKey]*agg{},
 		bcast:  map[aggKey]*coalesced{},
 		drops:  map[logKey]*dropState{},

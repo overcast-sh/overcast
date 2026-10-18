@@ -293,27 +293,18 @@ func TestServe_initFailureIs502WithItsType(t *testing.T) {
 }
 
 func TestServe_environmentCrashIsReportedByHowItDied(t *testing.T) {
-	// Given: an application that kills its own environment mid-request
-	var env atomic.Pointer[fakeEnv]
+	// Given: an application that gets its environment killed for memory mid-request
 	f := newDPFixture(t, dpOptions{})
 	f.prov.handler = func(envSpec) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			e := env.Load()
+			f.prov.mu.Lock()
+			e := f.prov.envs[0]
+			f.prov.mu.Unlock()
 			go e.crash(exitReason{OOM: true})
 			<-r.Context().Done()
 		})
 	}
 	d := f.deploy(deployOpts{})
-	go func() {
-		for env.Load() == nil {
-			f.prov.mu.Lock()
-			if len(f.prov.envs) > 0 {
-				env.Store(f.prov.envs[0])
-			}
-			f.prov.mu.Unlock()
-			time.Sleep(time.Millisecond)
-		}
-	}()
 
 	// When / Then: the caller learns it ran out of memory
 	resp, _ := f.do(d, "GET", "/", nil, nil)

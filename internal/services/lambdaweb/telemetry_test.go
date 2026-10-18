@@ -111,16 +111,16 @@ func dimStr(o metrics.Observation) string {
 	return strings.Join(p, ",")
 }
 
-type fakeEnv struct {
+type tmFakeEnv struct {
 	stats envStats
 }
 
-func (e *fakeEnv) ID() string                                { return "env-1" }
-func (e *fakeEnv) Addr() string                              { return "127.0.0.1:1" }
-func (e *fakeEnv) Done() <-chan struct{}                     { return nil }
-func (e *fakeEnv) ExitReason() exitReason                    { return exitReason{} }
-func (e *fakeEnv) Stats(context.Context) envStats            { return e.stats }
-func (e *fakeEnv) Stop(context.Context, time.Duration) error { return nil }
+func (e *tmFakeEnv) ID() string                                { return "env-1" }
+func (e *tmFakeEnv) Addr() string                              { return "127.0.0.1:1" }
+func (e *tmFakeEnv) Done() <-chan struct{}                     { return nil }
+func (e *tmFakeEnv) ExitReason() exitReason                    { return exitReason{} }
+func (e *tmFakeEnv) Stats(context.Context) envStats            { return e.stats }
+func (e *tmFakeEnv) Stop(context.Context, time.Duration) error { return nil }
 
 // ─── harness ─────────────────────────────────────────────────────────────────
 
@@ -328,7 +328,7 @@ func TestInvokeSummaryCadence(t *testing.T) {
 	// Given a running environment whose Stats grow
 	h := newHarness(t, nil)
 	r := ref("INFO")
-	env := &fakeEnv{}
+	env := &tmFakeEnv{}
 	h.tel.EnvironmentInit(envInitEvent{Env: r, Started: h.clk.Now(), Duration: 0, Handle: env})
 	h.tel.sync()
 	count := func() int {

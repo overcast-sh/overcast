@@ -123,6 +123,12 @@ type authContext struct {
 	Policy *policyRecord
 	// Region is the Region of the domain the request arrived on.
 	Region string
+	// SourceARN is the ARN of the CloudFront distribution that originated the
+	// request, when it arrived from this process's own CloudFront service
+	// (serviceutil.TakeCloudFrontSource); empty for a direct caller. It is the
+	// value of aws:SourceArn and means the caller is the service principal
+	// cloudfront.amazonaws.com.
+	SourceARN string
 }
 
 // invokeAuth decides whether a request may reach an IamAuth endpoint. It is

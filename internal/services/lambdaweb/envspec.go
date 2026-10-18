@@ -1,12 +1,5 @@
 package lambdaweb
 
-import (
-	"crypto/rand"
-	"encoding/hex"
-
-	"github.com/overcast-sh/overcast/internal/clock"
-)
-
 // errTypeCodeUnavailable is an initFailure type internal to Overcast: the
 // provider could not read the revision's package from S3 (deleted object,
 // revoked access). It is never sent to a client; the engine turns it into
@@ -44,16 +37,6 @@ func sysLogLevelFor(rev *revision) string {
 		return lc.SystemLogLevel
 	}
 	return "INFO"
-}
-
-// newEnvLogStream names an environment's log stream YYYY/MM/DD/[{revisionId}]
-// followed by 32 hex characters. The format is inferred from Lambda's own
-// (YYYY/MM/DD/[$LATEST]…): AWS documents the lambda-web-logstream header, not
-// the name's shape.
-func newEnvLogStream(clk clock.Clock, revisionID string) string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	return clk.Now().UTC().Format("2006/01/02") + "/[" + revisionID + "]" + hex.EncodeToString(b[:])
 }
 
 // envSpecFor describes the environment to start for a revision.

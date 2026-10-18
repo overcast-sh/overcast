@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 // invokeBase is where host-routed requests land. The path is under
@@ -100,6 +101,11 @@ func (s *Service) serve(w http.ResponseWriter, r *http.Request) {
 // platform error to write, if any, and the telemetry event for requests that
 // got past routing.
 func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start time.Time) (*platformError, *requestEvent) {
+	// A request that CloudFront originated in this process carries a trusted
+	// source ARN; anything an external client forged is stripped here, before
+	// the headers can reach the application.
+	sourceARN, _ := serviceutil.TakeCloudFrontSource(r)
+
 	// 1. protocol checks
 	if r.ProtoMajor == 1 && r.ProtoMinor == 0 {
 		return errHTTPVersion(), nil
@@ -144,7 +150,7 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 	}
 
 	// 4. auth
-	if perr := s.authorize(r, ro); perr != nil {
+	if perr := s.authorize(r, ro, sourceARN); perr != nil {
 		return perr, ev
 	}
 
@@ -152,10 +158,10 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 	s.startEngine()
 	now := start.UnixNano()
 	if !s.dp.acct.Load().allow(now) {
-		return s.throttled(ro, errTypeAccountRequestThrottle, "The account request rate limit was exceeded."), ev
+		return s.throttled(ro, errTypeAccountRequestThrottle, "The account request rate limit was exceeded."), nil
 	}
 	if !ro.rt.limiter.Load().allow(now) {
-		return s.throttled(ro, errTypeEndpointRequestThrot, "The endpoint request rate limit was exceeded."), ev
+		return s.throttled(ro, errTypeEndpointRequestThrot, "The endpoint request rate limit was exceeded."), nil
 	}
 
 	// 6. revision
@@ -176,6 +182,7 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 	if perr != nil {
 		if perr.Status == http.StatusTooManyRequests {
 			s.telemetry().Throttled(throttleEvent{Region: ro.servedRegion, Function: ro.function.Name, Endpoint: ep.Name, ErrorType: perr.Type, At: start})
+			return perr, nil // Throttled already counted it
 		}
 		return perr, ev
 	}
@@ -212,7 +219,7 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 // are not authorised at all; IamAuth endpoints go to the wired authoriser, or,
 // with none wired, to a structural check (a signed request carrying the
 // content hash header).
-func (s *Service) authorize(r *http.Request, rt *route) *platformError {
+func (s *Service) authorize(r *http.Request, rt *route, sourceARN string) *platformError {
 	if rt.endpoint.AuthType != authIam {
 		return nil
 	}
@@ -224,7 +231,7 @@ func (s *Service) authorize(r *http.Request, rt *route) *platformError {
 	}
 	return s.auth.Authorize(r.Context(), r, authContext{
 		Function: rt.function, Endpoint: rt.endpoint, EndpointARN: rt.endpointARN,
-		Policy: rt.policy, Region: rt.servedRegion,
+		Policy: rt.policy, Region: rt.servedRegion, SourceARN: sourceARN,
 	})
 }
 
