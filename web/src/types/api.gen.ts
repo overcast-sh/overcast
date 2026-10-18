@@ -917,6 +917,11 @@ export interface TopologyWebEndpoint {
   domainName: string
   /** Serves lists the revisions traffic goes to, by weight. */
   serves: TopologyWebRevisionWeight[]
+  /**
+   * Environments is how many execution environments (containers) the
+   * endpoint has running or starting right now; 0 when scaled to zero.
+   */
+  environments: number
 }
 
 /**

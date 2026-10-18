@@ -69,7 +69,7 @@ func (s *Service) ContributeTopology(ctx context.Context, g *topology.Graph) err
 			}
 			node.WebEndpoints = append(node.WebEndpoints, topology.WebEndpoint{
 				Name: e.Name, Type: e.Type, AuthType: e.AuthType, AutoDeployment: e.AutoDeploy,
-				DomainName: e.DomainName, Serves: serves,
+				DomainName: e.DomainName, Serves: serves, Environments: s.liveEnvironments(fn.Name, e.Name),
 			})
 			anchors = append(anchors, topology.CFN(region, cfnWebEndpoint, e.ARN))
 		}

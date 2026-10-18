@@ -777,3 +777,17 @@ func (noTelemetry) EnvironmentInit(envInitEvent)      {}
 func (noTelemetry) EnvironmentSpinDown(spinDownEvent) {}
 func (noTelemetry) RequestDone(requestEvent)          {}
 func (noTelemetry) Throttled(throttleEvent)           {}
+
+// liveEnvironments counts the environments an endpoint has running or starting,
+// across its domains and revisions.
+func (s *Service) liveEnvironments(function, endpoint string) int {
+	s.dp.rtMu.Lock()
+	defer s.dp.rtMu.Unlock()
+	n := 0
+	for _, rt := range s.dp.rts {
+		if rt.function == function && rt.endpoint == endpoint {
+			n += int(rt.envs.Load())
+		}
+	}
+	return n
+}
