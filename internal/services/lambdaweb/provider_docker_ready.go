@@ -194,10 +194,15 @@ func withTail(msg, tail string) string {
 // a stack frame, or the trailer that follows the trace.
 var uncaughtException = regexp.MustCompile(`(?m)^\s+at \S|^Node\.js v\d`)
 
+// heapExhausted matches what V8 prints when it aborts for want of memory. A
+// Node.js process sizes its heap from the container's limit, so it usually
+// aborts (exit status 134) before the kernel's OOM killer gets to it.
+var heapExhausted = regexp.MustCompile(`JavaScript heap out of memory|Reached heap limit|ERR_WORKER_OUT_OF_MEMORY`)
+
 // classifyExit turns the end of a process that never listened into an init
 // failure.
 //
-//   - killed for memory: Runtime.OutOfMemory
+//   - killed for memory, or aborted by V8 for it: Runtime.OutOfMemory
 //   - bootstrap.mjs could not import the entry file (its marker, or its exit
 //     code): Runtime.ImportCodeError
 //   - the entry file threw as it ran, or an exception went uncaught while the
@@ -206,7 +211,7 @@ var uncaughtException = regexp.MustCompile(`(?m)^\s+at \S|^Node\.js v\d`)
 func classifyExit(code int, oom bool, tail string) *initFailure {
 	detail := func(msg string) string { return withTail(msg, tail) }
 	switch {
-	case oom:
+	case oom || heapExhausted.MatchString(tail):
 		return &initFailure{Type: errTypeOutOfMemory, Detail: detail("the process was killed for exceeding its memory")}
 	case code == exitCodeImportError || strings.Contains(tail, "OVERCAST_WEB_IMPORT_ERROR"):
 		return &initFailure{Type: errTypeImportCode, Detail: detail("the entry file could not be imported")}

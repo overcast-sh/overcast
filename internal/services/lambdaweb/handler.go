@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -404,6 +405,19 @@ func (s *Service) proxyError(w http.ResponseWriter, r *http.Request, err error) 
 // classifyEnvError says why a request to a live-looking environment failed.
 func (s *Service) classifyEnvError(es *envState, err error) *platformError {
 	if es != nil && es.env != nil {
+		// A dying process resets its connections a moment before the runtime
+		// reports its exit; give the report a short chance to catch up so the
+		// caller learns how it died rather than that the connection closed.
+		var grace <-chan time.Time
+		if connectionLost(err) {
+			t := time.NewTimer(exitReportGrace)
+			defer t.Stop()
+			grace = t.C
+		}
+		select {
+		case <-es.env.Done():
+		case <-grace:
+		}
 		select {
 		case <-es.env.Done():
 			reason := es.env.ExitReason()
@@ -429,6 +443,17 @@ func (s *Service) classifyEnvError(es *envState, err error) *platformError {
 		return &platformError{Status: http.StatusServiceUnavailable, Type: errTypeOriginRequest, Message: "The application closed the connection without a response."}
 	}
 	return &platformError{Status: http.StatusServiceUnavailable, Type: errTypeUnreachable, Message: "The application could not be reached."}
+}
+
+// exitReportGrace is how long a lost connection waits for the environment's
+// exit to be reported.
+const exitReportGrace = 300 * time.Millisecond
+
+// connectionLost reports whether err is the connection to the application
+// closing under a request.
+func connectionLost(err error) bool {
+	return errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) ||
+		errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
