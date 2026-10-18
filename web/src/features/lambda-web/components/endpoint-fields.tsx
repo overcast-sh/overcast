@@ -92,7 +92,7 @@ export function EndpointFields({
               label="Other Regions"
               required
               error={problems.regions}
-              hint={`${homeRegion} is always included. Nothing runs in the other Regions; they are recorded.`}
+              hint={`${homeRegion} is always included. Every Region is served from this one Overcast process; nothing is replicated.`}
             >
               <Combobox
                 multiple
