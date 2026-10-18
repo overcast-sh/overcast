@@ -28,7 +28,7 @@ import (
 
 // codeUnavailableType is the initFailure type for a package that is gone from
 // S3; the engine turns it into 409 RevisionNotActive and fails the revision.
-const codeUnavailableType = "Overcast.RevisionCodeUnavailable"
+const codeUnavailableType = errTypeCodeUnavailable
 
 var errPackageTooLarge = errors.New("package exceeds 512 MB unzipped")
 
@@ -47,7 +47,7 @@ func codeTar(zipData []byte) ([]byte, error) {
 	var declared uint64
 	for _, f := range zr.File {
 		declared += f.UncompressedSize64
-		if declared > maxPackageBytes {
+		if declared > providerMaxPackageBytes {
 			return nil, errPackageTooLarge
 		}
 	}
@@ -58,7 +58,7 @@ func codeTar(zipData []byte) ([]byte, error) {
 	var total int64
 
 	for _, f := range zr.File {
-		name, ok := safeEntryName(f.Name)
+		name, ok := tarEntryName(f.Name)
 		if !ok {
 			continue
 		}
@@ -108,7 +108,7 @@ func codeTar(zipData []byte) ([]byte, error) {
 				return nil, fmt.Errorf("%q does not match its declared size", f.Name)
 			}
 			total += n
-			if total > maxPackageBytes {
+			if total > providerMaxPackageBytes {
 				return nil, errPackageTooLarge
 			}
 		}
@@ -127,9 +127,9 @@ func codeTar(zipData []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// safeEntryName normalises a zip entry name to a relative path inside the
+// tarEntryName normalises a zip entry name to a relative path inside the
 // package, or reports that it names something outside it (or the root itself).
-func safeEntryName(name string) (string, bool) {
+func tarEntryName(name string) (string, bool) {
 	name = strings.ReplaceAll(name, "\\", "/")
 	name = strings.TrimPrefix(name, "./")
 	if name == "" || strings.HasPrefix(name, "/") {

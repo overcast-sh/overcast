@@ -416,17 +416,19 @@ func (s *Service) acquireSlow(rt *endpointRT, p *pool, rev *revision) (acquisiti
 	if lf := p.lastFail.Load(); lf != nil && s.clk.Since(lf.at) < startBackoff {
 		return acquisition{}, initFailureError(lf.fail)
 	}
-	es, perr := s.newEnv(rt, p, rev)
+	es, perr := s.newEnv(rt, p, rev, true)
 	if perr != nil {
 		return acquisition{}, perr
 	}
-	es.inflight.Store(1)
 	return acquisition{es: es, cold: true}, nil
 }
 
 // newEnv starts a new environment in p, applying the endpoint, concurrent-init
 // and host caps. The caller holds rt.mu and p.mu.
-func (s *Service) newEnv(rt *endpointRT, p *pool, rev *revision) (*envState, *platformError) {
+// newEnv starts an environment. With reserve it is created holding one slot for
+// the caller, set before the environment is published so a concurrent fast-path
+// acquire cannot be overwritten.
+func (s *Service) newEnv(rt *endpointRT, p *pool, rev *revision, reserve bool) (*envState, *platformError) {
 	if max := rt.maxEnv.Load(); max > 0 && rt.envs.Load() >= max {
 		return nil, errThrottle(errTypeEndpointMaxEnvThrottle, "The endpoint reached its maximum number of environments.")
 	}
@@ -450,6 +452,9 @@ func (s *Service) newEnv(rt *endpointRT, p *pool, rev *revision) (*envState, *pl
 		},
 	}
 	es.lastUsed.Store(s.clk.Now().UnixNano())
+	if reserve {
+		es.inflight.Store(1)
+	}
 	p.add(es)
 	s.registerEnv(es)
 	rt.envs.Add(1)
@@ -485,7 +490,7 @@ func (s *Service) maybeAddHeadroom(rt *endpointRT, p *pool, es *envState, rev *r
 		}
 	}
 	// A refused headroom start is not an error: the request is already served.
-	_, _ = s.newEnv(rt, p, rev)
+	_, _ = s.newEnv(rt, p, rev, false)
 }
 
 // reserveHostSlot takes one of the host's environment slots, reclaiming an idle

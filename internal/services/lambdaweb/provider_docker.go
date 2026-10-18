@@ -71,8 +71,8 @@ const (
 	exitCodeImportError = 87
 	exitCodeInitError   = 88
 
-	// maxPackageBytes bounds a package unzipped.
-	maxPackageBytes = 512 << 20
+	// providerMaxPackageBytes bounds a package unzipped.
+	providerMaxPackageBytes = 512 << 20
 	// outputTailBytes bounds the process output quoted in an initFailure.
 	outputTailBytes = 4 << 10
 )

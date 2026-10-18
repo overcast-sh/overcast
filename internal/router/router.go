@@ -819,7 +819,17 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		lwTel.InitMetrics(svcMetrics)
 	}
 	lambdaWebSvc.InitTelemetry(lwTel)
-	lambdaWebSvc.InitCodeSource(lambdaweb.NewS3CodeSource(s3Svc))
+	codeSource := lambdaweb.NewS3CodeSource(s3Svc)
+	lambdaWebSvc.InitCodeSource(codeSource)
+	// The environment provider runs each revision in a container. It needs the
+	// Docker client (set when the probe finds Docker), the log writer for
+	// application logs, and the code source for the package.
+	lwProvider := lambdaweb.NewDockerProvider(cfg, logger, clk)
+	lwProvider.InitStore(store)
+	lwProvider.InitLogWriter(logsSvc.LogWriter())
+	lwProvider.InitBus(bus)
+	lwProvider.InitCode(codeSource)
+	lambdaWebSvc.InitProvider(lwProvider)
 	lambdaWebSvc.InitChangeHook(lambdaWebSvc.RoutesChanged)
 	// IamAuth endpoints: SigV4/SigV4a checks always, signature verification and
 	// IAM evaluation with the same switches the rest of the emulator uses.
@@ -932,6 +942,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	dockerSetters["msk"] = mskSvc.SetDocker
 	dockerServices["ecs"] = docker.ServiceConfig{Name: "ecs", Socket: cfg.ECSDockerSocket}
 	dockerSetters["ecs"] = ecsSvc.SetDocker
+	dockerServices["lambdaweb"] = docker.ServiceConfig{Name: "lambdaweb", Socket: cfg.LambdaDockerSocket}
+	dockerSetters["lambdaweb"] = lwProvider.SetDocker
 	// EC2 additionally manages one network per VPC, created on demand rather
 	// than at probe time.
 	dockerServices["ec2"] = docker.ServiceConfig{Name: "ec2", Socket: cfg.LambdaDockerSocket}
@@ -971,7 +983,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		go func() {
 			// Collect configs in deterministic order.
 			var configs []docker.ServiceConfig
-			for _, name := range []string{"lambda", "ecr", "rds", "elasticache", "msk", "ecs", "ec2", "eks", "efs", "athena"} {
+			for _, name := range []string{"lambda", "ecr", "rds", "elasticache", "msk", "ecs", "ec2", "eks", "efs", "athena", "lambdaweb"} {
 				if sc, ok := dockerServices[name]; ok {
 					configs = append(configs, sc)
 				}
