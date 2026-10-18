@@ -14,6 +14,11 @@
  *   - on a web function, a write flash on the endpoint a create or update
  *     names (including one `LatestRevision` re-routes when a revision
  *     arrives), a tick on its revision count, and a flash across the node;
+ *     and, from its data plane, a pulse on the endpoint a request reached
+ *     (coloured by status class, with a marker when it was a cold start) and
+ *     a flash on the endpoint an execution environment started or stopped
+ *     for. A pulse is a fixed-length animation, whatever the request's own
+ *     duration: observability over literal timing;
  *   - a query's states, each on screen for at least `RUN_DWELL` — a dwell only
  *     for a transition too fast to see; a query that runs for longer shows
  *     each state for as long as it really lasted.
@@ -80,6 +85,25 @@ export interface RowOverlay {
   records: number
   /** When the burst ends. */
   recordsUntil: number
+  /** Web function requests seen so far: a new value restarts the endpoint's pulse. */
+  requests: number
+  /** The status class of the latest request: `2xx`, `3xx`, `4xx` or `5xx`. */
+  requestClass: StatusClass
+  /** Cold-start requests seen so far: a new value restarts the cold-start marker. */
+  coldStarts: number
+  /** Environments started / stopped so far: a new value restarts that flash. */
+  envStarts: number
+  envStops: number
+}
+
+export type StatusClass = "2xx" | "3xx" | "4xx" | "5xx"
+
+/** The class a response status falls in; anything outside 200-599 reads as an error. */
+export function statusClass(status: number): StatusClass {
+  if (status >= 200 && status < 300) return "2xx"
+  if (status >= 300 && status < 400) return "3xx"
+  if (status >= 400 && status < 500) return "4xx"
+  return "5xx"
 }
 
 /** A dropped table, shown as a ghost on its node until `ROW_GHOST_TTL` has passed. */
@@ -118,12 +142,25 @@ function text(p: Payload, key: string): string {
   return typeof v === "string" ? v : ""
 }
 
+/** A row nothing has happened to. */
+export const EMPTY_ROW: RowOverlay = {
+  flashes: 0,
+  ticks: 0,
+  records: 0,
+  recordsUntil: 0,
+  requests: 0,
+  requestClass: "2xx",
+  coldStarts: 0,
+  envStarts: 0,
+  envStops: 0,
+}
+
 function updateRow(
   o: DataLakeOverlay,
   key: RowKey,
   change: (row: RowOverlay) => Partial<RowOverlay>,
 ): DataLakeOverlay {
-  const row = o.rows[key] ?? { flashes: 0, ticks: 0, records: 0, recordsUntil: 0 }
+  const row = o.rows[key] ?? EMPTY_ROW
   return { ...o, rows: { ...o.rows, [key]: { ...row, ...change(row) } } }
 }
 
@@ -192,6 +229,16 @@ export function applyLakeEvent(o: DataLakeOverlay, ev: LakeEvent, now: number): 
       return flash(o, rowKey(webFunctionNode(p), text(p, "endpoint")))
     case EventType.lambdaWeb.EndpointDeleted:
       return ghost(o, webFunctionNode(p), { name: text(p, "endpoint"), deletedAt: now })
+    case EventType.lambdaWeb.EnvironmentStarted:
+      return updateRow(o, webEventRow(p), (r) => ({ envStarts: r.envStarts + 1 }))
+    case EventType.lambdaWeb.EnvironmentStopped:
+      return updateRow(o, webEventRow(p), (r) => ({ envStops: r.envStops + 1 }))
+    case EventType.lambdaWeb.RequestCompleted:
+      return updateRow(o, webEventRow(p), (r) => ({
+        requests: r.requests + 1,
+        requestClass: statusClass(typeof p.status === "number" ? p.status : 0),
+        coldStarts: r.coldStarts + (p.coldStart === true ? 1 : 0),
+      }))
     case EventType.athena.QueryStateChanged: {
       const id = text(p, "queryExecutionId")
       return id ? addStep(o, id, text(p, "state"), now) : o
@@ -203,6 +250,14 @@ export function applyLakeEvent(o: DataLakeOverlay, ev: LakeEvent, now: number): 
 
 function webFunctionNode(p: Payload): NodeSuffix {
   return `lambdaweb::${text(p, "function")}`
+}
+
+/**
+ * The row a data-plane event is about: its endpoint's, or — for an
+ * environment start that names none — the node's own.
+ */
+function webEventRow(p: Payload): RowKey {
+  return rowKey(webFunctionNode(p), text(p, "endpoint") || WEB_NODE_ROW)
 }
 
 function s3TablesRow(p: Payload): RowKey {

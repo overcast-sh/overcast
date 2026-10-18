@@ -588,6 +588,11 @@ function getEventQueryMap(): Record<string, QueryKey[] | undefined> {
     [EventType.lambdaWeb.EndpointCreated]: [lambdaWebKeys.endpoints(), topologyKey],
     [EventType.lambdaWeb.EndpointUpdated]: [lambdaWebKeys.endpoints(), topologyKey],
     [EventType.lambdaWeb.EndpointDeleted]: [lambdaWebKeys.endpoints(), topologyKey],
+    // Environments come and go with traffic: the map's rows and the Endpoints
+    // tab show how many are running. RequestCompleted invalidates nothing —
+    // it only pulses the map — so a busy endpoint does not refetch per second.
+    [EventType.lambdaWeb.EnvironmentStarted]: [lambdaWebKeys.endpoints(), topologyKey],
+    [EventType.lambdaWeb.EnvironmentStopped]: [lambdaWebKeys.endpoints(), topologyKey],
   }
 }
 

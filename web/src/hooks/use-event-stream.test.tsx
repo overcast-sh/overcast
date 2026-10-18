@@ -291,6 +291,11 @@ describe("useEventStreamSubscription > Lambda Web Functions events", () => {
     ["lambda-web:EndpointCreated", [lambdaWebKeys.endpoints(), topologyKey]],
     ["lambda-web:EndpointUpdated", [lambdaWebKeys.endpoints(), topologyKey]],
     ["lambda-web:EndpointDeleted", [lambdaWebKeys.endpoints(), topologyKey]],
+    // The map's rows and the Endpoints tab show how many environments run.
+    ["lambda-web:EnvironmentStarted", [lambdaWebKeys.endpoints(), topologyKey]],
+    ["lambda-web:EnvironmentStopped", [lambdaWebKeys.endpoints(), topologyKey]],
+    // It only pulses the map: a busy endpoint must not refetch every second.
+    ["lambda-web:RequestCompleted", []],
   ])("invalidates what %s makes stale", (type, keys) => {
     const client = makeClient()
     const invalidate = vi.spyOn(client, "invalidateQueries")

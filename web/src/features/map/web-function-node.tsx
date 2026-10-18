@@ -8,12 +8,19 @@
  * endpoint all read the one overlay (data-lake-overlay.ts), so a canary split
  * moving shows in the row, the count and the pulse at once.
  *
- * Nothing serves an endpoint's domain yet, so the node shows no domain and no
- * link to one; the endpoints tab has it, with the caveat.
+ * The data plane shows too. Each row says how many execution environments
+ * (containers) its endpoint has — `0 envs` once it has scaled to zero, and the
+ * node says so when every endpoint has — and moves with traffic: a request
+ * pulses its endpoint's row in its status class's colour (a cold start adds a
+ * marker), and an environment starting or stopping sweeps the row. Pulses are
+ * fixed-length whatever the request took (CONTRIBUTING § Topology map
+ * methodology); the counts are the topology's, re-read on each start and stop.
+ * The node shows no domain; the endpoints tab has it, with a way to open it.
  */
 
 import { memo } from "react"
 import type { NodeProps } from "@xyflow/react"
+import { Moon, Snowflake } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { formatQuantity } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -31,18 +38,33 @@ import {
   WEB_NODE_ROW,
   WEB_REVISIONS_ROW,
   type RowOverlay,
+  type StatusClass,
 } from "./data-lake-overlay"
 import { SERVICE_THEME, toSweep } from "./map-theme"
 import { nodeRoute, useNodeNavigation, type NodeRoute } from "./node-route"
 import {
   ENDPOINT_ROW_H,
   endpointList,
+  environmentsText,
+  scalingOf,
   servesText,
   type DisplayEndpoint,
 } from "./web-function-layout"
 
 /** How long a write flash sweeps across the node or a row (ms) — the node sweep's length. */
 const FLASH_TTL = 2_000
+/** How long a request's pulse is on screen (ms): fixed, whatever the request took. */
+const PULSE_TTL = 1_200
+/** How long a cold start's marker stays (ms). */
+const COLD_MARK_TTL = 3_000
+
+/** A request's pulse by status class. */
+const PULSE_COLOR: Record<StatusClass, string> = {
+  "2xx": "var(--color-success)",
+  "3xx": "var(--color-accent)",
+  "4xx": "var(--color-warning)",
+  "5xx": "var(--color-danger)",
+}
 
 const TYPE_LABEL: Record<string, string> = {
   HomeRegion: "home",
@@ -63,11 +85,14 @@ export const WebFunctionNode = memo(function WebFunctionNode({ data }: NodeProps
   const revisionsRow = overlay.rows[rowKey(suffix, WEB_REVISIONS_ROW)] as RowOverlay | undefined
   const nodeFlashes = nodeRow?.flashes ?? 0
   const revisionTicks = revisionsRow?.ticks
+  // The header's count and every row's chip read the same endpoints.
+  const scaling = scalingOf(node.webEndpoints ?? [])
 
   return (
     <DataLakeCard
       data={nodeData}
       route={route}
+      className={cn(scaling.scaledToZero && "border-dashed")}
       subtitle={
         <>
           <span className="shrink-0">Web function</span>
@@ -79,6 +104,21 @@ export const WebFunctionNode = memo(function WebFunctionNode({ data }: NodeProps
           >
             {formatQuantity(node.webRevisions ?? 0, "revision")}
           </span>
+          {scaling.scaledToZero ? (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 italic"
+              title="Every endpoint has scaled to zero environments. The next request starts one."
+            >
+              <Moon className="size-3" aria-hidden />
+              scaled to zero
+            </span>
+          ) : (
+            scaling.environments > 0 && (
+              <span className="shrink-0 text-success tabular-nums">
+                {environmentsText(scaling.environments)}
+              </span>
+            )
+          )}
         </>
       }
     >
@@ -138,6 +178,12 @@ function EndpointRow({ item, route, region, color, overlay }: EndpointRowProps) 
   if (!item.endpoint) return <GhostEndpointRow name={item.name} />
   const endpoint = item.endpoint
   const flashes = overlay?.flashes ?? 0
+  const requests = overlay?.requests ?? 0
+  const coldStarts = overlay?.coldStarts ?? 0
+  const envStarts = overlay?.envStarts ?? 0
+  const envStops = overlay?.envStops ?? 0
+  const pulse = PULSE_COLOR[overlay?.requestClass ?? "2xx"]
+  const environments = endpoint.environments
   return (
     <button
       type="button"
@@ -150,19 +196,41 @@ function EndpointRow({ item, route, region, color, overlay }: EndpointRowProps) 
       className="relative flex w-full flex-col justify-center gap-0.5 overflow-hidden rounded px-1.5 text-left hover:bg-bg-muted focus-visible:bg-bg-muted"
       style={{ height: ENDPOINT_ROW_H }}
     >
-      {flashes > 0 && (
+      {flashes > 0 && <RowSweep key={`write-${flashes}`} color={toSweep(color)} />}
+      {envStarts > 0 && (
+        <RowSweep key={`start-${envStarts}`} color={toSweep("var(--color-success)")} />
+      )}
+      {envStops > 0 && (
+        <RowSweep key={`stop-${envStops}`} color={toSweep("var(--color-fg-muted)")} />
+      )}
+      {requests > 0 && (
         <span
-          key={flashes}
+          key={`req-${requests}`}
           aria-hidden
-          className="pointer-events-none absolute inset-0"
+          data-request-class={overlay?.requestClass}
+          className="pointer-events-none absolute inset-0 rounded"
           style={{
-            background: `linear-gradient(90deg, transparent 0%, ${toSweep(color)} 50%, transparent 100%)`,
-            animation: `overcastSweep ${FLASH_TTL}ms ease-out forwards`,
+            boxShadow: `inset 0 0 0 1.5px ${pulse}`,
+            background: `color-mix(in oklab, ${pulse} 18%, transparent)`,
+            animation: `overcastPulseRing ${PULSE_TTL}ms ease-out forwards`,
           }}
         />
       )}
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="min-w-0 flex-1 truncate font-mono text-xs">{endpoint.name}</span>
+        <span
+          className={cn(
+            "shrink-0 text-2xs tabular-nums",
+            environments > 0 ? "text-success" : "text-fg-subtle italic",
+          )}
+          title={
+            environments > 0
+              ? "Execution environments running or starting"
+              : "Scaled to zero: the next request starts an environment"
+          }
+        >
+          {environmentsText(environments)}
+        </span>
         <Badge variant="outline" className="px-1 py-0">
           {TYPE_LABEL[endpoint.type] ?? endpoint.type}
         </Badge>
@@ -186,7 +254,29 @@ function EndpointRow({ item, route, region, color, overlay }: EndpointRowProps) 
         )}
         {servesText(endpoint.serves)}
       </span>
+      {coldStarts > 0 && (
+        <Snowflake
+          key={`cold-${coldStarts}`}
+          aria-label="Cold start"
+          className="pointer-events-none absolute right-1.5 bottom-1 size-3 text-accent"
+          style={{ animation: `overcastColdMark ${COLD_MARK_TTL}ms ease-out forwards` }}
+        />
+      )}
     </button>
+  )
+}
+
+/** A sweep across a row: a write, or an environment that started (green) or stopped (grey). */
+function RowSweep({ color }: { color: string }) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none absolute inset-0"
+      style={{
+        background: `linear-gradient(90deg, transparent 0%, ${color} 50%, transparent 100%)`,
+        animation: `overcastSweep ${FLASH_TTL}ms ease-out forwards`,
+      }}
+    />
   )
 }
 

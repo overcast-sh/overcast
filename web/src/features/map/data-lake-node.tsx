@@ -21,12 +21,21 @@ interface DataLakeCardProps {
   subtitle: ReactNode
   /** The node's one on-node action. */
   action?: ReactNode
+  /** Extra classes for the card, e.g. a quieter border for an idle node. */
+  className?: string
   children?: ReactNode
 }
 
 const handleClass = "size-2! rounded-full! border-0! bg-fg-muted/50!"
 
-export function DataLakeCard({ data, route, subtitle, action, children }: DataLakeCardProps) {
+export function DataLakeCard({
+  data,
+  route,
+  subtitle,
+  action,
+  className,
+  children,
+}: DataLakeCardProps) {
   const { topologyNode: node, hasTarget, hasSource, isNew } = data
   const [enter] = useState(() => (isNew ? "overcast-node-enter" : ""))
   const { open, openInNewTab } = useNodeNavigation(route, node.region)
@@ -47,6 +56,7 @@ export function DataLakeCard({ data, route, subtitle, action, children }: DataLa
         meta?.border ?? "border-border",
         route && "cursor-pointer",
         enter,
+        className,
       )}
     >
       {hasTarget && <Handle type="target" position={Position.Left} className={handleClass} />}

@@ -326,6 +326,11 @@ export const EventType = {
     EndpointCreated: "lambda-web:EndpointCreated",
     EndpointUpdated: "lambda-web:EndpointUpdated",
     EndpointDeleted: "lambda-web:EndpointDeleted",
+    // The data plane: an execution environment (a container) starting or
+    // stopping, and — coalesced to one per endpoint per second — requests.
+    EnvironmentStarted: "lambda-web:EnvironmentStarted",
+    EnvironmentStopped: "lambda-web:EnvironmentStopped",
+    RequestCompleted: "lambda-web:RequestCompleted",
   },
 } as const
 
@@ -335,10 +340,14 @@ export const EventType = {
  * an incident actually wants to see. Mirrors the Go classification in
  * internal/events/classify.go (IsNoise) so the server's history-buffer
  * eviction policy and the Events page's default filters stay in lockstep:
- * today that is exactly per-request HTTP telemetry, including the UI's own
- * polling and any Docker/load-balancer health checks.
+ * today that is per-request HTTP telemetry, including the UI's own polling
+ * and any Docker/load-balancer health checks, and the data plane's coalesced
+ * per-endpoint request events.
  */
-const NOISE_EVENT_TYPES: ReadonlySet<string> = new Set([EventType.request.Received])
+const NOISE_EVENT_TYPES: ReadonlySet<string> = new Set([
+  EventType.request.Received,
+  EventType.lambdaWeb.RequestCompleted,
+])
 
 /** Reports whether `type` is classified as noise. See NOISE_EVENT_TYPES. */
 export function isNoiseEventType(type: string): boolean {

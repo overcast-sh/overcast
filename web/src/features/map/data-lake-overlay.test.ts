@@ -114,6 +114,68 @@ describe("applyLakeEvent > Lambda Web Functions", () => {
     expect(o.ghosts[node]).toEqual([{ name: "old", deletedAt: T0 }])
     expect(expireOverlay(o, T0 + ROW_GHOST_TTL).ghosts[node]).toBeUndefined()
   })
+
+  describe("the data plane", () => {
+    const request = (status: number, coldStart = false) => ({
+      function: "shop",
+      endpoint: "prod",
+      status,
+      coldStart,
+      count: 1,
+    })
+
+    it.each([
+      [200, "2xx"],
+      [204, "2xx"],
+      [302, "3xx"],
+      [404, "4xx"],
+      [429, "4xx"],
+      [500, "5xx"],
+      [504, "5xx"],
+    ])("pulses the endpoint a %i reached, in class %s", (status, statusClass) => {
+      const o = apply(EMPTY_OVERLAY, "lambda-web:RequestCompleted", request(status))
+      expect(o.rows[rowKey(node, "prod")]).toMatchObject({ requests: 1, requestClass: statusClass })
+    })
+
+    it("restarts the pulse with each request, keeping the latest one's class", () => {
+      let o = apply(EMPTY_OVERLAY, "lambda-web:RequestCompleted", request(200))
+      o = apply(o, "lambda-web:RequestCompleted", request(502))
+      expect(o.rows[rowKey(node, "prod")]).toMatchObject({ requests: 2, requestClass: "5xx" })
+    })
+
+    it("counts cold starts apart from requests", () => {
+      let o = apply(EMPTY_OVERLAY, "lambda-web:RequestCompleted", request(200, true))
+      o = apply(o, "lambda-web:RequestCompleted", request(200, false))
+      expect(o.rows[rowKey(node, "prod")]).toMatchObject({ requests: 2, coldStarts: 1 })
+    })
+
+    it("flashes the endpoint an environment started or stopped for", () => {
+      let o = apply(EMPTY_OVERLAY, "lambda-web:EnvironmentStarted", {
+        function: "shop",
+        endpoint: "prod",
+        reason: "initialized",
+      })
+      o = apply(o, "lambda-web:EnvironmentStopped", {
+        function: "shop",
+        endpoint: "prod",
+        reason: "requested",
+      })
+      o = apply(o, "lambda-web:EnvironmentStopped", {
+        function: "shop",
+        endpoint: "prod",
+        reason: "oom",
+      })
+      expect(o.rows[rowKey(node, "prod")]).toMatchObject({ envStarts: 1, envStops: 2 })
+    })
+
+    it("puts an environment that names no endpoint on the node", () => {
+      const o = apply(EMPTY_OVERLAY, "lambda-web:EnvironmentStarted", {
+        function: "shop",
+        reason: "initialized",
+      })
+      expect(o.rows[rowKey(node, WEB_NODE_ROW)]?.envStarts).toBe(1)
+    })
+  })
 })
 
 describe("expireOverlay", () => {

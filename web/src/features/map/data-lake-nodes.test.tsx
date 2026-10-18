@@ -8,7 +8,13 @@ import {
   DataLakePeekContext,
   type DataLakeNodeData,
 } from "./data-lake-context"
-import { EMPTY_OVERLAY, rowKey, RUN_DWELL, type DataLakeOverlay } from "./data-lake-overlay"
+import {
+  EMPTY_OVERLAY,
+  EMPTY_ROW,
+  rowKey,
+  RUN_DWELL,
+  type DataLakeOverlay,
+} from "./data-lake-overlay"
 
 const navigateMock = vi.fn()
 const openPeekMock = vi.fn()
@@ -126,6 +132,7 @@ describe("DataCatalogNode", () => {
       ...EMPTY_OVERLAY,
       rows: {
         [rowKey("s3tables::lake", "sales.orders")]: {
+          ...EMPTY_ROW,
           flashes: 1,
           ticks: 0,
           records: 250,
