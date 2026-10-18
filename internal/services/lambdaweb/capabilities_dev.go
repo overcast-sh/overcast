@@ -13,11 +13,9 @@ const (
 	catAccount   = "Account"
 )
 
-// The control plane is served in full, including the revision and endpoint
-// lifecycles; what is missing is the data plane. A revision's code is checked
-// but never started, and an endpoint's domain name is allocated but not served,
-// so the operations that create those two carry Partial rather than a ✅
-// (docs/services/lambda-web/limitations.md).
+// The control plane and a Docker data plane are served: a revision's code runs
+// on the first request to an endpoint. What differs from AWS is listed in
+// docs/services/lambda-web/limitations.md.
 func init() {
 	capabilities.Default.RegisterForService(serviceName,
 		// Web functions
@@ -32,7 +30,7 @@ func init() {
 
 		// Revisions
 		capabilities.Capability{Operation: "CreateWebFunctionRevision", Category: catRevisions,
-			Status: capabilities.StatusPartial, Notes: "Validated, pinned to an S3 object version and created `Pending`; a worker checks the package and the revision becomes `Active` or `Failed`. No code runs. `LatestRevision` endpoints are pointed at it once `Active`. Reserved environment variable names are refused. Past 50 revisions the oldest unrouted ones are deleted"},
+			Status: capabilities.StatusSupported, Notes: "Validated, pinned to an S3 object version and created `Pending`; a worker checks the package and the revision becomes `Active` or `Failed`. Docker runs the code on the first request. `LatestRevision` endpoints are pointed at it once `Active`. Reserved environment variable names are refused. Past 50 revisions the oldest unrouted ones are deleted"},
 		capabilities.Capability{Operation: "GetWebFunctionRevision", Category: catRevisions,
 			Status: capabilities.StatusSupported, Notes: "By revision ID or ARN; `timeoutSeconds` and `maxConcurrencyPerEnvironment` defaults are returned"},
 		capabilities.Capability{Operation: "ListWebFunctionRevisions", Category: catRevisions,
@@ -42,19 +40,19 @@ func init() {
 
 		// Endpoints
 		capabilities.Capability{Operation: "CreateWebFunctionEndpoint", Category: catEndpoints,
-			Status: capabilities.StatusPartial, Notes: "`HomeRegion`, `MultiRegion` and `PerRegion`; revision weights, `autoDeploymentMode`, scaling and throttle config; at most 10 per function. The domain name is allocated but nothing serves it"},
+			Status: capabilities.StatusSupported, Notes: "`HomeRegion`, `MultiRegion` and `PerRegion`; revision weights, `autoDeploymentMode`, scaling and throttle config; at most 10 per function. The domain name serves HTTP on the caller's host; other Regions of a `MultiRegion` endpoint are served from this process"},
 		capabilities.Capability{Operation: "GetWebFunctionEndpoint", Category: catEndpoints,
 			Status: capabilities.StatusSupported, Notes: "By name or ARN; `regionalEndpoints` has an entry per Region"},
 		capabilities.Capability{Operation: "ListWebFunctionEndpoints", Category: catEndpoints,
 			Status: capabilities.StatusSupported, Notes: "`authType`, `autoDeploymentMode`, `endpointType`, `state` and `updateStatus` filters"},
 		capabilities.Capability{Operation: "UpdateWebFunctionEndpoint", Category: catEndpoints,
-			Status: capabilities.StatusPartial, Notes: "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; `updateStatus` goes `InProgress` then `Successful`. Revision weights must name `Active` revisions. No traffic flows to observe it"},
+			Status: capabilities.StatusSupported, Notes: "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; `updateStatus` goes `InProgress` then `Successful`. Revision weights must name `Active` revisions; the new routing is live for the next request"},
 		capabilities.Capability{Operation: "DeleteWebFunctionEndpoint", Category: catEndpoints,
 			Status: capabilities.StatusSupported, Notes: "Goes `Deleting` while the data plane drains, then is removed"},
 
 		// Resource policy
 		capabilities.Capability{Operation: "PutResourcePolicy", Category: catPolicy,
-			Status: capabilities.StatusPartial, Notes: "Public policies are rejected with `ValidationException`; `RevisionId` is checked. The policy is stored, but no endpoint request is authorised against it"},
+			Status: capabilities.StatusSupported, Notes: "Public policies are rejected with `ValidationException`; `RevisionId` is checked. `lambda:InvokeWebFunctionEndpoint` on an `IamAuth` endpoint is evaluated against it, for same- and cross-account callers and CloudFront"},
 		capabilities.Capability{Operation: "GetResourcePolicy", Category: catPolicy,
 			Status: capabilities.StatusSupported, Notes: "`ResourceNotFoundException` when none is attached"},
 		capabilities.Capability{Operation: "DeleteResourcePolicy", Category: catPolicy,

@@ -1,6 +1,6 @@
 # Lambda Web Functions data plane
 
-> Status: in progress (#2302 step 2). The control plane shipped in #2307; this plan is the runtime behind it.
+> Status: implemented (#2302 step 2). The control plane shipped in #2307; this is the runtime behind it. Differences from AWS are in `docs/services/lambda-web/limitations.md`.
 
 Goal: an endpoint of a web function serves HTTP. A revision's S3 package runs as a Node.js server in a Docker
 container, Overcast reverse-proxies requests to it, and scales containers with traffic, to zero when idle — with the

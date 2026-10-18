@@ -6718,8 +6718,8 @@
         {
           "operation": "CreateWebFunctionRevision",
           "category": "Revisions",
-          "status": "⚠️ Partial",
-          "notes": "Validated, pinned to an S3 object version and created `Pending`; a worker checks the package and the revision becomes `Active` or `Failed`. No code runs. `LatestRevision` endpoints are pointed at it once `Active`. Reserved environment variable names are refused. Past 50 revisions the oldest unrouted ones are deleted"
+          "status": "✅ Supported",
+          "notes": "Validated, pinned to an S3 object version and created `Pending`; a worker checks the package and the revision becomes `Active` or `Failed`. Docker runs the code on the first request. `LatestRevision` endpoints are pointed at it once `Active`. Reserved environment variable names are refused. Past 50 revisions the oldest unrouted ones are deleted"
         },
         {
           "operation": "GetWebFunctionRevision",
@@ -6742,8 +6742,8 @@
         {
           "operation": "CreateWebFunctionEndpoint",
           "category": "Endpoints",
-          "status": "⚠️ Partial",
-          "notes": "`HomeRegion`, `MultiRegion` and `PerRegion`; revision weights, `autoDeploymentMode`, scaling and throttle config; at most 10 per function. The domain name is allocated but nothing serves it"
+          "status": "✅ Supported",
+          "notes": "`HomeRegion`, `MultiRegion` and `PerRegion`; revision weights, `autoDeploymentMode`, scaling and throttle config; at most 10 per function. The domain name serves HTTP on the caller's host; other Regions of a `MultiRegion` endpoint are served from this process"
         },
         {
           "operation": "GetWebFunctionEndpoint",
@@ -6760,8 +6760,8 @@
         {
           "operation": "UpdateWebFunctionEndpoint",
           "category": "Endpoints",
-          "status": "⚠️ Partial",
-          "notes": "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; `updateStatus` goes `InProgress` then `Successful`. Revision weights must name `Active` revisions. No traffic flows to observe it"
+          "status": "✅ Supported",
+          "notes": "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; `updateStatus` goes `InProgress` then `Successful`. Revision weights must name `Active` revisions; the new routing is live for the next request"
         },
         {
           "operation": "DeleteWebFunctionEndpoint",
@@ -6772,8 +6772,8 @@
         {
           "operation": "PutResourcePolicy",
           "category": "Resource policy",
-          "status": "⚠️ Partial",
-          "notes": "Public policies are rejected with `ValidationException`; `RevisionId` is checked. The policy is stored, but no endpoint request is authorised against it"
+          "status": "✅ Supported",
+          "notes": "Public policies are rejected with `ValidationException`; `RevisionId` is checked. `lambda:InvokeWebFunctionEndpoint` on an `IamAuth` endpoint is evaluated against it, for same- and cross-account callers and CloudFront"
         },
         {
           "operation": "GetResourcePolicy",
