@@ -9,7 +9,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -269,4 +268,87 @@ func TestEndToEnd_concurrentRequestsShareWarmEnvironments(t *testing.T) {
 	}
 }
 
-var _ = fmt.Sprintf
+// awsJSON calls a JSON-protocol AWS API (CloudWatch Logs) on the test server.
+func (e *e2e) awsJSON(target, body string) string {
+	e.t.Helper()
+	req, _ := http.NewRequest("POST", e.srv.URL+"/", strings.NewReader(body))
+	req.Header.Set("X-Amz-Target", target)
+	req.Header.Set("Content-Type", "application/x-amz-json-1.1")
+	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260101/us-east-1/logs/aws4_request, SignedHeaders=host, Signature=x")
+	resp, err := e.http.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return string(b)
+}
+
+// metricNames lists the metrics CloudWatch holds for a namespace.
+func (e *e2e) metricNames(namespace string) string {
+	e.t.Helper()
+	form := "Action=ListMetrics&Version=2010-08-01&Namespace=" + namespace
+	req, _ := http.NewRequest("POST", e.srv.URL+"/", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 Credential=test/20260101/us-east-1/monitoring/aws4_request, SignedHeaders=host, Signature=x")
+	resp, err := e.http.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	return string(b)
+}
+
+func TestEndToEnd_logsAndMetricsReachCloudWatch(t *testing.T) {
+	// Given: an endpoint that has served a request
+	e := newE2E(t)
+	e.upload("echo.zip", map[string]string{"index.js": echoApp})
+	domain := e.deploy("observed", revCfg("echo.zip", nil), types.AuthTypeApplicationManaged)
+	resp, _ := e.get(domain, "/watch", nil)
+	requestID := resp.Header.Get("Lambda-Web-Request-Id")
+	stream := resp.Header.Get("Lambda-Web-Logstream")
+	if requestID == "" || stream == "" {
+		t.Fatalf("response lacks its request id or log stream: %v", resp.Header)
+	}
+
+	// Then: the application's console.log line, tagged with the request id, is in
+	// the function's log group, in the stream the response named
+	var events string
+	waitUntil(t, 20*time.Second, func() bool {
+		events = e.awsJSON("Logs_20140328.FilterLogEvents", `{"logGroupName":"/aws/lambda/web/observed","logStreamNames":["`+stream+`"]}`)
+		return strings.Contains(events, "handling") && strings.Contains(events, requestID)
+	}, "the application log line")
+	for _, want := range []string{`endpointName`, `prod`, `us-east-1`} {
+		if !strings.Contains(events, want) {
+			t.Errorf("log events lack %q: %s", want, events)
+		}
+	}
+
+	// And: the platform's own lifecycle events are there too
+	waitUntil(t, 20*time.Second, func() bool {
+		events = e.awsJSON("Logs_20140328.FilterLogEvents", `{"logGroupName":"/aws/lambda/web/observed","logStreamNames":["`+stream+`"]}`)
+		return strings.Contains(events, "platform.initStart") && strings.Contains(events, "platform.initReport")
+	}, "the platform init events")
+	local := e.awsJSON("Logs_20140328.FilterLogEvents", `{"logGroupName":"/aws/lambda/web/observed.local"}`)
+	if !strings.Contains(local, "platform.initStart") {
+		t.Errorf(".local group lacks the system events: %s", local)
+	}
+
+	// And: request metrics are published (flushed every few seconds)
+	waitUntil(t, 40*time.Second, func() bool {
+		return strings.Contains(e.metricNames("AWS/Lambda/Web"), "ExecutedRequests")
+	}, "the ExecutedRequests metric")
+}
+
+func waitUntil(t *testing.T, d time.Duration, cond func() bool, what string) {
+	t.Helper()
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
