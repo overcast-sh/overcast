@@ -165,6 +165,9 @@ type envInitEvent struct {
 	Duration time.Duration
 	// Failure is nil on success.
 	Failure *initFailure
+	// Handle is the started environment, kept so telemetry can sample Stats
+	// once a minute. Optional: nil means no samples (zeros are reported).
+	Handle environment
 }
 
 type spinDownEvent struct {
