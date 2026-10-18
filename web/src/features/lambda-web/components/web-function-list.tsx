@@ -26,7 +26,6 @@ import {
   webRevisionsQueryOptions,
 } from "../data"
 import { CreateFunctionDialog } from "./create-function-dialog"
-import { NotServedAdvisory } from "./not-served-advisory"
 import { StateBadge } from "./state-badge"
 
 interface WebFunctionListProps {
@@ -103,7 +102,6 @@ export function WebFunctionList({
         </>
       }
     >
-      <NotServedAdvisory />
       <ResourceListFilter
         value={filter}
         onChange={onFilterChange}

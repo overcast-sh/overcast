@@ -59,9 +59,10 @@ describe("WebFunctionList", () => {
     expect(within(row).getByRole("button", { name: "Copy ARN" })).toBeInTheDocument()
   })
 
-  it("says up front that the endpoints are not served", async () => {
+  it("no longer tells the person endpoints are not served", async () => {
     renderList()
-    expect(await screen.findByText("Endpoint domains are not served yet")).toBeInTheDocument()
+    await screen.findByText("shop")
+    expect(screen.queryByText(/not served/i)).not.toBeInTheDocument()
   })
 
   it("explains an empty region and offers to create the first function", async () => {

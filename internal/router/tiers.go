@@ -114,8 +114,9 @@ var ServiceTiers = map[string]EmulationTier{
 	// engines commit through; maintenance and replication are never run.
 	"s3tables": TierPartial,
 	// lambdaweb: the whole control plane (web functions, revisions, endpoints,
-	// policies, tags). Nothing serves an endpoint yet.
-	"lambdaweb": TierInert,
+	// policies, tags) and a Docker data plane that serves endpoints over HTTP.
+	// Without Docker nothing is served.
+	"lambdaweb": TierPartial,
 }
 
 // ServiceGoalTiers maps each service to its aspirational emulation tier — the

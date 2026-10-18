@@ -23,6 +23,24 @@ export function servesText(serves: TopologyWebEndpoint["serves"]): string {
     : serves.map((s) => `${s.revisionId} ${s.weight}%`).join(" · ")
 }
 
+/** How a function's environments stand, for the node's subtitle and its idle look. */
+export interface Scaling {
+  /** Environments running or starting across every endpoint. */
+  environments: number
+  /** The function has endpoints and none has an environment: it is scaled to zero. */
+  scaledToZero: boolean
+}
+
+export function scalingOf(endpoints: readonly TopologyWebEndpoint[]): Scaling {
+  const environments = endpoints.reduce((sum, e) => sum + e.environments, 0)
+  return { environments, scaledToZero: endpoints.length > 0 && environments === 0 }
+}
+
+/** `2 envs` / `1 env` / `0 envs`, as a row's chip reads. */
+export function environmentsText(count: number): string {
+  return `${count} ${count === 1 ? "env" : "envs"}`
+}
+
 /** An endpoint as the node lists it: live, or a ghost of one just deleted. */
 export interface DisplayEndpoint {
   name: string

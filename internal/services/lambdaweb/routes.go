@@ -65,6 +65,11 @@ func (s *Service) registerRoutes(r chi.Router) {
 	r.Delete(pol, serveAny(empty, fillPolicyRef, s.deleteResourcePolicyTyped))
 
 	r.Get(acct, serve(ok, func(*http.Request, *noInput) *protocol.AWSError { return nil }, s.getWebAccountSettingsTyped))
+
+	// The data plane: host-routed requests to an endpoint's domain land here
+	// (see HostRouteRewrite). The path is not an AWS binding.
+	r.HandleFunc(invokeBase+"/{id}/{region}", s.serve)
+	r.HandleFunc(invokeBase+"/{id}/{region}/*", s.serve)
 }
 
 // ─── Serving ──────────────────────────────────────────────────────────────────

@@ -30,6 +30,17 @@ const (
 	// LambdaWebEndpointDeleted fires after DeleteWebFunctionEndpoint removes an
 	// endpoint. Payload: LambdaWebPayload, with Endpoint set.
 	LambdaWebEndpointDeleted Type = "lambda-web:EndpointDeleted"
+	// LambdaWebEnvironmentStarted fires when an execution environment finished
+	// initialising and began serving. Payload: LambdaWebEnvironmentPayload.
+	LambdaWebEnvironmentStarted Type = "lambda-web:EnvironmentStarted"
+	// LambdaWebEnvironmentStopped fires when an execution environment has shut
+	// down, for any reason. Payload: LambdaWebEnvironmentPayload, with Reason set.
+	LambdaWebEnvironmentStopped Type = "lambda-web:EnvironmentStopped"
+	// LambdaWebRequestCompleted fires for requests that reached an execution
+	// environment. It is high volume, so it is classified as noise and
+	// coalesced: at most one event per endpoint per second, whose Count says
+	// how many requests it stands for. Payload: LambdaWebRequestPayload.
+	LambdaWebRequestCompleted Type = "lambda-web:RequestCompleted"
 )
 
 // LambdaWebPayload names the web function a lambda-web event is about, and the
@@ -40,4 +51,32 @@ type LambdaWebPayload struct {
 	Region      string `json:"region"`
 	Revision    string `json:"revision,omitempty"`
 	Endpoint    string `json:"endpoint,omitempty"`
+}
+
+// LambdaWebEnvironmentPayload describes an execution environment lifecycle
+// change. Endpoint is the endpoint whose traffic triggered the start. Reason
+// is "initialized" on start and "requested", "oom" or "exited" on stop.
+type LambdaWebEnvironmentPayload struct {
+	Function    string `json:"function"`
+	Region      string `json:"region"`
+	Revision    string `json:"revision"`
+	Environment string `json:"environment"`
+	Endpoint    string `json:"endpoint,omitempty"`
+	Reason      string `json:"reason"`
+}
+
+// LambdaWebRequestPayload describes a request that reached an environment.
+// When requests were coalesced, Status, DurationMs and Environment are the
+// last request's, ColdStart is true if any of them was a cold start, and Count
+// is how many requests the event stands for (1 when nothing was coalesced).
+type LambdaWebRequestPayload struct {
+	Function    string  `json:"function"`
+	Region      string  `json:"region"`
+	Endpoint    string  `json:"endpoint"`
+	Revision    string  `json:"revision"`
+	Environment string  `json:"environment"`
+	Status      int     `json:"status"`
+	DurationMs  float64 `json:"durationMs"`
+	ColdStart   bool    `json:"coldStart"`
+	Count       int     `json:"count"`
 }

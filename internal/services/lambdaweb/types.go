@@ -52,6 +52,12 @@ type revision struct {
 	BuildConfig buildConfig   `json:"buildConfig"`
 	Service     serviceConfig `json:"serviceConfig"`
 	CreatedAt   time.Time     `json:"createdAt"`
+	// State, StateReason and Errors are the revision's lifecycle: Pending while
+	// its package is prepared, then Active or Failed. A record stored before the
+	// data plane has no State and reads as Active.
+	State       string          `json:"state,omitempty"`
+	StateReason string          `json:"stateReason,omitempty"`
+	Errors      []revisionError `json:"errors,omitempty"`
 	// Seq orders a function's revisions: 1 for its first. Timestamps tie when
 	// two revisions are created within a clock tick, so they cannot say which
 	// is newer.
@@ -76,6 +82,20 @@ type endpoint struct {
 	RegionDomain map[string]string `json:"regionDomains,omitempty"`
 	CreatedAt    time.Time         `json:"createdAt"`
 	UpdatedAt    time.Time         `json:"updatedAt"`
+	// State, StateReason, UpdateStatus and UpdateStatusReason are the endpoint's
+	// lifecycle. A record stored before the data plane has none and reads as
+	// Active and Successful.
+	State              string `json:"state,omitempty"`
+	StateReason        string `json:"stateReason,omitempty"`
+	UpdateStatus       string `json:"updateStatus,omitempty"`
+	UpdateStatusReason string `json:"updateStatusReason,omitempty"`
+}
+
+// revisionError is one entry of a revision's errors list (RevisionError).
+type revisionError struct {
+	Attribute    string `json:"attribute"`
+	ErrorCode    string `json:"errorCode"`
+	ErrorMessage string `json:"errorMessage"`
 }
 
 // policyRecord is a function's resource-based policy and its revision token.

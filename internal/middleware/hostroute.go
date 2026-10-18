@@ -15,6 +15,7 @@ import (
 //
 //	myapi123.execute-api.us-east-1.amazonaws.com   (API Gateway invoke, v1+v2)
 //	{url-id}.lambda-url.us-east-1.on.aws           (Lambda function URLs)
+//	{id}.{shard}.lambda-web.us-east-1.on.aws       (Lambda Web Function endpoints)
 //	myapi456.appsync-api.us-east-1.amazonaws.com   (AppSync GraphQL)
 //
 // ParseHostRoute recognises this grammar against the fixed set of known
@@ -76,6 +77,7 @@ import (
 const (
 	LabelExecuteAPI         = "execute-api"
 	LabelLambdaURL          = "lambda-url"
+	LabelLambdaWeb          = "lambda-web"
 	LabelAppSyncAPI         = "appsync-api"
 	LabelAppSyncRealtimeAPI = "appsync-realtime-api"
 	LabelCloudFront         = "cloudfront"
@@ -85,6 +87,7 @@ const (
 var hostRouteLabels = map[string]string{
 	LabelExecuteAPI:         "apigateway",
 	LabelLambdaURL:          "lambda",
+	LabelLambdaWeb:          "lambdaweb",
 	LabelAppSyncAPI:         "appsync",
 	LabelAppSyncRealtimeAPI: "appsync",
 	LabelCloudFront:         "cloudfront",

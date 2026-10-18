@@ -8,6 +8,7 @@ package lambdaweb
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -91,6 +92,13 @@ var (
 	logGrpRe  = regexp.MustCompile(`^[a-zA-Z0-9.\-_/#]+$`)
 )
 
+// reservedEnvVars are the environment variable names a revision can't set.
+var reservedEnvVars = []string{
+	"AWS_ACCESS_KEY", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SECRET_KEY", "AWS_SECURITY_TOKEN",
+	"AWS_SESSION_TOKEN", "AWS_DEFAULT_REGION", "AWS_REGION", "AWS_LAMBDA_HTTP_ENDPOINT", "AWS_LAMBDA_RUNTIME_API",
+	"AWS_LAMBDA_INITIALIZATION_TYPE", "AWS_LAMBDA_FUNCTION_MEMORY_SIZE", "AWS_LAMBDA_METADATA_API", "AWS_LAMBDA_METADATA_TOKEN",
+}
+
 var (
 	appLogLevels = []string{"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
 	sysLogLevels = []string{"DEBUG", "INFO", "WARN"}
@@ -131,6 +139,15 @@ func validateRevision(bc *buildConfig, sc *serviceConfig, kmsKeyARN, description
 	}
 	if sc.MaxConcurrencyPerEnvironment != nil && (*sc.MaxConcurrencyPerEnvironment < 1 || *sc.MaxConcurrencyPerEnvironment > 128) {
 		return validationError("serviceConfig.maxConcurrencyPerEnvironment must be between 1 and 128.")
+	}
+	// Per AWS docs (web-functions-revisions-env-vars.md): these names are
+	// reserved for Web Functions; specifying one makes Lambda reject the
+	// request to create a Web Function or revision. The page gives no size or
+	// count limit on environment variables, so none is enforced.
+	for _, name := range slices.Sorted(maps.Keys(sc.EnvironmentVariables)) {
+		if slices.Contains(reservedEnvVars, name) {
+			return validationError("The environment variable %s is reserved and can't be set.", name)
+		}
 	}
 	if sc.EgressNetworkConnectorARN != "" && (len(sc.EgressNetworkConnectorARN) > 2048 || !connRe.MatchString(sc.EgressNetworkConnectorARN)) {
 		return validationError("serviceConfig.egressNetworkConnectorArn must be a fully qualified network connector ARN, including its version.")

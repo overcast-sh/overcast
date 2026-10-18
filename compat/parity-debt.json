@@ -5,6 +5,12 @@
     {
       "suite": "cli",
       "service": "lambdaweb",
+      "group": "lambda-web-endpoints",
+      "tests": 15
+    },
+    {
+      "suite": "cli",
+      "service": "lambdaweb",
       "group": "lambda-web-functions",
       "tests": 24
     },
@@ -337,6 +343,12 @@
       "service": "glue",
       "group": "glue-s3tables-catalog",
       "tests": 4
+    },
+    {
+      "suite": "dotnet-sdk",
+      "service": "lambdaweb",
+      "group": "lambda-web-endpoints",
+      "tests": 15
     },
     {
       "suite": "dotnet-sdk",
@@ -653,6 +665,12 @@
     {
       "suite": "java-sdk",
       "service": "lambdaweb",
+      "group": "lambda-web-endpoints",
+      "tests": 15
+    },
+    {
+      "suite": "java-sdk",
+      "service": "lambdaweb",
       "group": "lambda-web-functions",
       "tests": 24
     },
@@ -769,6 +787,12 @@
       "service": "glue",
       "group": "glue-s3tables-catalog",
       "tests": 4
+    },
+    {
+      "suite": "node-js-sdk",
+      "service": "lambdaweb",
+      "group": "lambda-web-endpoints",
+      "tests": 15
     },
     {
       "suite": "node-js-sdk",
@@ -1243,6 +1267,12 @@
       "service": "glue",
       "group": "glue-s3tables-catalog",
       "tests": 4
+    },
+    {
+      "suite": "rust-sdk",
+      "service": "lambdaweb",
+      "group": "lambda-web-endpoints",
+      "tests": 15
     },
     {
       "suite": "rust-sdk",

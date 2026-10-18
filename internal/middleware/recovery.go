@@ -20,6 +20,12 @@ func Recovery(logger *zap.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if rec := recover(); rec != nil {
+					if rec == http.ErrAbortHandler {
+						// net/http's signal to cut the connection (a reverse proxy
+						// whose upstream failed mid-body): not a fault, and writing
+						// an error into the half-sent response would corrupt it.
+						panic(rec)
+					}
 					reqID := protocol.RequestIDFromContext(r.Context())
 					logger.Error("panic recovered",
 						zap.String("request_id", reqID),

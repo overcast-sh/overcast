@@ -1,6 +1,6 @@
 ---
 title: "Lambda Web Functions — AWS Lambda Web Functions"
-description: "Lambda Web Functions — web functions, immutable revisions and endpoints, with resource policies and tags. The control plane is complete; nothing serves an endpoint yet."
+description: "Lambda Web Functions — web functions, immutable revisions and endpoints, with resource policies and tags. Revisions run as Node.js servers in Docker containers and endpoints serve HTTP, scaling to zero when idle."
 section: "Service Reference"
 tags:
   - docs
@@ -13,8 +13,9 @@ tags:
 # Lambda Web Functions — AWS Lambda Web Functions
 
 Web functions with their revisions and endpoints, as the `lambda-web` API serves
-them. The control plane is complete; an endpoint's domain name is allocated but
-no HTTP server runs behind it yet.
+them. An endpoint's domain name serves HTTP: Overcast starts the revision's
+Node.js server in a Docker container on the first request, reverse-proxies to
+it, runs more containers as traffic grows, and stops them when idle.
 
 **Status:** ⚠️ Partial
 
@@ -36,6 +37,19 @@ aws lambda-web create-web-function --function-name my-web-app \
 aws lambda-web get-web-function-endpoint --function-name my-web-app --endpoint-name dev
 ```
 
+The endpoint's `domainName` is a host under Overcast. Send a request to it with
+that name as the `Host` header (or as the URL, where `*.localhost` resolves to
+loopback):
+
+```bash
+curl -H "Host: {domainName from the call above}" http://localhost:4566/
+```
+
+The first request starts a container (about half a second); later ones are
+answered in a couple of milliseconds. The package must be a zip of a Node.js
+server in a versioned S3 bucket that listens on the port in
+`AWS_LAMBDA_HTTP_ENDPOINT`.
+
 Any credentials work; with none configured, run `eval "$(overcast env)"` first
 — see [Using AWS SDKs and CLI](../sdk-cli.md#credentials). The `aws lambda-web`
 commands need an AWS CLI release that includes them.
@@ -51,6 +65,11 @@ commands need an AWS CLI release that includes them.
 | Updates | Omitted members are kept; an empty `scalingConfig` or `throttleConfig` clears |
 | Resource policy | Public policies are rejected; `RevisionId` guards concurrent changes |
 | Tags | On the web function; revisions and endpoints inherit them |
+| Serving | Host-routed requests on `{id}.{shard}.lambda-web.{region}.{host}`; the `lambda-web-request-id`, `lambda-web-logstream` and `lambda-web-error-type` headers; AWS's platform, runtime and application error types |
+| Scaling | Containers start on demand, up to `maxConcurrencyPerEnvironment` requests each, `scalingConfig.maxEnvironments` per endpoint and `LAMBDA_WEB_MAX_ENVIRONMENTS` per host; idle ones stop after `LAMBDA_WEB_IDLE_TTL` |
+| Throttling | `throttleConfig.rateLimit` per endpoint and AWS's account-level limit, refused with 429 |
+| `IamAuth` | SigV4 and SigV4a checks; the caller's IAM policy and the function's resource policy for `lambda:InvokeWebFunctionEndpoint`; CloudFront distributions with a `lambda` origin access control |
+| Telemetry | Application and `platform.*` logs in CloudWatch Logs; `AWS/Lambda/Web` metrics; `lambda-web:*` EventBridge events |
 | Account settings | AWS's documented default quotas and the Region's function count |
 | CloudFormation | `AWS::Lambda::WebFunction`, `WebFunctionRevision` and `WebFunctionEndpoint` |
 | System map | A node per web function, listing its endpoints and the revision each serves |
@@ -59,9 +78,9 @@ commands need an AWS CLI release that includes them.
 
 | Area | On AWS | Overcast |
 | --- | --- | --- |
-| Running the code | Lambda fetches the package from S3 and starts your server | Nothing is fetched or started; a revision is Active as soon as it exists |
-| Endpoint domain | Serves HTTPS | Allocated and returned, not served |
-| `IamAuth` and resource policies | Evaluated on every request to the endpoint | Stored; no request reaches an endpoint |
+| Running the code | Firecracker microVMs, 2 GiB each | Docker containers of `public.ecr.aws/lambda/nodejs:24`, 2 GiB and 2 vCPU each. Needs a Docker daemon; without one a request answers with a 5xx platform error and nothing starts |
+| Endpoint domain | Serves HTTPS | Serves HTTP, on the host the caller used (so `localhost:4566` stays out of the stored name) |
+| Other Regions | `MultiRegion` and `PerRegion` endpoints replicate | Every Region of the endpoint is served from this process |
 | Create responses | `Pending`, then `Active` after a delay | `Pending` in the create response, `Active` on every read after |
 
 The full list is on [Lambda Web Functions limitations](./lambda-web/limitations.md).
@@ -72,6 +91,10 @@ The full list is on [Lambda Web Functions limitations](./lambda-web/limitations.
 > Web Functions are not Lambda functions. `aws lambda list-functions` does not
 > show them, and `aws lambda invoke` cannot call them. They are a separate
 > service, `lambda-web`, whose paths all start with `/2025-03-07/`.
+
+Overcast's `RealIP` middleware sets the connection's remote address from
+`X-Forwarded-For`, so an application sees its client's address twice in that
+header.
 
 <!-- BEGIN overcast:capabilities -->
 

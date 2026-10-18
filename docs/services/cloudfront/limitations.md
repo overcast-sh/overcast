@@ -23,7 +23,9 @@ correctness will pass locally and fail on AWS, or the reverse.
 | Feature | What is missing |
 | --- | --- |
 | Trusted signers / trusted key groups | No signature verification. `ActiveTrustedSigners` and `ActiveTrustedKeyGroups` report `Enabled: false, Quantity: 0` on every distribution |
-| Origin access control and origin access identity | Origin requests are not SigV4-signed; the bucket behind an "OAC-protected" origin is directly readable |
+| Origin access control and origin access identity | Origin requests are not SigV4-signed, except to a Lambda Web Function origin with a `lambda` OAC; the bucket behind an "OAC-protected" S3 origin is directly readable |
+| `sigv4a` Web Function origins (global endpoints) | Signed with SigV4 in the default Region, not SigV4a; the emulated edge also puts its signature in `X-Amz-Cf-Authorization` (AWS uses an undocumented header) and signs with fixed emulator credentials. The `aws:SourceArn` identity travels in `X-Overcast-Source-Arn` plus a per-process trust header, not in the signature |
+| Web Function origin request policy | `Host` is always the endpoint domain; the policy that excludes the viewer `Host` is not required. Lambda@Edge origin triggers on such origins are not rejected |
 | Response headers policies | Headers in the policy are never added, removed or overridden |
 | Origin request policies | The set of headers, cookies and query strings forwarded to the origin is not filtered by the policy |
 | Field-level encryption | Configs and profiles are CRUD only; no field is ever encrypted |

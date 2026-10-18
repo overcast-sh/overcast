@@ -815,6 +815,23 @@ type Config struct {
 	// MemTotal, or leaves the budget unlimited when Docker /info is unavailable.
 	LambdaMaxMemoryMB int
 
+	// LambdaWebMaxEnvironments bounds how many Lambda Web Function execution
+	// environments (containers) Overcast runs at once across all functions.
+	// Past it a request that needs a new environment is throttled with
+	// Platform.AccountActiveVCPUArm64Throttle, after reclaiming an idle one.
+	// Corresponds to env var LAMBDA_WEB_MAX_ENVIRONMENTS. Default 8.
+	LambdaWebMaxEnvironments int
+
+	// LambdaWebIdleTTL is how long a web function environment may sit without a
+	// request before Overcast scales it away (down to zero). Corresponds to env
+	// var LAMBDA_WEB_IDLE_TTL, a Go duration. Default 5m.
+	LambdaWebIdleTTL time.Duration
+
+	// LambdaWebEnvironmentMemoryMB is the memory cap of one web function
+	// environment, in MB (AWS gives each 2 GB). Corresponds to env var
+	// LAMBDA_WEB_ENVIRONMENT_MEMORY_MB. Default 2048.
+	LambdaWebEnvironmentMemoryMB int
+
 	// LambdaMaxWarmInstances bounds how many idle containers one function keeps
 	// after a concurrency burst. Surplus instances are destroyed on release
 	// rather than waiting out the 15-minute idle sweep. A provisioned
@@ -2587,6 +2604,20 @@ func Load() (*Config, error) {
 	cfg.LambdaMaxMemoryMB = envInt("LAMBDA_MAX_MEMORY_MB", 0)
 	if cfg.LambdaMaxMemoryMB < 0 {
 		cfg.LambdaMaxMemoryMB = 0
+	}
+	cfg.LambdaWebMaxEnvironments = envInt("LAMBDA_WEB_MAX_ENVIRONMENTS", 8)
+	if cfg.LambdaWebMaxEnvironments < 1 {
+		cfg.LambdaWebMaxEnvironments = 1
+	}
+	cfg.LambdaWebIdleTTL = 5 * time.Minute
+	if raw := strings.TrimSpace(os.Getenv("LAMBDA_WEB_IDLE_TTL")); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			cfg.LambdaWebIdleTTL = d
+		}
+	}
+	cfg.LambdaWebEnvironmentMemoryMB = envInt("LAMBDA_WEB_ENVIRONMENT_MEMORY_MB", 2048)
+	if cfg.LambdaWebEnvironmentMemoryMB < 128 {
+		cfg.LambdaWebEnvironmentMemoryMB = 128
 	}
 	cfg.LambdaMaxWarmInstances = envInt("LAMBDA_MAX_WARM_INSTANCES", 10)
 	if cfg.LambdaMaxWarmInstances < 1 {

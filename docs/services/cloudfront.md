@@ -86,6 +86,28 @@ name a stack output hands you is one you can dial. Set
 The full list, with what each unenforced feature means for a stack that relies
 on it, is in [CloudFront limitations](./cloudfront/limitations.md).
 
+## Lambda Web Function origins
+
+A distribution can front a [Lambda Web Function](./lambda-web.md) endpoint. Set
+the origin `DomainName` to the endpoint's domain (as `GetWebFunctionEndpoint`
+returns it, `{id}.{shard}.lambda-web.{region}.{host}`); Overcast reaches it
+through its own listener with that domain as the `Host`, never over the network.
+
+Attach an origin access control with `OriginAccessControlOriginType: lambda`,
+`SigningBehavior: always-amz-auth` and `SigningProtocol: sigv4` (`sigv4a` for a
+global endpoint) to an `IamAuth` endpoint, and grant `cloudfront.amazonaws.com`
+`lambda:InvokeWebFunctionEndpoint` with an `aws:SourceArn` condition naming the
+distribution. Each origin request is then SigV4-signed for service `lambda` in
+the endpoint's Region, carries `X-Amz-Content-Sha256` (`UNSIGNED-PAYLOAD` for
+`PUT`/`POST`/`PATCH`), and states the distribution identity so the endpoint can
+evaluate `aws:SourceArn`. The viewer's `Authorization` header is passed through
+unless it is itself an AWS signature, in which case it is removed. Forward
+`Authorization` by including it in the behaviour's cache policy or forwarded
+headers, as on AWS.
+
+`always-amz-auth` is accepted only for `lambda` OACs, and a `lambda` OAC only
+for a Web Function domain (`InvalidDomainNameForOriginAccessControl`).
+
 ## Gotchas
 
 > [!CAUTION]

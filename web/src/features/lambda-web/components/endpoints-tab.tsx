@@ -1,11 +1,12 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Globe, Pencil } from "lucide-react"
+import { Globe, Pencil, Send } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { CreateAction, RefreshAction, RowAction } from "@/components/ui/resource-list-page"
 import { ResourceListSection } from "@/components/ui/resource-list-section"
 import { ResourceTable } from "@/components/ui/resource-table"
 import { useResourceMutation } from "@/hooks/use-resource-mutation"
+import { cn } from "@/lib/utils"
 import type { WebEndpoint } from "@/services/api/lambda-web"
 import {
   createEndpointMutationOptions,
@@ -16,10 +17,12 @@ import {
   webRevisionsQueryOptions,
 } from "../data"
 import { describeServes, toCreateEndpoint, toUpdateEndpoint, type EndpointDraft } from "../models"
+import { useEndpointEnvironments } from "../use-endpoint-environments"
+import { EndpointDetailDialog } from "./endpoint-detail-dialog"
 import { EndpointDialog } from "./endpoint-dialog"
 import { EndpointDomain } from "./endpoint-domain"
-import { NotServedAdvisory } from "./not-served-advisory"
 import { StateBadge } from "./state-badge"
+import { TrafficSpark } from "./traffic"
 
 interface EndpointsTabProps {
   functionName: string
@@ -36,11 +39,16 @@ function limitsText(e: WebEndpoint): string {
   return parts.join(" · ")
 }
 
-/** A function's endpoints: their domains, what each serves, and the settings an update can change. */
+/**
+ * A function's endpoints: where each is reached, what it serves, how many
+ * environments it has, and the settings an update can change. A row opens the
+ * endpoint's page of detail, with traffic and a form to send it a request.
+ */
 export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<WebEndpoint>()
   const [deleteTarget, setDeleteTarget] = useState<WebEndpoint>()
+  const [viewingName, setViewingName] = useState<string>()
   const {
     data: endpoints,
     isLoading,
@@ -49,6 +57,8 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
     refetch,
   } = useQuery(webEndpointsQueryOptions(functionName))
   const { data: revisions = [] } = useQuery(webRevisionsQueryOptions(functionName))
+  const environments = useEndpointEnvironments(functionName, homeRegion)
+  const viewing = endpoints?.find((e) => e.endpointName === viewingName)
 
   const create = useResourceMutation({
     options: createEndpointMutationOptions(),
@@ -97,7 +107,6 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
         </>
       }
     >
-      <NotServedAdvisory />
       <ResourceTable
         variant="embedded"
         query={{ data: endpoints, isLoading, error }}
@@ -109,6 +118,7 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
         errorTitle="Failed to load endpoints"
         defaultSort={{ id: "name", desc: false }}
         rowKey={(e) => e.endpointName ?? ""}
+        onRowClick={(e) => setViewingName(e.endpointName)}
         columns={[
           {
             id: "name",
@@ -116,7 +126,28 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
             sortValue: (e) => e.endpointName,
             cell: (e) => <span className="font-mono font-medium">{e.endpointName}</span>,
           },
-          { header: "State", cell: (e) => <StateBadge state={e.state} /> },
+          {
+            header: "State",
+            prose: true,
+            cell: (e) => (
+              <span className="flex flex-col items-start gap-1">
+                <StateBadge state={e.state} />
+                {e.state === "Failed" && e.stateReason && (
+                  <span className="text-xs text-danger">{e.stateReason}</span>
+                )}
+                {e.updateStatus && e.updateStatus !== "Successful" && (
+                  <span className="inline-flex flex-wrap items-center gap-1 text-xs text-fg-muted">
+                    update <StateBadge state={e.updateStatus} />
+                    {e.updateStatusReason && (
+                      <span className={cn(e.updateStatus === "Failed" && "text-danger")}>
+                        {e.updateStatusReason}
+                      </span>
+                    )}
+                  </span>
+                )}
+              </span>
+            ),
+          },
           {
             header: "Type",
             cell: (e) => <Badge variant="outline">{e.endpointType}</Badge>,
@@ -147,15 +178,36 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
             ),
           },
           {
-            header: "Domain",
+            header: "Environments",
+            cellClassName: "tabular-nums whitespace-nowrap",
+            cell: (e) => <EnvironmentCount count={environments?.get(e.endpointName ?? "")} />,
+          },
+          {
+            header: "Traffic",
+            cell: (e) => (
+              <TrafficSpark functionName={functionName} endpointName={e.endpointName ?? ""} />
+            ),
+          },
+          {
+            header: "Address",
             interactive: true,
-            cell: (e) => <EndpointDomain domainName={e.domainName} />,
+            cell: (e) => (
+              <EndpointDomain domainName={e.domainName} authType={e.authType} region={homeRegion} />
+            ),
           },
         ]}
         rowActions={(e) => (
-          <RowAction label={`Edit ${e.endpointName}`} onClick={() => openEdit(e)}>
-            <Pencil className="size-3.5" />
-          </RowAction>
+          <>
+            <RowAction
+              label={`Test ${e.endpointName}`}
+              onClick={() => setViewingName(e.endpointName)}
+            >
+              <Send className="size-3.5" />
+            </RowAction>
+            <RowAction label={`Edit ${e.endpointName}`} onClick={() => openEdit(e)}>
+              <Pencil className="size-3.5" />
+            </RowAction>
+          </>
         )}
         onDelete={{
           target: deleteTarget,
@@ -172,6 +224,13 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
             </>
           ),
         }}
+      />
+      <EndpointDetailDialog
+        functionName={functionName}
+        endpoint={viewing}
+        region={homeRegion}
+        environments={viewing ? environments?.get(viewing.endpointName ?? "") : undefined}
+        onClose={() => setViewingName(undefined)}
       />
       <EndpointDialog
         open={creating}
@@ -198,4 +257,11 @@ export function EndpointsTab({ functionName, homeRegion }: EndpointsTabProps) {
       />
     </ResourceListSection>
   )
+}
+
+/** An endpoint's environments: the count, or `scaled to zero`; blank until the topology says. */
+function EnvironmentCount({ count }: { count: number | undefined }) {
+  if (count === undefined) return <span className="text-fg-subtle">—</span>
+  if (count === 0) return <span className="text-fg-muted italic">scaled to zero</span>
+  return <span className="text-success">{count}</span>
 }

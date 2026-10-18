@@ -114,6 +114,10 @@ func (h *Handler) CreateDistribution(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, aerr)
 		return
 	}
+	if aerr := h.validateOriginAccessControls(r.Context(), cfg); aerr != nil {
+		writeError(w, r, aerr)
+		return
+	}
 
 	id := generateDistributionID()
 	now := h.clk.Now()
@@ -217,6 +221,10 @@ func (h *Handler) UpdateDistribution(w http.ResponseWriter, r *http.Request) {
 
 	validateAndNormalizeConfig(cfg)
 	if aerr := validateOriginRefs(cfg); aerr != nil {
+		writeError(w, r, aerr)
+		return
+	}
+	if aerr := h.validateOriginAccessControls(r.Context(), cfg); aerr != nil {
 		writeError(w, r, aerr)
 		return
 	}
@@ -689,6 +697,11 @@ func (h *Handler) CreateDistributionWithTags(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if aerr := h.validateOriginAccessControls(ctx, cfg); aerr != nil {
+		writeError(w, r, aerr)
+		return
+	}
+
 	// Support _custom_id_ tag for deterministic IDs (LocalStack compat).
 	id := ""
 	for _, tag := range body.Tags.Items {
@@ -750,6 +763,11 @@ func (h *Handler) CreateOriginAccessControl(w http.ResponseWriter, r *http.Reque
 		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
+		return
+	}
+
+	if aerr := validateOACConfig(&body); aerr != nil {
+		writeError(w, r, aerr)
 		return
 	}
 
@@ -830,6 +848,11 @@ func (h *Handler) UpdateOriginAccessControl(w http.ResponseWriter, r *http.Reque
 		writeError(w, r, &protocol.AWSError{
 			Code: "MalformedXML", Message: "The XML you provided was not well-formed.", HTTPStatus: 400,
 		})
+		return
+	}
+
+	if aerr := validateOACConfig(&body); aerr != nil {
+		writeError(w, r, aerr)
 		return
 	}
 

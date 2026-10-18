@@ -110,6 +110,9 @@ explaining.
 | `LAMBDA_MAX_INSTANCES_PER_FUNCTION` | _(auto)_            | Max concurrent containers for one function. Unset: `clamp(maxInstances/2, 2, maxInstances)`; `10` when `/info` is unavailable |
 | `LAMBDA_MAX_MEMORY_MB`           | _(auto)_               | Aggregate memory budget for live Lambda containers (Σ `MemorySize`, in MB). Unset: 65% of the Docker host's `MemTotal`; unlimited when `/info` is unavailable |
 | `LAMBDA_MAX_WARM_INSTANCES`      | `10`                   | Idle containers kept warm per function after a burst                                 |
+| `LAMBDA_WEB_MAX_ENVIRONMENTS`    | `8`                    | Max [Lambda Web Function](../services/lambda-web.md) execution environments (containers) across all functions; past it a request is throttled with `Platform.AccountActiveVCPUArm64Throttle` after an idle environment is reclaimed |
+| `LAMBDA_WEB_IDLE_TTL`            | `5m`                   | How long a web function environment may go without a request before it is scaled away (to zero). A Go duration |
+| `LAMBDA_WEB_ENVIRONMENT_MEMORY_MB` | `2048`               | Memory cap of one web function environment, in MB (AWS gives each 2 GB) |
 | `LAMBDA_SEED_RUNTIME_IMAGES`     | `false`                | Pre-pull every currently-supported Lambda runtime image at startup                   |
 | `LAMBDA_INIT_TIMEOUT_SECONDS`    | `10`                   | Max seconds to wait for a Lambda runtime to finish INIT. LocalStack's `LAMBDA_RUNTIME_ENVIRONMENT_TIMEOUT` is an alias |
 | `LAMBDA_KEEP_CONTAINERS`         | `false`                | Keep stopped Lambda containers after expiry/delete (useful for debugging)            |

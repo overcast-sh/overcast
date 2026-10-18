@@ -8,17 +8,35 @@
  */
 
 import type {
+  ApplicationLogLevel,
   AuthType,
   AutoDeploymentMode,
   CreateWebFunctionEndpointRequest,
   EndpointType,
   FunctionEndpointSummary,
+  LoggingConfig,
   RevisionConfig,
   RevisionWeight,
   ScalingConfig,
+  SystemLogLevel,
   ThrottleConfig,
   UpdateWebFunctionEndpointRequest,
 } from "@aws-sdk/client-lambda-web"
+
+// ─── States ───────────────────────────────────────────────────────────────
+
+/** How often a Pending revision or endpoint is re-read until it settles (ms). */
+export const TRANSITION_POLL_MS = 1_500
+
+/** Whether a state is one that passes: the thing is still being prepared or removed. */
+export function isTransitionalState(state: string | undefined): boolean {
+  return state === "Pending" || state === "Deleting"
+}
+
+/** An endpoint that is still settling: Pending or Deleting, or an update still in progress. */
+export function isTransitionalEndpoint(e: { state?: string; updateStatus?: string }): boolean {
+  return isTransitionalState(e.state) || e.updateStatus === "InProgress"
+}
 
 // ─── Names ────────────────────────────────────────────────────────────────
 
@@ -42,6 +60,30 @@ export const RUNTIMES = ["nodejs24.x", "nodejs22.x", "nodejs20.x"] as const
 export const TIMEOUT_RANGE = { min: 3, max: 900, default: 30 } as const
 export const CONCURRENCY_RANGE = { min: 1, max: 128, default: 64 } as const
 
+export const APPLICATION_LOG_LEVELS: readonly ApplicationLogLevel[] = [
+  "TRACE",
+  "DEBUG",
+  "INFO",
+  "WARN",
+  "ERROR",
+  "FATAL",
+]
+export const SYSTEM_LOG_LEVELS: readonly SystemLogLevel[] = ["DEBUG", "INFO", "WARN"]
+
+/**
+ * The CloudWatch Logs group a function's logs go to unless a revision's
+ * `loggingConfig.logGroup` says otherwise. System logs go to the same name
+ * with `.local` appended (internal/services/lambdaweb/telemetry.go).
+ */
+export function defaultLogGroup(functionName: string): string {
+  return `/aws/lambda/web/${functionName}`
+}
+
+/** The group holding the system logs of `logGroup`. */
+export function systemLogGroup(logGroup: string): string {
+  return `${logGroup}.local`
+}
+
 export interface EnvEntry {
   key: string
   value: string
@@ -57,6 +99,11 @@ export interface RevisionDraft {
   maxConcurrency: string
   description: string
   env: EnvEntry[]
+  /** Blank for the default group, `/aws/lambda/web/{function}`. */
+  logGroup: string
+  /** Blank for the service default (INFO). */
+  applicationLogLevel: ApplicationLogLevel | ""
+  systemLogLevel: SystemLogLevel | ""
 }
 
 export function emptyRevisionDraft(): RevisionDraft {
@@ -70,12 +117,20 @@ export function emptyRevisionDraft(): RevisionDraft {
     maxConcurrency: "",
     description: "",
     env: [],
+    logGroup: "",
+    applicationLogLevel: "",
+    systemLogLevel: "",
   }
 }
 
 export type RevisionProblems = Partial<
-  Record<"bucket" | "key" | "executionRoleArn" | "timeoutSeconds" | "maxConcurrency", string>
+  Record<
+    "bucket" | "key" | "executionRoleArn" | "timeoutSeconds" | "maxConcurrency" | "logGroup",
+    string
+  >
 >
+
+const LOG_GROUP_PATTERN = /^[\w./#-]{1,512}$/
 
 const ROLE_ARN = /^arn:aws[a-z-]*:iam::\d{12}:role\/.+$/
 
@@ -99,6 +154,10 @@ export function revisionProblems(d: RevisionDraft): RevisionProblems {
   if (timeout) problems.timeoutSeconds = timeout
   const concurrency = integerIn(d.maxConcurrency, CONCURRENCY_RANGE.min, CONCURRENCY_RANGE.max)
   if (concurrency) problems.maxConcurrency = concurrency
+  const logGroup = d.logGroup.trim()
+  if (logGroup !== "" && !LOG_GROUP_PATTERN.test(logGroup)) {
+    problems.logGroup = "Letters, numbers and . _ - / # up to 512 characters."
+  }
   return problems
 }
 
@@ -113,6 +172,12 @@ export function toRevisionConfig(d: RevisionDraft): RevisionConfig {
   )
   const versionId = d.versionId.trim()
   const description = d.description.trim()
+  const logGroup = d.logGroup.trim()
+  const logging: LoggingConfig = {
+    ...(logGroup ? { logGroup } : {}),
+    ...(d.applicationLogLevel ? { applicationLogLevel: d.applicationLogLevel } : {}),
+    ...(d.systemLogLevel ? { systemLogLevel: d.systemLogLevel } : {}),
+  }
   return {
     ...(description ? { description } : {}),
     buildConfig: {
@@ -132,6 +197,7 @@ export function toRevisionConfig(d: RevisionDraft): RevisionConfig {
         ? { maxConcurrencyPerEnvironment: Number(d.maxConcurrency) }
         : {}),
       ...(Object.keys(env).length > 0 ? { environmentVariables: env } : {}),
+      ...(Object.keys(logging).length > 0 ? { telemetryConfig: { loggingConfig: logging } } : {}),
     },
   }
 }

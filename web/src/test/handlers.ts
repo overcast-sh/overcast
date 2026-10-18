@@ -72,6 +72,12 @@ export const ecsHandlers = [
   ),
 ]
 
+// ─── Topology ─────────────────────────────────────────────────────────────
+
+export const topologyHandlers = [
+  http.get("/api/topology", () => HttpResponse.json({ regions: [], nodes: [], edges: [] })),
+]
+
 // ─── Inbox ────────────────────────────────────────────────────────────────
 
 export const inboxHandlers = [http.get("/api/inbox/messages", () => HttpResponse.json([]))]
@@ -147,6 +153,7 @@ export const handlers = [
   ...ecrHandlers,
   ...cloudwatchHandlers,
   ...ecsHandlers,
+  ...topologyHandlers,
   ...inboxHandlers,
   ...debugHandlers,
   ...debuggerHandlers,

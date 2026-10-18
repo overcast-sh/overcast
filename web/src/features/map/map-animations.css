@@ -55,6 +55,25 @@
   }
 }
 
+/* A web function request landed on a cold endpoint: the marker arrives large,
+   settles, holds, then fades. */
+@keyframes overcastColdMark {
+  0% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes overcastNodeEnter {
   from {
     opacity: 0;

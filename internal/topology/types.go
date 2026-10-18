@@ -149,6 +149,9 @@ type WebEndpoint struct {
 	DomainName string `json:"domainName"`
 	// Serves lists the revisions traffic goes to, by weight.
 	Serves []WebRevisionWeight `json:"serves"`
+	// Environments is how many execution environments (containers) the
+	// endpoint has running or starting right now; 0 when scaled to zero.
+	Environments int `json:"environments"`
 }
 
 // WebRevisionWeight is a share of an endpoint's traffic.

@@ -24,7 +24,7 @@ func CORS(next http.Handler) http.Handler {
 		} else {
 			h.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		}
-		h.Set("Access-Control-Expose-Headers", "ETag, X-Amz-*, X-*")
+		h.Set("Access-Control-Expose-Headers", "ETag, X-Amz-*, X-*, Lambda-Web-Request-Id, Lambda-Web-Logstream, Lambda-Web-Error-Type")
 
 		if r.Method == http.MethodOptions {
 			h.Set("Access-Control-Max-Age", "86400")

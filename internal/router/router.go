@@ -810,6 +810,37 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	s3tablesSvc.InitBus(bus)
 	// Lambda Web Functions: wire bus for web function, revision and endpoint lifecycle events.
 	lambdaWebSvc.InitBus(bus)
+	// Telemetry: system logs, CloudWatch metrics and request events. Service.Stop
+	// flushes it, before the metrics recorder stops.
+	lwTel := lambdaweb.NewTelemetry(lambdaweb.TelemetryOptions{Clock: clk, Logger: logger})
+	lwTel.InitLogWriter(logsSvc.LogWriter())
+	lwTel.InitBus(bus)
+	if svcMetrics != nil {
+		lwTel.InitMetrics(svcMetrics)
+	}
+	lambdaWebSvc.InitTelemetry(lwTel)
+	codeSource := lambdaweb.NewS3CodeSource(s3Svc)
+	lambdaWebSvc.InitCodeSource(codeSource)
+	// The environment provider runs each revision in a container. It needs the
+	// Docker client (set when the probe finds Docker), the log writer for
+	// application logs, and the code source for the package.
+	lwProvider := lambdaweb.NewDockerProvider(cfg, logger, clk)
+	lwProvider.InitStore(store)
+	lwProvider.InitLogWriter(logsSvc.LogWriter())
+	lwProvider.InitBus(bus)
+	lwProvider.InitCode(codeSource)
+	lambdaWebSvc.InitProvider(lwProvider)
+	lambdaWebSvc.InitChangeHook(lambdaWebSvc.RoutesChanged)
+	// IamAuth endpoints: SigV4/SigV4a checks always, signature verification and
+	// IAM evaluation with the same switches the rest of the emulator uses.
+	lambdaWebSvc.InitAuth(lambdaweb.NewAuthorizer(lambdaweb.AuthorizerOptions{
+		Clock: clk, Log: logger,
+		ValidateSignatures: cfg.SigV4Validate,
+		EnforceIAM:         cfg.EnforceIAM,
+		Secrets:            middleware.NewSecretResolver(store),
+		Principals:         middleware.NewIAMPrincipalResolver(store),
+		ResourceTags:       lambdaWebSvc.ResourceTags,
+	}))
 	// EventBridge: wire bus for bus/rule lifecycle events.
 	ebSvc.InitBus(bus)
 	ebSvc.InitLambdaAuthorizer(lambdaSvc)
@@ -911,6 +942,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	dockerSetters["msk"] = mskSvc.SetDocker
 	dockerServices["ecs"] = docker.ServiceConfig{Name: "ecs", Socket: cfg.ECSDockerSocket}
 	dockerSetters["ecs"] = ecsSvc.SetDocker
+	dockerServices["lambdaweb"] = docker.ServiceConfig{Name: "lambdaweb", Socket: cfg.LambdaDockerSocket}
+	dockerSetters["lambdaweb"] = lwProvider.SetDocker
 	// EC2 additionally manages one network per VPC, created on demand rather
 	// than at probe time.
 	dockerServices["ec2"] = docker.ServiceConfig{Name: "ec2", Socket: cfg.LambdaDockerSocket}
@@ -950,7 +983,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		go func() {
 			// Collect configs in deterministic order.
 			var configs []docker.ServiceConfig
-			for _, name := range []string{"lambda", "ecr", "rds", "elasticache", "msk", "ecs", "ec2", "eks", "efs", "athena"} {
+			for _, name := range []string{"lambda", "ecr", "rds", "elasticache", "msk", "ecs", "ec2", "eks", "efs", "athena", "lambdaweb"} {
 				if sc, ok := dockerServices[name]; ok {
 					configs = append(configs, sc)
 				}
@@ -1026,6 +1059,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelExecuteAPI, Rewrite: apigwSvc.HostRouteRewrite})
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelCloudFront, Rewrite: cloudfrontSvc.HostRouteRewrite})
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelLambdaURL, Rewrite: lambdaSvc.HostRouteRewrite})
+	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelLambdaWeb, Rewrite: lambdaWebSvc.HostRouteRewrite})
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelAppSyncAPI, Rewrite: appsyncSvc.HostRouteRewrite})
 	// Real AWS serves subscriptions on a separate appsync-realtime-api
 	// host, and Amplify derives it by substituting into the GraphQL URL.

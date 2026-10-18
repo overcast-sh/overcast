@@ -39,6 +39,7 @@ const node: TopologyNode = {
         { revisionId: "rev-ab12c", weight: 90 },
         { revisionId: "rev-de34f", weight: 10 },
       ],
+      environments: 2,
     },
     {
       name: "edge",
@@ -47,6 +48,7 @@ const node: TopologyNode = {
       autoDeployment: "Disabled",
       domainName: "def.lambda-url.on.aws",
       serves: [{ revisionId: "rev-ab12c", weight: 100 }],
+      environments: 1,
     },
     {
       name: "dev",
@@ -55,6 +57,7 @@ const node: TopologyNode = {
       autoDeployment: "LatestRevision",
       domainName: "ghi.lambda-url.us-east-1.on.aws",
       serves: [],
+      environments: 0,
     },
   ],
 }
@@ -91,7 +94,7 @@ describe("WebFunctionNode", () => {
     expect(within(dev).getByText("no revision")).toBeInTheDocument()
   })
 
-  it("shows no domain: nothing serves it", async () => {
+  it("shows no domain: the endpoints tab has it", async () => {
     renderNode(node)
     await screen.findByText("Web function")
     expect(screen.queryByText(/lambda-url/)).not.toBeInTheDocument()
@@ -136,5 +139,92 @@ describe("WebFunctionNode", () => {
     const prod = await screen.findByRole("button", { name: /^Endpoint prod/ })
     expect(prod.querySelector("[aria-hidden]")).not.toBeNull()
     expect(container.querySelectorAll("[style*='overcastSweep']")).toHaveLength(1)
+  })
+
+  describe("the data plane", () => {
+    it("says how many environments each endpoint has, and the function in all", async () => {
+      renderNode(node)
+      const prod = await screen.findByRole("button", { name: /^Endpoint prod/ })
+      expect(within(prod).getByText("2 envs")).toBeInTheDocument()
+      const edge = screen.getByRole("button", { name: /^Endpoint edge/ })
+      expect(within(edge).getByText("1 env")).toBeInTheDocument()
+      const dev = screen.getByRole("button", { name: /^Endpoint dev/ })
+      expect(within(dev).getByText("0 envs")).toBeInTheDocument()
+      // The header sums the same rows.
+      expect(screen.getAllByText("3 envs")).toHaveLength(1)
+      expect(screen.queryByLabelText("Scaled to zero")).not.toBeInTheDocument()
+    })
+
+    it("says the function is scaled to zero when no endpoint has an environment", async () => {
+      const idle = {
+        ...node,
+        webEndpoints: node.webEndpoints!.map((e) => ({ ...e, environments: 0 })),
+      }
+      renderNode(idle)
+      expect(await screen.findByLabelText("Scaled to zero")).toBeInTheDocument()
+    })
+
+    it("does not call a function with no endpoints scaled to zero", async () => {
+      renderNode({ ...node, webEndpoints: [] })
+      await screen.findByText("Web function")
+      expect(screen.queryByLabelText("Scaled to zero")).not.toBeInTheDocument()
+    })
+
+    it.each([
+      [200, "2xx"],
+      [301, "3xx"],
+      [404, "4xx"],
+      [429, "4xx"],
+      [502, "5xx"],
+    ])("pulses the endpoint a %i response reached, as %s", async (status, statusClass) => {
+      const overlay = overlayAfter("lambda-web:RequestCompleted", {
+        function: "shop",
+        endpoint: "prod",
+        status,
+        coldStart: false,
+        count: 3,
+      })
+      renderNode(node, overlay)
+      const prod = await screen.findByRole("button", { name: /^Endpoint prod/ })
+      expect(prod.querySelector(`[data-request-class='${statusClass}']`)).not.toBeNull()
+      expect(within(prod).queryByLabelText("Cold start")).not.toBeInTheDocument()
+    })
+
+    it("marks a cold start on the endpoint it reached, and only there", async () => {
+      const overlay = overlayAfter("lambda-web:RequestCompleted", {
+        function: "shop",
+        endpoint: "prod",
+        status: 200,
+        coldStart: true,
+      })
+      renderNode(node, overlay)
+      const prod = await screen.findByRole("button", { name: /^Endpoint prod/ })
+      expect(within(prod).getByLabelText("Cold start")).toBeInTheDocument()
+      const edge = screen.getByRole("button", { name: /^Endpoint edge/ })
+      expect(within(edge).queryByLabelText("Cold start")).not.toBeInTheDocument()
+    })
+
+    it("sweeps the endpoint an environment started or stopped for", async () => {
+      const started = overlayAfter("lambda-web:EnvironmentStarted", {
+        function: "shop",
+        endpoint: "prod",
+        reason: "initialized",
+      })
+      const { container, unmount } = renderNode(node, started)
+      await screen.findByRole("button", { name: /^Endpoint prod/ })
+      expect(container.querySelectorAll("[style*='overcastSweep']")).toHaveLength(1)
+      expect(container.querySelector("[style*='--color-success']")).not.toBeNull()
+      unmount()
+
+      const stopped = overlayAfter("lambda-web:EnvironmentStopped", {
+        function: "shop",
+        endpoint: "prod",
+        reason: "requested",
+      })
+      const again = renderNode(node, stopped)
+      await screen.findByRole("button", { name: /^Endpoint prod/ })
+      expect(again.container.querySelectorAll("[style*='overcastSweep']")).toHaveLength(1)
+      expect(again.container.querySelector("[style*='--color-fg-muted']")).not.toBeNull()
+    })
   })
 })

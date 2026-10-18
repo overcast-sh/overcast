@@ -1,6 +1,8 @@
 package cloudformation_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"net/http"
 	"net/url"
@@ -12,6 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/lambdaweb"
 	"github.com/aws/aws-sdk-go-v2/service/lambdaweb/types"
+	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
 )
@@ -66,6 +70,35 @@ const lambdaWebStackTemplate = `{
   }
 }`
 
+// seedLambdaWebCode puts a versioned code-bucket and a package at each key on
+// the server: CreateWebFunctionRevision reads the package from S3.
+func seedLambdaWebCode(t *testing.T, srv *helpers.TestServer, keys ...string) {
+	t.Helper()
+	ctx := context.Background()
+	c := awss3.New(awss3.Options{
+		Region: "us-east-1", Credentials: credentials.NewStaticCredentialsProvider("test", "test", ""),
+		BaseEndpoint: aws.String(srv.URL), HTTPClient: http.DefaultClient, UsePathStyle: true,
+	})
+	if _, err := c.CreateBucket(ctx, &awss3.CreateBucketInput{Bucket: aws.String("code-bucket")}); err != nil {
+		t.Fatalf("CreateBucket: %v", err)
+	}
+	if _, err := c.PutBucketVersioning(ctx, &awss3.PutBucketVersioningInput{
+		Bucket: aws.String("code-bucket"), VersioningConfiguration: &s3types.VersioningConfiguration{Status: s3types.BucketVersioningStatusEnabled},
+	}); err != nil {
+		t.Fatalf("PutBucketVersioning: %v", err)
+	}
+	var zipped bytes.Buffer
+	zw := zip.NewWriter(&zipped)
+	w, _ := zw.Create("index.js")
+	_, _ = w.Write([]byte("require('http').createServer((q, r) => r.end('ok')).listen(8080)"))
+	_ = zw.Close()
+	for _, key := range keys {
+		if _, err := c.PutObject(ctx, &awss3.PutObjectInput{Bucket: aws.String("code-bucket"), Key: aws.String(key), Body: bytes.NewReader(zipped.Bytes())}); err != nil {
+			t.Fatalf("PutObject %s: %v", key, err)
+		}
+	}
+}
+
 func lambdaWebClient(srv *helpers.TestServer) *lambdaweb.Client {
 	return lambdaweb.New(lambdaweb.Options{
 		Region:       "us-east-1",
@@ -76,8 +109,9 @@ func lambdaWebClient(srv *helpers.TestServer) *lambdaweb.Client {
 }
 
 func TestCreateStack_LambdaWebFunction(t *testing.T) {
-	// Given: a stack of every Web Function resource type
+	// Given: a stack of every Web Function resource type, its package in S3
 	srv := helpers.NewTestServer(t)
+	seedLambdaWebCode(t, srv, "app.zip")
 	resp := cfnQuery(t, srv, "CreateStack", url.Values{
 		"StackName":    []string{"web-stack"},
 		"TemplateBody": []string{lambdaWebStackTemplate},
@@ -95,7 +129,7 @@ func TestCreateStack_LambdaWebFunction(t *testing.T) {
 	if out["RevisionRef"] != fnARN+"/revision/"+out["RevisionId"] || !strings.HasPrefix(out["RevisionId"], "rev-") {
 		t.Errorf("RevisionRef = %q, RevisionId = %q", out["RevisionRef"], out["RevisionId"])
 	}
-	if out["EndpointRef"] != fnARN+"/endpoint/prod" || !strings.HasSuffix(out["EndpointDomain"], ".lambda-web.us-east-1.on.aws") {
+	if out["EndpointRef"] != fnARN+"/endpoint/prod" || !strings.Contains(out["EndpointDomain"], ".lambda-web.us-east-1.") {
 		t.Errorf("EndpointRef = %q, EndpointDomain = %q", out["EndpointRef"], out["EndpointDomain"])
 	}
 
@@ -139,6 +173,7 @@ func TestCreateStack_LambdaWebFunction(t *testing.T) {
 func TestUpdateStack_LambdaWebFunctionEndpointInPlaceAndRevisionReplaced(t *testing.T) {
 	// Given: the stack above
 	srv := helpers.NewTestServer(t)
+	seedLambdaWebCode(t, srv, "app.zip", "app-v2.zip")
 	resp := cfnQuery(t, srv, "CreateStack", url.Values{
 		"StackName":    []string{"web-update"},
 		"TemplateBody": []string{lambdaWebStackTemplate},

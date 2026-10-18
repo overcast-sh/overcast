@@ -5,6 +5,8 @@ import {
   ENDPOINT_ROW_H,
   MAX_ENDPOINT_ROWS,
   endpointList,
+  environmentsText,
+  scalingOf,
   servesText,
   webFunctionHeight,
 } from "./web-function-layout"
@@ -16,6 +18,7 @@ const endpoint = (name: string): TopologyWebEndpoint => ({
   autoDeployment: "Disabled",
   domainName: "",
   serves: [],
+  environments: 0,
 })
 
 describe("endpointList", () => {
@@ -72,5 +75,31 @@ describe("servesText", () => {
       ]),
     ).toBe("rev-ab12c 90% · rev-de34f 10%")
     expect(servesText([])).toBe("no revision")
+  })
+})
+
+describe("scalingOf", () => {
+  const running = (name: string, environments: number) => ({ ...endpoint(name), environments })
+
+  it("sums the environments of every endpoint", () => {
+    expect(scalingOf([running("a", 2), running("b", 1)])).toEqual({
+      environments: 3,
+      scaledToZero: false,
+    })
+  })
+
+  it("is scaled to zero when it has endpoints and none has an environment", () => {
+    expect(scalingOf([running("a", 0), running("b", 0)])).toEqual({
+      environments: 0,
+      scaledToZero: true,
+    })
+  })
+
+  it("is not scaled to zero when there is nothing to scale", () => {
+    expect(scalingOf([])).toEqual({ environments: 0, scaledToZero: false })
+  })
+
+  it("writes a count with its unit", () => {
+    expect([0, 1, 2].map(environmentsText)).toEqual(["0 envs", "1 env", "2 envs"])
   })
 })
