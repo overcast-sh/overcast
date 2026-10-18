@@ -335,3 +335,25 @@ func TestCompile_singleStatementObject_isAccepted(t *testing.T) {
 		t.Fatalf("len(stmts) = %d, want 1", len(stmts))
 	}
 }
+
+func TestEvaluate_servicePrincipal_matchesOnlyNamedService(t *testing.T) {
+	// Given: a resource policy that allows cloudfront.amazonaws.com
+	policy := identityFrom(t, `{"Version":"2012-10-17","Statement":[{"Effect":"Allow",
+		"Principal":{"Service":"cloudfront.amazonaws.com"},"Action":"lambda:InvokeWebFunctionEndpoint","Resource":"*"}]}`)
+	req := Request{Action: "lambda:InvokeWebFunctionEndpoint", Resource: "arn:aws:lambda:us-east-1:111122223333:web-function/f/endpoint/e"}
+
+	// When: the service, another service and an IAM user are evaluated
+	req.ServicePrincipal = "cloudfront.amazonaws.com"
+	named := Evaluate(Input{Request: req, ResourcePolicy: policy})
+	req.ServicePrincipal = "apigateway.amazonaws.com"
+	other := Evaluate(Input{Request: req, ResourcePolicy: policy})
+	req.ServicePrincipal = ""
+	req.PrincipalARN = "arn:aws:iam::111122223333:user/u"
+	req.PrincipalAccount = "111122223333"
+	user := Evaluate(Input{Request: req, ResourcePolicy: policy})
+
+	// Then: only the named service is allowed
+	if named.Decision != DecisionAllowed || other.Decision != DecisionImplicitDeny || user.Decision != DecisionImplicitDeny {
+		t.Fatalf("decisions = %q/%q/%q, want allowed/implicitDeny/implicitDeny", named.Decision, other.Decision, user.Decision)
+	}
+}

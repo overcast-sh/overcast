@@ -29,6 +29,11 @@ type Request struct {
 	// match a resource-based policy's Principal block.
 	PrincipalARN     string
 	PrincipalAccount string
+	// ServicePrincipal is set when the caller is an AWS service acting on its
+	// own behalf (for example "cloudfront.amazonaws.com"), in which case it
+	// is the only identity a resource-based policy's Principal block can match
+	// besides "*": a statement names a service in {"Service": [...]}.
+	ServicePrincipal string
 	// Federated names the identity provider a web identity caller
 	// authenticated with, in every form a trust policy's Federated principal
 	// may name it. It is empty for an IAM user or role caller.
@@ -263,6 +268,14 @@ func reportPrincipalGaps(set *PrincipalSet, rep *conditionReport) {
 func principalSetMatches(set *PrincipalSet, req Request) bool {
 	if set.Anonymous {
 		return true
+	}
+	if sp := strings.TrimSpace(req.ServicePrincipal); sp != "" {
+		for _, svc := range set.Service {
+			if strings.EqualFold(strings.TrimSpace(svc), sp) {
+				return true
+			}
+		}
+		return false
 	}
 	arn := strings.TrimSpace(req.PrincipalARN)
 	account := strings.TrimSpace(req.PrincipalAccount)
