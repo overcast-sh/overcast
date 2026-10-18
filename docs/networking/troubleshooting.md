@@ -16,6 +16,7 @@ tags:
 | A host-routed URL will not resolve from your shell | DNS rebinding protection, or `*.localhost` on Windows | [Hostnames that resolve for every caller](./hostnames.md) |
 | A URL works from your shell but not inside a container | `OVERCAST_HOSTNAME=localhost` — inside a container that is the container | Set a wildcard-DNS name or the Compose service name — [Hostnames](./hostnames.md) |
 | A bucket with a dot in its name reaches API Gateway or AppSync | The name carries a reserved service label | Use path-style, or the explicit `.s3.` form — [Host-routed addressing](./host-routing.md#how-overcast-decides-who-owns-a-host) |
+| Over HTTPS, a client rejects a host-routed URL's certificate | You brought your own certificate — only `OVERCAST_TLS=auto` mints a leaf per name at handshake time | Add the names as SANs, or switch to auto mode — [Which names the certificate covers](../https/how-it-works.md#which-names-the-certificate-covers) |
 | The same stack output shows `:4652` on the host and `:4566` in a function | Each caller gets the port it can dial | Nothing. Both are correct — [What host and port a URL carries](./urls.md) |
 | A token minted on the host fails validation inside a container | A remapped port splits the OIDC issuer | Publish the API 1:1 (`-p 4566:4566`) — [URLs](./urls.md) |
 | An RDS or ElastiCache endpoint refuses connections | The port belongs to the other caller, or the engine container is gone | [Data-plane endpoints](./data-plane-endpoints.md), then [below](#an-endpoint-name-resolves-nowhere) |
