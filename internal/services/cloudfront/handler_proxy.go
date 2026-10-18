@@ -980,7 +980,8 @@ func (h *Handler) dispatchToOrigins(
 
 		if origin.OriginAccessControlId != "" {
 			if oac, oacErr := h.store.GetOAC(ctx, origin.OriginAccessControlId); oacErr == nil && oac != nil &&
-				oac.OriginAccessControlConfig.OriginAccessControlOriginType == oacTypeLambda {
+				oac.OriginAccessControlConfig.OriginAccessControlOriginType == oacTypeLambda &&
+				isLambdaWebDomain(origin.DomainName) && h.servesOriginLocally(origin.DomainName, r.Host) {
 				// Lambda Web Function origin: sign with the distribution's
 				// identity (aws:SourceArn). Other OAC types are stored, not applied.
 				arn := protocol.DistributionARN(h.accountID(), distID)

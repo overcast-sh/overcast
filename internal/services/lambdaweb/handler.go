@@ -84,11 +84,12 @@ func (s *Service) serve(w http.ResponseWriter, r *http.Request) {
 	id := newRequestID()
 	cw := &countingWriter{ResponseWriter: w}
 
-	perr, ev := s.dispatch(cw, r, id, start)
-	if perr != nil && !cw.wrote {
-		writePlatformError(cw, perr, id)
-	}
-	if ev != nil {
+	var perr *platformError
+	var ev *requestEvent
+	finish := func() {
+		if ev == nil {
+			return
+		}
 		ev.Status = cw.statusOr(http.StatusOK)
 		ev.ResponseBytes = cw.bytes
 		ev.Duration = s.clk.Since(start)
@@ -97,6 +98,21 @@ func (s *Service) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		s.telemetry().RequestDone(*ev)
 	}
+	// A response that fails after its body has started makes the proxy panic
+	// with http.ErrAbortHandler, which is how net/http is told to cut the
+	// connection. The request is still recorded; the panic goes on.
+	defer func() {
+		if rec := recover(); rec != nil {
+			finish()
+			panic(rec)
+		}
+	}()
+
+	perr, ev = s.dispatch(cw, r, id, start)
+	if perr != nil && !cw.wrote {
+		writePlatformError(cw, perr, id)
+	}
+	finish()
 }
 
 // dispatch runs the request through the sequence in the plan. It returns the
@@ -279,6 +295,9 @@ func (s *Service) startFailureError(rt *route, rev *revision, f *initFailure) *p
 }
 
 func initFailureError(f *initFailure) *platformError {
+	if f.Type == errTypeCodeUnavailable {
+		return errRevisionNotActive() // internal type: never shown to a client
+	}
 	msg := "The application failed to start: " + f.Type
 	if d := strings.TrimSpace(f.Detail); d != "" {
 		if len(d) > 1024 {
@@ -306,7 +325,7 @@ func (s *Service) newEnvProxy(addr string, concurrency int) (*httputil.ReversePr
 		ForceAttemptHTTP2:      false,
 		MaxIdleConns:           concurrency,
 		MaxIdleConnsPerHost:    concurrency,
-		IdleConnTimeout:        90 * time.Second,
+		IdleConnTimeout:        4 * time.Second, // under Node's 5 s keep-alive, so a socket Node is closing is never reused
 		MaxResponseHeaderBytes: maxResponseHeaderBytes,
 		DialContext:            (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 	}
@@ -391,7 +410,8 @@ func (s *Service) proxyError(w http.ResponseWriter, r *http.Request, err error) 
 	}
 	var perr *platformError
 	switch {
-	case errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, context.DeadlineExceeded) && r.Context().Err() != nil:
+		// the request's own deadline; a dial that timed out is Unreachable below
 		perr = errTimeout()
 	case errors.Is(err, context.Canceled):
 		return // the client went away; there is nobody to answer

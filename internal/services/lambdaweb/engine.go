@@ -98,6 +98,7 @@ func (s *Service) startEngine() {
 			s.markRevisionFailed(context.Background(), region, function, revisionID, "CodeUnavailable", detail)
 		}
 		s.dp.kick = make(chan struct{}, 1)
+		s.ensureResumed()
 		s.dp.started.Store(true)
 		s.dp.wg.Add(2)
 		go s.sweepLoop()
@@ -654,6 +655,14 @@ func (s *Service) drainEnv(es *envState, locked bool) {
 
 // stopEnv stops the environment's process and reports the spin-down.
 func (s *Service) stopEnv(es *envState) {
+	// An environment still starting has no process to stop yet: its start is
+	// cancelled with the engine context, and the provider sweeps what is left.
+	// Reading es.env before ready is closed would race with finishStart.
+	select {
+	case <-es.ready:
+	default:
+		return
+	}
 	if es.env == nil {
 		return
 	}
@@ -751,6 +760,12 @@ func (s *Service) Stop(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		s.log.Warn("lambda-web: stop timed out with environments still running", zap.Error(ctx.Err()))
+		// Still sweep: containers the provider knows of must not be left behind.
+		sweep, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if st, ok := s.provider.(interface{ Stop(context.Context) error }); ok {
+			_ = st.Stop(sweep)
+		}
 		return
 	}
 	s.StopRevisionWorker(ctx)

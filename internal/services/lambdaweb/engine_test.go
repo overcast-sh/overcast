@@ -10,6 +10,10 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/overcast-sh/overcast/internal/middleware"
 )
 
 func TestServe_proxiesToAnEnvironmentAndAppliesHeaderRules(t *testing.T) {
@@ -576,4 +580,41 @@ func BenchmarkServe(b *testing.B) {
 			resp.Body.Close()
 		}
 	})
+}
+
+func TestServe_aFailureMidBodyCutsTheConnectionInsteadOfAppendingAnError(t *testing.T) {
+	// Given: the real Recovery in front of an application that dies after it has
+	// started streaming its response
+	f := newDPFixture(t, dpOptions{wrap: middleware.Recovery(zap.NewNop())})
+	var env *fakeEnv
+	f.prov.handler = func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = io.WriteString(w, "partial")
+			w.(http.Flusher).Flush()
+			f.prov.mu.Lock()
+			env = f.prov.envs[0]
+			f.prov.mu.Unlock()
+			env.crash(exitReason{Code: 1})
+			<-r.Context().Done()
+		})
+	}
+	d := f.deploy(deployOpts{})
+
+	// When: a client reads the response
+	req, _ := http.NewRequest("GET", f.server.URL+invokeBase+"/"+d.id+"/us-east-1/", nil)
+	req.Host = d.domain
+	resp, err := f.client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, readErr := io.ReadAll(resp.Body)
+
+	// Then: the body is cut short with an error, and no AWS error blob follows it
+	if readErr == nil {
+		t.Errorf("body read cleanly: %q", body)
+	}
+	if strings.Contains(string(body), "InternalError") || strings.Contains(string(body), "<Error>") {
+		t.Errorf("an error was appended to the stream: %q", body)
+	}
 }

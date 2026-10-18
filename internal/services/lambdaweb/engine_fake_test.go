@@ -135,6 +135,8 @@ type dpOptions struct {
 	tweakCfg  func(*config.Config)
 	noWire    bool
 	authorize invokeAuth
+	// wrap puts middleware (the real Recovery, for one) in front of the routes.
+	wrap func(http.Handler) http.Handler
 }
 
 func newDPFixture(t testing.TB, o dpOptions) *dpFixture {
@@ -157,7 +159,11 @@ func newDPFixture(t testing.TB, o dpOptions) *dpFixture {
 	}
 	router := chi.NewRouter()
 	svc.RegisterRoutes(router)
-	srv := httptest.NewServer(router)
+	var root http.Handler = router
+	if o.wrap != nil {
+		root = o.wrap(router)
+	}
+	srv := httptest.NewServer(root)
 	f := &dpFixture{t: t, svc: svc, prov: prov, clk: clk, server: srv, client: &http.Client{
 		Timeout:       20 * time.Second,
 		Transport:     &http.Transport{DisableKeepAlives: true},
