@@ -170,11 +170,11 @@ func weightsOrEmpty(w []revisionWt) []revisionWt {
 	return w
 }
 
-func (s *Service) endpointSummary(ep *endpoint) endpointSummary {
+func (s *Service) endpointSummary(ctx context.Context, ep *endpoint) endpointSummary {
 	st := epState(ep)
 	return endpointSummary{
 		EndpointARN: ep.ARN, EndpointName: ep.Name, Description: ep.Description, EndpointType: ep.Type,
-		DomainName: ep.DomainName, AuthType: ep.AuthType, AutoDeploymentMode: ep.AutoDeploy,
+		DomainName: s.domainOf(ctx, ep), AuthType: ep.AuthType, AutoDeploymentMode: ep.AutoDeploy,
 		RevisionWeights: weightsOrEmpty(ep.Weights), Regions: ep.Regions, ScalingConfig: ep.Scaling,
 		ThrottleConfig: ep.Throttle, State: st, StateReason: reasonOf(ep.StateReason, st, "endpoint"),
 		UpdateStatus: epUpdateStatus(ep), UpdateStatusReason: ep.UpdateStatusReason,
@@ -193,8 +193,8 @@ type endpointView struct {
 // endpointView renders ep. Every Region of a MultiRegion or PerRegion endpoint
 // is applied together here, so each carries the endpoint's own state and update
 // status.
-func (s *Service) endpointView(fn *webFunction, ep *endpoint) *endpointView {
-	sum := s.endpointSummary(ep)
+func (s *Service) endpointView(ctx context.Context, fn *webFunction, ep *endpoint) *endpointView {
+	sum := s.endpointSummary(ctx, ep)
 	regional := make(map[string]regionalEndpoint, len(ep.Regions))
 	for _, r := range ep.Regions {
 		re := regionalEndpoint{
@@ -203,7 +203,7 @@ func (s *Service) endpointView(fn *webFunction, ep *endpoint) *endpointView {
 			UpdateStatus: sum.UpdateStatus, UpdateStatusReason: sum.UpdateStatusReason,
 		}
 		if ep.Type != endpointMultiRegion {
-			re.DomainName = ep.RegionDomain[r]
+			re.DomainName = s.regionDomainOf(ctx, ep, r)
 		}
 		regional[r] = re
 	}
@@ -539,7 +539,7 @@ func (s *Service) createWebFunctionTyped(ctx context.Context, in *createWebFunct
 		if aerr := putRecord(ctx, s, nsEndpoints, childKey(region, fn.Name, ep.Name), ep); aerr != nil {
 			return nil, aerr
 		}
-		sum := s.endpointSummary(ep) // Pending, as stored
+		sum := s.endpointSummary(ctx, ep) // Pending, as stored
 		out.Endpoint = &sum
 		s.publish(ctx, events.LambdaWebEndpointCreated, fn, "", ep.Name)
 		if aerr := s.registerEndpoint(ctx, fn, ep); aerr != nil {
@@ -817,7 +817,7 @@ func (s *Service) createWebFunctionEndpointTyped(ctx context.Context, in *create
 		return nil, aerr
 	}
 	s.publish(ctx, events.LambdaWebEndpointCreated, fn, "", ep.Name)
-	out := s.endpointView(fn, ep) // Pending: the state the create call reports
+	out := s.endpointView(ctx, fn, ep) // Pending: the state the create call reports
 	if aerr := s.registerEndpoint(ctx, fn, ep); aerr != nil {
 		return nil, aerr
 	}
@@ -838,7 +838,7 @@ func (s *Service) getWebFunctionEndpointTyped(ctx context.Context, in *endpointR
 	if aerr != nil {
 		return nil, aerr
 	}
-	return s.endpointView(fn, ep), nil
+	return s.endpointView(ctx, fn, ep), nil
 }
 
 type listEndpointsResponse struct {
@@ -860,7 +860,7 @@ func (s *Service) listWebFunctionEndpointsTyped(ctx context.Context, in *listReq
 	}
 	sums := make([]endpointSummary, 0, len(eps))
 	for _, ep := range eps {
-		sum := s.endpointSummary(ep)
+		sum := s.endpointSummary(ctx, ep)
 		attrs := map[string]string{
 			"authType": sum.AuthType, "autoDeploymentMode": sum.AutoDeploymentMode, "endpointType": sum.EndpointType,
 			"state": sum.State, "updateStatus": sum.UpdateStatus,
@@ -970,7 +970,7 @@ func (s *Service) updateWebFunctionEndpointTyped(ctx context.Context, in *update
 	if aerr := s.beginEndpointUpdate(ctx, fn, []*endpoint{ep}); aerr != nil {
 		return nil, aerr
 	}
-	out := s.endpointView(fn, ep)
+	out := s.endpointView(ctx, fn, ep)
 	if aerr := s.finishEndpointUpdate(ctx, fn, []*endpoint{ep}, s.onChange(ctx, fn.Region, fn.Name)); aerr != nil {
 		return nil, aerr
 	}

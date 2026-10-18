@@ -1,18 +1,23 @@
 package lambdaweb_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/lambdaweb"
 	"github.com/aws/aws-sdk-go-v2/service/lambdaweb/types"
+	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
 
 	"github.com/overcast-sh/overcast/tests/helpers"
@@ -45,11 +50,51 @@ func apiErrorCode(t *testing.T, err error) string {
 type fixture struct {
 	ctx context.Context
 	web *lambdaweb.Client
+	// s3 is the emulated S3 the revisions' packages are read from; nil for a
+	// fixture that supplies its own.
+	s3     *awss3.Client
+	mu     sync.Mutex
+	seeded map[string]bool
 }
 
+// newFixture starts a server and puts a versioned code bucket on it, so
+// CreateWebFunctionRevision finds the packages it is pointed at.
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	return &fixture{ctx: context.Background(), web: client(helpers.NewTestServer(t))}
+	srv := helpers.NewTestServer(t)
+	creds := credentials.NewStaticCredentialsProvider("test", "test", "")
+	f := &fixture{ctx: context.Background(), web: client(srv), seeded: map[string]bool{}, s3: awss3.New(awss3.Options{
+		Region: "us-east-1", Credentials: creds, BaseEndpoint: aws.String(srv.URL), HTTPClient: http.DefaultClient, UsePathStyle: true,
+	})}
+	if _, err := f.s3.CreateBucket(f.ctx, &awss3.CreateBucketInput{Bucket: aws.String("code-bucket")}); err != nil {
+		t.Fatalf("CreateBucket: %v", err)
+	}
+	if _, err := f.s3.PutBucketVersioning(f.ctx, &awss3.PutBucketVersioningInput{
+		Bucket: aws.String("code-bucket"), VersioningConfiguration: &s3types.VersioningConfiguration{Status: s3types.BucketVersioningStatusEnabled},
+	}); err != nil {
+		t.Fatalf("PutBucketVersioning: %v", err)
+	}
+	return f
+}
+
+// code makes sure code-bucket holds a package at key.
+func (f *fixture) code(t *testing.T, key string) {
+	t.Helper()
+	if f.s3 == nil {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.seeded[key] {
+		return
+	}
+	if _, err := f.s3.PutObject(f.ctx, &awss3.PutObjectInput{
+		Bucket: aws.String("code-bucket"), Key: aws.String(key),
+		Body: bytes.NewReader(zipOf(t, map[string]string{"index.js": "require(\"http\").createServer((q, r) => r.end(\"ok\")).listen(8080)"})),
+	}); err != nil {
+		t.Fatalf("PutObject %s: %v", key, err)
+	}
+	f.seeded[key] = true
 }
 
 func revisionConfig(key string) *types.RevisionConfig {
@@ -73,6 +118,7 @@ func homeEndpoint(name string, mode types.AutoDeploymentMode) *types.EndpointCon
 // home endpoint, the shape `aws lambda-web deploy` makes.
 func (f *fixture) createApp(t *testing.T, name string) *lambdaweb.CreateWebFunctionOutput {
 	t.Helper()
+	f.code(t, "app-v1.zip")
 	out, err := f.web.CreateWebFunction(f.ctx, &lambdaweb.CreateWebFunctionInput{
 		FunctionName:   aws.String(name),
 		RevisionConfig: revisionConfig("app-v1.zip"),
@@ -81,11 +127,45 @@ func (f *fixture) createApp(t *testing.T, name string) *lambdaweb.CreateWebFunct
 	if err != nil {
 		t.Fatalf("CreateWebFunction: %v", err)
 	}
+	f.waitRevisionActive(t, name, aws.ToString(out.Revision.RevisionId))
 	return out
+}
+
+// waitRevisionActive waits for a revision's package to be prepared.
+func (f *fixture) waitRevisionActive(t *testing.T, fn, id string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		got, err := f.web.GetWebFunctionRevision(f.ctx, &lambdaweb.GetWebFunctionRevisionInput{FunctionName: aws.String(fn), RevisionId: aws.String(id)})
+		if err == nil && got.State == types.RevisionStateActive {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("revision %s did not become Active: %+v %v", id, got, err)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// waitServing waits for an endpoint to route all traffic to a revision.
+func (f *fixture) waitServing(t *testing.T, fn, endpoint, revID string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		ep, err := f.web.GetWebFunctionEndpoint(f.ctx, &lambdaweb.GetWebFunctionEndpointInput{FunctionName: aws.String(fn), EndpointName: aws.String(endpoint)})
+		if err == nil && len(ep.RevisionWeights) == 1 && aws.ToString(ep.RevisionWeights[0].RevisionId) == revID {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("endpoint %s does not serve %s: %+v %v", endpoint, revID, ep, err)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 func (f *fixture) newRevision(t *testing.T, name, key string) string {
 	t.Helper()
+	f.code(t, key)
 	cfg := revisionConfig(key)
 	out, err := f.web.CreateWebFunctionRevision(f.ctx, &lambdaweb.CreateWebFunctionRevisionInput{
 		FunctionName: aws.String(name), BuildConfig: cfg.BuildConfig, ServiceConfig: cfg.ServiceConfig,
@@ -93,6 +173,7 @@ func (f *fixture) newRevision(t *testing.T, name, key string) string {
 	if err != nil {
 		t.Fatalf("CreateWebFunctionRevision: %v", err)
 	}
+	f.waitRevisionActive(t, name, aws.ToString(out.RevisionId))
 	return aws.ToString(out.RevisionId)
 }
 
@@ -127,13 +208,15 @@ func TestCreateWebFunction_withRevisionAndEndpoint(t *testing.T) {
 		t.Fatalf("Endpoint = %+v", out.Endpoint)
 	}
 
-	// And: the endpoint's domain follows AWS's regional form
-	domain := regexp.MustCompile(`^[a-z]{16}\.[a-z][0-9][a-z]\.lambda-web\.us-east-1\.on\.aws$`)
+	// And: the endpoint's domain follows AWS's regional form, on the host the caller reached
+	domain := regexp.MustCompile(`^[a-z]{16}\.[a-z][0-9][a-z]\.lambda-web\.us-east-1\.`)
 	if !domain.MatchString(aws.ToString(out.Endpoint.DomainName)) {
 		t.Errorf("DomainName = %q", aws.ToString(out.Endpoint.DomainName))
 	}
 
 	// And: read back, everything is Active and the endpoint serves the revision
+	f.waitRevisionActive(t, "my-web-app", aws.ToString(out.Revision.RevisionId))
+	f.waitServing(t, "my-web-app", "dev", aws.ToString(out.Revision.RevisionId))
 	fn, err := f.web.GetWebFunction(f.ctx, &lambdaweb.GetWebFunctionInput{FunctionName: aws.String("my-web-app")})
 	if err != nil || fn.State != types.FunctionStateActive {
 		t.Fatalf("GetWebFunction = %+v, %v", fn, err)
@@ -355,6 +438,7 @@ func TestCreateWebFunctionRevision_defaultsAndImmutability(t *testing.T) {
 	f.createApp(t, "revs")
 
 	// When: a revision is created with only the required settings
+	f.code(t, "app-v2.zip")
 	cfg := revisionConfig("app-v2.zip")
 	cfg.ServiceConfig.EnvironmentVariables = map[string]string{"MODE": "prod"}
 	out, err := f.web.CreateWebFunctionRevision(f.ctx, &lambdaweb.CreateWebFunctionRevisionInput{
@@ -376,6 +460,7 @@ func TestCreateWebFunctionRevision_defaultsAndImmutability(t *testing.T) {
 	}
 
 	// And: Active when read back, with its settings intact
+	f.waitRevisionActive(t, "revs", aws.ToString(out.RevisionId))
 	got, err := f.web.GetWebFunctionRevision(f.ctx, &lambdaweb.GetWebFunctionRevisionInput{FunctionName: aws.String("revs"), RevisionId: out.RevisionId})
 	if err != nil {
 		t.Fatalf("GetWebFunctionRevision: %v", err)
@@ -396,6 +481,7 @@ func TestCreateWebFunctionRevision_routesLatestRevisionEndpoints(t *testing.T) {
 	second := f.newRevision(t, "latest", "app-v2.zip")
 
 	// Then: the endpoint serves it
+	f.waitServing(t, "latest", "dev", second)
 	ep, err := f.web.GetWebFunctionEndpoint(f.ctx, &lambdaweb.GetWebFunctionEndpointInput{FunctionName: aws.String("latest"), EndpointName: aws.String("dev")})
 	if err != nil {
 		t.Fatalf("GetWebFunctionEndpoint: %v", err)
@@ -461,6 +547,12 @@ func TestCreateWebFunctionRevision_cleansUpPastFifty(t *testing.T) {
 	last := f.newRevision(t, "many", "v51.zip")
 
 	// Then: the oldest revision nothing routes to is cleaned up, and the served one is kept
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		page, err := f.web.ListWebFunctionRevisions(f.ctx, &lambdaweb.ListWebFunctionRevisionsInput{FunctionName: aws.String("many"), MaxResults: aws.Int32(50)})
+		if err == nil && page.NextToken == nil {
+			break
+		}
+	}
 	list, err := f.web.ListWebFunctionRevisions(f.ctx, &lambdaweb.ListWebFunctionRevisionsInput{FunctionName: aws.String("many")})
 	if err != nil {
 		t.Fatalf("ListWebFunctionRevisions: %v", err)
@@ -513,7 +605,7 @@ func TestCreateWebFunctionEndpoint_multiRegion(t *testing.T) {
 	if want := []string{"us-east-1", "eu-west-1", "ap-northeast-1"}; strings.Join(out.Regions, ",") != strings.Join(want, ",") {
 		t.Errorf("Regions = %v, want %v", out.Regions, want)
 	}
-	if !regexp.MustCompile(`^[a-z]{11}\.lambda-web\.global\.on\.aws$`).MatchString(aws.ToString(out.DomainName)) {
+	if !regexp.MustCompile(`^[a-z]{11}\.lambda-web\.global\.`).MatchString(aws.ToString(out.DomainName)) {
 		t.Errorf("DomainName = %q", aws.ToString(out.DomainName))
 	}
 	if len(out.RegionalEndpoints) != 3 || out.State != types.EndpointStatePending {
@@ -532,7 +624,7 @@ func TestCreateWebFunctionEndpoint_perRegionDomainsDiffer(t *testing.T) {
 		t.Fatalf("CreateWebFunctionEndpoint: %v", err)
 	}
 	home, eu := aws.ToString(out.RegionalEndpoints["us-east-1"].DomainName), aws.ToString(out.RegionalEndpoints["eu-west-1"].DomainName)
-	if home == "" || eu == "" || home == eu || !strings.HasSuffix(eu, ".lambda-web.eu-west-1.on.aws") {
+	if home == "" || eu == "" || home == eu || !strings.Contains(eu, ".lambda-web.eu-west-1.") {
 		t.Errorf("regional domains = %q, %q", home, eu)
 	}
 }

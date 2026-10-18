@@ -312,6 +312,8 @@ func TestCreateWebFunctionRevision_rejectsReservedEnvironmentVariables(t *testin
 	// Given: a function
 	f := newFixture(t)
 	f.createApp(t, "env")
+	f.code(t, "v2.zip")
+	f.code(t, "v1.zip")
 
 	for _, name := range []string{"AWS_REGION", "AWS_LAMBDA_HTTP_ENDPOINT", "AWS_SESSION_TOKEN", "AWS_LAMBDA_METADATA_TOKEN"} {
 		// When: a revision sets a reserved variable
