@@ -81,7 +81,7 @@ func SigV4(validate bool, secretResolver SecretResolver, logger *zap.Logger, clk
 			if parts, signed, _ := extractSigV4Parts(r); signed && strings.TrimSpace(parts.AccessKey) != "" {
 				r = r.WithContext(context.WithValue(r.Context(), sigV4AccessKeyContextKey{}, parts.AccessKey))
 			}
-			if validate {
+			if validate && !strings.HasPrefix(r.URL.Path, LambdaWebInvokePrefix) {
 				signed, err := validateSigV4Request(r, clk, secretResolver)
 				if err != nil {
 					writeUnroutedError(w, r, err)
@@ -114,6 +114,14 @@ type sigV4Parts struct {
 }
 
 func validateSigV4Request(r *http.Request, clk clock.Clock, secretResolver SecretResolver) (bool, *protocol.AWSError) {
+	return validateSigV4RequestAt(r, clk, secretResolver, "")
+}
+
+// validateSigV4RequestAt is validateSigV4Request with the canonical URI the
+// client signed supplied by the caller. canonicalPath "" means the request's
+// own escaped path; a request whose path was rewritten after the client
+// signed it (host-routed services) passes the original here.
+func validateSigV4RequestAt(r *http.Request, clk clock.Clock, secretResolver SecretResolver, canonicalPath string) (bool, *protocol.AWSError) {
 	parts, signed, err := extractSigV4Parts(r)
 	if err != nil {
 		return true, err
@@ -138,7 +146,7 @@ func validateSigV4Request(r *http.Request, clk clock.Clock, secretResolver Secre
 	if aerr != nil {
 		return true, aerr
 	}
-	canonicalRequest := canonicalRequest(r, parts.SignedHeaders, payloadHash, parts.Presigned)
+	canonicalRequest := canonicalRequestAt(r, parts.SignedHeaders, payloadHash, parts.Presigned, canonicalPath)
 	stringToSign := strings.Join([]string{
 		sigV4Algorithm,
 		parts.AmzDate,
@@ -279,10 +287,13 @@ func payloadHashForRequest(r *http.Request, presigned bool) (string, *protocol.A
 	return sha256Hex(body), nil
 }
 
-func canonicalRequest(r *http.Request, signedHeaders []string, payloadHash string, presigned bool) string {
+func canonicalRequestAt(r *http.Request, signedHeaders []string, payloadHash string, presigned bool, path string) string {
+	if path == "" {
+		path = canonicalPath(r.URL)
+	}
 	return strings.Join([]string{
 		r.Method,
-		canonicalPath(r.URL),
+		path,
 		canonicalQuery(r.URL.Query(), presigned),
 		canonicalHeaders(r, signedHeaders),
 		strings.Join(signedHeaders, ";"),
