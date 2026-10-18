@@ -32,6 +32,8 @@ const codeUnavailableType = errTypeCodeUnavailable
 
 var errPackageTooLarge = errors.New("package exceeds 512 MB unzipped")
 
+var errPackageTooManyEntries = errors.New("package has too many entries")
+
 // tarKey identifies a pinned package version.
 func tarKey(ref codeRef) string { return ref.Bucket + "/" + ref.Key + "/" + ref.VersionID }
 
@@ -44,9 +46,12 @@ func codeTar(zipData []byte) ([]byte, error) {
 	}
 	// The declared sizes are checked before anything is inflated; the copy
 	// below checks the actual ones, since a header can lie.
+	if len(zr.File) > providerMaxPackageEntries {
+		return nil, errPackageTooManyEntries
+	}
 	var declared uint64
 	for _, f := range zr.File {
-		declared += f.UncompressedSize64
+		declared += f.UncompressedSize64 + tarHeaderBytes
 		if declared > providerMaxPackageBytes {
 			return nil, errPackageTooLarge
 		}
@@ -107,7 +112,7 @@ func codeTar(zipData []byte) ([]byte, error) {
 			if n != hdr.Size {
 				return nil, fmt.Errorf("%q does not match its declared size", f.Name)
 			}
-			total += n
+			total += n + tarHeaderBytes
 			if total > providerMaxPackageBytes {
 				return nil, errPackageTooLarge
 			}
@@ -242,6 +247,13 @@ func (p *DockerProvider) runBuild(ctx context.Context, ref codeRef, key string, 
 	src := p.codeSource()
 	if src == nil {
 		f.fail = internalFailure("no code source is wired")
+		return
+	}
+	select {
+	case p.buildSlots <- struct{}{}:
+		defer func() { <-p.buildSlots }()
+	case <-ctx.Done():
+		f.fail = internalFailure("environment start cancelled: " + ctx.Err().Error())
 		return
 	}
 	data, aerr := src.Fetch(ctx, ref)
