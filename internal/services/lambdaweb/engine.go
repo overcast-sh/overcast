@@ -721,8 +721,8 @@ func (s *Service) sweepIdle() {
 }
 
 // Stop drains and stops every environment, then the provider. It satisfies
-// router.Stopper.
-func (s *Service) Stop(ctx context.Context) error {
+// router.Stopper, so it returns nothing.
+func (s *Service) Stop(ctx context.Context) {
 	if s.dp.stop != nil {
 		select {
 		case <-s.dp.stop:
@@ -750,17 +750,18 @@ func (s *Service) Stop(ctx context.Context) error {
 	select {
 	case <-done:
 	case <-ctx.Done():
-		return ctx.Err()
+		s.log.Warn("lambda-web: stop timed out with environments still running", zap.Error(ctx.Err()))
+		return
 	}
 	s.StopRevisionWorker(ctx)
-	var err error
 	if st, ok := s.provider.(interface{ Stop(context.Context) error }); ok {
-		err = st.Stop(ctx)
+		if err := st.Stop(ctx); err != nil {
+			s.log.Warn("lambda-web: stopping the provider", zap.Error(err))
+		}
 	}
 	if st, ok := s.tel.(interface{ Stop(context.Context) }); ok {
 		st.Stop(ctx)
 	}
-	return err
 }
 
 // telemetry returns the wired sink, or a no-op.

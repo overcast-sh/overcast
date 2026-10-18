@@ -289,6 +289,9 @@ func TestBootstrap_consoleBecomesJSONWithRequestIdentity(t *testing.T) {
 	// When: a request arrives with the platform's identity headers
 	app.get(t, "/log", map[string]string{"lambda-web-request-id": "req-1", "lambda-web-endpoint-name": "my-ep"})
 	app.get(t, "/", map[string]string{"lambda-web-request-id": "req-2"})
+	// the output pipe is read on another goroutine: wait for the last line
+	require.Eventually(t, func() bool { return findLog(app.logRecords(t), "served /") != nil },
+		5*time.Second, 10*time.Millisecond, "output: %v", app.out.lines())
 	recs := app.logRecords(t)
 
 	// Then: every call is one JSON line in the application-log shape

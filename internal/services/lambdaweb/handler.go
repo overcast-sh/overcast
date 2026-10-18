@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
@@ -534,6 +535,16 @@ type countingWriter struct {
 	status int
 	bytes  int64
 	wrote  bool
+}
+
+// RecordAWSError forwards to the wrapped writer so an AWS error written behind
+// this one still reaches the trace and request log.
+func (c *countingWriter) RecordAWSError(aerr *protocol.AWSError) {
+	if rec, ok := c.ResponseWriter.(interface {
+		RecordAWSError(*protocol.AWSError)
+	}); ok {
+		rec.RecordAWSError(aerr)
+	}
 }
 
 func (c *countingWriter) WriteHeader(code int) {

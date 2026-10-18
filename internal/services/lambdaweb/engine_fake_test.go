@@ -167,7 +167,7 @@ func newDPFixture(t testing.TB, o dpOptions) *dpFixture {
 		srv.Close()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_ = svc.Stop(ctx)
+		svc.Stop(ctx)
 	})
 	return f
 }

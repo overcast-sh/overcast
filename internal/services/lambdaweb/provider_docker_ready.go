@@ -32,7 +32,7 @@ const (
 	// the connection whether or not anything listens behind it, and closes it
 	// when it finds nothing there; a connection that is still open after this
 	// long reached the server.
-	publishedProbeHold = 25 * time.Millisecond
+	publishedProbeHold = 150 * time.Millisecond
 
 	defaultInitTimeout = 10 * time.Second
 )
