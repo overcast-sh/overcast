@@ -74,6 +74,8 @@ func revisionActive(rev *revision) bool {
 type routeTable struct {
 	gen    uint64
 	byHost map[string]*route
+	// tags are each function's tags by function ARN, for ABAC conditions.
+	tags map[string]map[string]string
 }
 
 // invalidateRoutes tells the data plane the control plane changed: the next
@@ -131,7 +133,17 @@ func (s *Service) rebuildRoutes(ctx context.Context) (*routeTable, error) {
 		}
 	}
 
-	t := &routeTable{gen: gen, byHost: make(map[string]*route, len(eps))}
+	tagKVs, err := s.store.Scan(ctx, nsTags, "")
+	if err != nil {
+		return nil, err
+	}
+	t := &routeTable{gen: gen, byHost: make(map[string]*route, len(eps)), tags: make(map[string]map[string]string, len(tagKVs))}
+	for _, kv := range tagKVs {
+		var tags map[string]string
+		if json.Unmarshal([]byte(kv.Value), &tags) == nil {
+			t.tags[kv.Key] = tags
+		}
+	}
 	live := make(map[string]struct{}, len(eps))
 	type servingSet struct {
 		rt      *endpointRT
@@ -192,4 +204,15 @@ func (s *Service) rebuildRoutes(ctx context.Context) (*routeTable, error) {
 	}
 	s.dp.table.Store(t)
 	return t, nil
+}
+
+// ResourceTags returns a function's tags from the current routing table, for
+// the authoriser's aws:ResourceTag conditions. It never reads the store on the
+// request path; the table is rebuilt when tags change.
+func (s *Service) ResourceTags(ctx context.Context, functionARN string) map[string]string {
+	t, err := s.routes(ctx)
+	if err != nil {
+		return nil
+	}
+	return t.tags[functionARN]
 }

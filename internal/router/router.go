@@ -819,6 +819,16 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		lwTel.InitMetrics(svcMetrics)
 	}
 	lambdaWebSvc.InitTelemetry(lwTel)
+	// IamAuth endpoints: SigV4/SigV4a checks always, signature verification and
+	// IAM evaluation with the same switches the rest of the emulator uses.
+	lambdaWebSvc.InitAuth(lambdaweb.NewAuthorizer(lambdaweb.AuthorizerOptions{
+		Clock: clk, Log: logger,
+		ValidateSignatures: cfg.SigV4Validate,
+		EnforceIAM:         cfg.EnforceIAM,
+		Secrets:            middleware.NewSecretResolver(store),
+		Principals:         middleware.NewIAMPrincipalResolver(store),
+		ResourceTags:       lambdaWebSvc.ResourceTags,
+	}))
 	// EventBridge: wire bus for bus/rule lifecycle events.
 	ebSvc.InitBus(bus)
 	ebSvc.InitLambdaAuthorizer(lambdaSvc)

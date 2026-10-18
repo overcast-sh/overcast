@@ -120,7 +120,7 @@ func (e *fakeEnv) finish(r exitReason) {
 
 // dpFixture is a Service wired to a fake provider behind a real HTTP server.
 type dpFixture struct {
-	t      *testing.T
+	t      testing.TB
 	svc    *Service
 	prov   *fakeProvider
 	clk    *clock.Mock
@@ -137,7 +137,7 @@ type dpOptions struct {
 	authorize invokeAuth
 }
 
-func newDPFixture(t *testing.T, o dpOptions) *dpFixture {
+func newDPFixture(t testing.TB, o dpOptions) *dpFixture {
 	t.Helper()
 	if o.handler == nil {
 		o.handler = func(envSpec) http.Handler { return http.HandlerFunc(echoHandler) }

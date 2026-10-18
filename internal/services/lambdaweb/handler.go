@@ -57,7 +57,7 @@ type reqState struct {
 	endpoint  string
 	path      string
 	rawPath   string
-	clientIP  string
+	peerIP    string
 	es        *envState
 	perr      *platformError
 	logStream string
@@ -207,7 +207,7 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 	// 8. proxy
 	st := &reqState{
 		id: id, endpoint: ep.Name, es: es, logStream: es.ref.LogStream,
-		host: s.forwardHost(r, ro), clientIP: clientIP(r),
+		host: s.forwardHost(r, ro), peerIP: peerIP(r),
 	}
 	st.path, st.rawPath = originalPath(r, ro)
 	out := r.WithContext(context.WithValue(ctx, reqStateKey{}, st))
@@ -350,9 +350,9 @@ func rewriteRequest(pr *httputil.ProxyRequest, addr string) {
 	// Rewrite removed the X-Forwarded-* family; Lambda appends the connecting
 	// address to X-Forwarded-For and forwards X-Forwarded-Host untouched.
 	if prior := pr.In.Header.Values("X-Forwarded-For"); len(prior) > 0 {
-		h.Set("X-Forwarded-For", strings.Join(prior, ", ")+", "+st.clientIP)
+		h.Set("X-Forwarded-For", strings.Join(prior, ", ")+", "+st.peerIP)
 	} else {
-		h.Set("X-Forwarded-For", st.clientIP)
+		h.Set("X-Forwarded-For", st.peerIP)
 	}
 	if v := pr.In.Header.Values("X-Forwarded-Host"); len(v) > 0 {
 		h["X-Forwarded-Host"] = v
@@ -481,7 +481,7 @@ func hostOnly(host string) string {
 	return strings.ToLower(strings.TrimSuffix(host, "."))
 }
 
-func clientIP(r *http.Request) string {
+func peerIP(r *http.Request) string {
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return h
 	}

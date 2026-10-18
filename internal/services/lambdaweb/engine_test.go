@@ -516,7 +516,7 @@ func TestServe_aDeletedEndpointStopsServingAndItsEnvironmentsStop(t *testing.T) 
 
 func intp(v int) *int { return &v }
 
-func waitFor(t *testing.T, cond func() bool, what string) {
+func waitFor(t testing.TB, cond func() bool, what string) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -544,4 +544,36 @@ func (f *dpFixture) patchRevision(d deployed, edit func(*revision)) {
 		f.t.Fatalf("put revision: %v", aerr)
 	}
 	f.svc.invalidateRoutes()
+}
+
+// BenchmarkServe measures the data plane's added cost per request: routing,
+// header rewriting and the proxy hop to a loopback environment that answers
+// "ok". Run with -benchmem; allocations on this path are the number to watch.
+func BenchmarkServe(b *testing.B) {
+	f := newDPFixture(b, dpOptions{handler: func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "ok") })
+	}})
+	d := f.deploy(deployOpts{})
+	client := &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 64}}
+	url := f.server.URL + invokeBase + "/" + d.id + "/us-east-1/"
+	// Warm the environment.
+	if resp, err := client.Get(url); err == nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			req, _ := http.NewRequest("GET", url, nil)
+			req.Host = d.domain
+			resp, err := client.Do(req)
+			if err != nil {
+				b.Error(err)
+				return
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+	})
 }
