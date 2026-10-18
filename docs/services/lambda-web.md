@@ -87,15 +87,14 @@ The full list is on [Lambda Web Functions limitations](./lambda-web/limitations.
 
 ## Gotchas
 
-> [!NOTE]
-> Overcast's `RealIP` middleware sets the connection's remote address from
-> `X-Forwarded-For`, so an application sees its client's address twice in that
-> header.
-
 > [!WARNING]
 > Web Functions are not Lambda functions. `aws lambda list-functions` does not
 > show them, and `aws lambda invoke` cannot call them. They are a separate
 > service, `lambda-web`, whose paths all start with `/2025-03-07/`.
+
+Overcast's `RealIP` middleware sets the connection's remote address from
+`X-Forwarded-For`, so an application sees its client's address twice in that
+header.
 
 <!-- BEGIN overcast:capabilities -->
 
