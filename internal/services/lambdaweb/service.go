@@ -68,6 +68,9 @@ type Service struct {
 	auth     invokeAuth
 	tel      telemetry
 	code     codeSource
+
+	// dp is the data plane's runtime state: routing table, environments.
+	dp dataPlane
 }
 
 // New returns a configured Lambda Web Functions Service. It does no I/O.

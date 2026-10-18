@@ -1026,6 +1026,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelExecuteAPI, Rewrite: apigwSvc.HostRouteRewrite})
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelCloudFront, Rewrite: cloudfrontSvc.HostRouteRewrite})
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelLambdaURL, Rewrite: lambdaSvc.HostRouteRewrite})
+	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelLambdaWeb, Rewrite: lambdaWebSvc.HostRouteRewrite})
 	hostRoutes = append(hostRoutes, middleware.HostRouteRow{Label: middleware.LabelAppSyncAPI, Rewrite: appsyncSvc.HostRouteRewrite})
 	// Real AWS serves subscriptions on a separate appsync-realtime-api
 	// host, and Amplify derives it by substituting into the GraphQL URL.
