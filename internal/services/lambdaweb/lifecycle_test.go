@@ -638,3 +638,36 @@ func TestEndpointLifecycle_oldRecordsReadActive(t *testing.T) {
 		t.Errorf("state = %s / %s / %s", epState(ep), epUpdateStatus(ep), revState(rev))
 	}
 }
+
+func TestResume_settlesEndpointsAStopLeftMidTransition(t *testing.T) {
+	// Given: three endpoints a restart found stuck in the store: Pending,
+	// Deleting, and Active with an update in progress
+	f := newLifecycleFixture(t)
+	f.code.put("code", "v1.zip", goodPackage(t))
+	f.createApp("shop")
+	ctx := context.Background()
+	fn, _, _ := getRecord[webFunction](ctx, f.s, nsFunctions, functionKey(f.s.cfg.Region, "shop"))
+	ep, _, _ := getRecord[endpoint](ctx, f.s, nsEndpoints, childKey(fn.Region, "shop", "dev"))
+	mk := func(name, state, update string) {
+		c := *ep
+		c.Name, c.State, c.UpdateStatus = name, state, update
+		c.ARN = ep.ARN + "-" + name
+		if aerr := putRecord(ctx, f.s, nsEndpoints, childKey(fn.Region, "shop", name), &c); aerr != nil {
+			t.Fatal(aerr)
+		}
+	}
+	mk("pending", statePending, updateSuccessful)
+	mk("deleting", stateDeleting, updateSuccessful)
+	mk("updating", stateActive, updateInProgress)
+
+	// When: the service resumes
+	f.s.Resume(ctx)
+
+	// Then: each is settled the way the interrupted call would have
+	eventually(t, "the endpoints to settle", func() bool {
+		p := f.endpoint("shop", "pending")
+		u := f.endpoint("shop", "updating")
+		_, found, _ := getRecord[endpoint](ctx, f.s, nsEndpoints, childKey(fn.Region, "shop", "deleting"))
+		return p.State == stateActive && u.UpdateStatus == updateSuccessful && !found
+	})
+}

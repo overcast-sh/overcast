@@ -2992,3 +2992,11 @@ func TestLoad_smtpPort(t *testing.T) {
 		})
 	}
 }
+
+func TestServiceNamespacePrefix_lambdaWebStoresUnderItsHyphenatedNamespace(t *testing.T) {
+	// The service key has no hyphen; its namespaces ("lambda-web:functions", …)
+	// do, and per-service state overrides and resets match on the namespace.
+	if got := config.ServiceNamespacePrefix("lambdaweb"); got != "lambda-web" {
+		t.Errorf("ServiceNamespacePrefix(lambdaweb) = %q, want lambda-web", got)
+	}
+}

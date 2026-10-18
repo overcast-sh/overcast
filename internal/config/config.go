@@ -1817,6 +1817,8 @@ func ServiceNamespacePrefix(service string) string {
 		return "apigw"
 	case "eventbridge":
 		return "eb"
+	case "lambdaweb":
+		return "lambda-web" // the namespaces the service stores under
 	default:
 		return service
 	}

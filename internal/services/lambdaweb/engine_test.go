@@ -834,3 +834,30 @@ func TestServe_anApplicationsOwnCORSHeadersReplaceThePreset(t *testing.T) {
 		t.Errorf("Access-Control-Allow-Origin = %q", got)
 	}
 }
+
+func TestServe_resetRetiresEndpointsTheStoreNoLongerHolds(t *testing.T) {
+	// Given: an endpoint that is serving, with a running environment
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	if resp, _ := f.do(d, "GET", "/", nil, nil); resp.StatusCode != 200 {
+		t.Fatalf("before reset = %d", resp.StatusCode)
+	}
+
+	// When: the store is wiped (POST /_overcast/reset) and the service settles
+	ctx := context.Background()
+	for _, ns := range []string{nsFunctions, nsRevisions, nsEndpoints, nsPolicies, nsTags} {
+		keys, _ := f.svc.store.List(ctx, ns, "")
+		for _, k := range keys {
+			_ = f.svc.store.Delete(ctx, ns, k)
+		}
+	}
+	if err := f.svc.DebugResetState(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Then: the deleted endpoint no longer serves, and its environment is stopped
+	if resp, _ := f.do(d, "GET", "/", nil, nil); resp.StatusCode != 404 {
+		t.Errorf("after reset = %d, want 404", resp.StatusCode)
+	}
+	eventually(t, "the environment to stop", func() bool { return f.prov.liveEnvs() == 0 })
+}
