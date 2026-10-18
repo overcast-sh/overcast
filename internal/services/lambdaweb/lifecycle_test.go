@@ -220,6 +220,11 @@ func TestRevisionLifecycle_pendingUntilThePackageIsChecked(t *testing.T) {
 	if got.BuildConfig.CodeConfig.S3Object.VersionID != "v1" || len(got.Errors) != 0 {
 		t.Errorf("revision = %+v", got)
 	}
+	// the endpoint follows the revision a moment after it turns Active
+	eventually(t, "the endpoint to serve it", func() bool {
+		ep := f.endpoint("shop", "dev")
+		return len(ep.RevisionWeights) == 1 && ep.UpdateStatus == updateSuccessful
+	})
 	ep := f.endpoint("shop", "dev")
 	if len(ep.RevisionWeights) != 1 || ep.RevisionWeights[0].RevisionID != first || ep.UpdateStatus != updateSuccessful {
 		t.Errorf("endpoint weights = %+v, updateStatus = %s", ep.RevisionWeights, ep.UpdateStatus)
