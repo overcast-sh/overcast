@@ -711,10 +711,14 @@ func (s *Service) Stop(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	var err error
 	if st, ok := s.provider.(interface{ Stop(context.Context) error }); ok {
-		return st.Stop(ctx)
+		err = st.Stop(ctx)
 	}
-	return nil
+	if st, ok := s.tel.(interface{ Stop(context.Context) }); ok {
+		st.Stop(ctx)
+	}
+	return err
 }
 
 // telemetry returns the wired sink, or a no-op.

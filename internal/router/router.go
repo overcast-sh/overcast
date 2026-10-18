@@ -810,6 +810,15 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	s3tablesSvc.InitBus(bus)
 	// Lambda Web Functions: wire bus for web function, revision and endpoint lifecycle events.
 	lambdaWebSvc.InitBus(bus)
+	// Telemetry: system logs, CloudWatch metrics and request events. Service.Stop
+	// flushes it, before the metrics recorder stops.
+	lwTel := lambdaweb.NewTelemetry(lambdaweb.TelemetryOptions{Clock: clk, Logger: logger})
+	lwTel.InitLogWriter(logsSvc.LogWriter())
+	lwTel.InitBus(bus)
+	if svcMetrics != nil {
+		lwTel.InitMetrics(svcMetrics)
+	}
+	lambdaWebSvc.InitTelemetry(lwTel)
 	// EventBridge: wire bus for bus/rule lifecycle events.
 	ebSvc.InitBus(bus)
 	ebSvc.InitLambdaAuthorizer(lambdaSvc)
