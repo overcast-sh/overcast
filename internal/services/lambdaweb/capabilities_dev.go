@@ -13,10 +13,11 @@ const (
 	catAccount   = "Account"
 )
 
-// The control plane is served in full; what is missing is the data plane. A
-// revision's code is never fetched from S3 or started, and an endpoint's domain
-// name is allocated but not served, so the operations that create those two
-// carry Partial rather than a ✅ (docs/services/lambda-web/limitations.md).
+// The control plane is served in full, including the revision and endpoint
+// lifecycles; what is missing is the data plane. A revision's code is checked
+// but never started, and an endpoint's domain name is allocated but not served,
+// so the operations that create those two carry Partial rather than a ✅
+// (docs/services/lambda-web/limitations.md).
 func init() {
 	capabilities.Default.RegisterForService(serviceName,
 		// Web functions
@@ -31,11 +32,11 @@ func init() {
 
 		// Revisions
 		capabilities.Capability{Operation: "CreateWebFunctionRevision", Category: catRevisions,
-			Status: capabilities.StatusPartial, Notes: "Validated and stored; the S3 package is not fetched and no code runs. `LatestRevision` endpoints are pointed at it. Past 50 revisions the oldest unrouted ones are deleted"},
+			Status: capabilities.StatusPartial, Notes: "Validated, pinned to an S3 object version and created `Pending`; a worker checks the package and the revision becomes `Active` or `Failed`. No code runs. `LatestRevision` endpoints are pointed at it once `Active`. Reserved environment variable names are refused. Past 50 revisions the oldest unrouted ones are deleted"},
 		capabilities.Capability{Operation: "GetWebFunctionRevision", Category: catRevisions,
 			Status: capabilities.StatusSupported, Notes: "By revision ID or ARN; `timeoutSeconds` and `maxConcurrencyPerEnvironment` defaults are returned"},
 		capabilities.Capability{Operation: "ListWebFunctionRevisions", Category: catRevisions,
-			Status: capabilities.StatusSupported, Notes: "`state` filter; oldest first"},
+			Status: capabilities.StatusSupported, Notes: "`state` filter; newest first"},
 		capabilities.Capability{Operation: "DeleteWebFunctionRevision", Category: catRevisions,
 			Status: capabilities.StatusSupported, Notes: "`ConflictException` while an endpoint routes traffic to the revision"},
 
@@ -47,9 +48,9 @@ func init() {
 		capabilities.Capability{Operation: "ListWebFunctionEndpoints", Category: catEndpoints,
 			Status: capabilities.StatusSupported, Notes: "`authType`, `autoDeploymentMode`, `endpointType`, `state` and `updateStatus` filters"},
 		capabilities.Capability{Operation: "UpdateWebFunctionEndpoint", Category: catEndpoints,
-			Status: capabilities.StatusPartial, Notes: "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; takes effect at once, and no traffic flows to observe it"},
+			Status: capabilities.StatusPartial, Notes: "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; `updateStatus` goes `InProgress` then `Successful`. Revision weights must name `Active` revisions. No traffic flows to observe it"},
 		capabilities.Capability{Operation: "DeleteWebFunctionEndpoint", Category: catEndpoints,
-			Status: capabilities.StatusSupported, Notes: "Removed at once; the `Deleting` state is not observable"},
+			Status: capabilities.StatusSupported, Notes: "Goes `Deleting` while the data plane drains, then is removed"},
 
 		// Resource policy
 		capabilities.Capability{Operation: "PutResourcePolicy", Category: catPolicy,

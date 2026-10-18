@@ -6719,7 +6719,7 @@
           "operation": "CreateWebFunctionRevision",
           "category": "Revisions",
           "status": "⚠️ Partial",
-          "notes": "Validated and stored; the S3 package is not fetched and no code runs. `LatestRevision` endpoints are pointed at it. Past 50 revisions the oldest unrouted ones are deleted"
+          "notes": "Validated, pinned to an S3 object version and created `Pending`; a worker checks the package and the revision becomes `Active` or `Failed`. No code runs. `LatestRevision` endpoints are pointed at it once `Active`. Reserved environment variable names are refused. Past 50 revisions the oldest unrouted ones are deleted"
         },
         {
           "operation": "GetWebFunctionRevision",
@@ -6731,7 +6731,7 @@
           "operation": "ListWebFunctionRevisions",
           "category": "Revisions",
           "status": "✅ Supported",
-          "notes": "`state` filter; oldest first"
+          "notes": "`state` filter; newest first"
         },
         {
           "operation": "DeleteWebFunctionRevision",
@@ -6761,13 +6761,13 @@
           "operation": "UpdateWebFunctionEndpoint",
           "category": "Endpoints",
           "status": "⚠️ Partial",
-          "notes": "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; takes effect at once, and no traffic flows to observe it"
+          "notes": "Omitted members are kept and an empty `scalingConfig` or `throttleConfig` clears; `updateStatus` goes `InProgress` then `Successful`. Revision weights must name `Active` revisions. No traffic flows to observe it"
         },
         {
           "operation": "DeleteWebFunctionEndpoint",
           "category": "Endpoints",
           "status": "✅ Supported",
-          "notes": "Removed at once; the `Deleting` state is not observable"
+          "notes": "Goes `Deleting` while the data plane drains, then is removed"
         },
         {
           "operation": "PutResourcePolicy",

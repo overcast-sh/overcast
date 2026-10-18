@@ -80,7 +80,7 @@ func epUpdateStatus(ep *endpoint) string {
 
 func codeRefOf(rev *revision) codeRef {
 	o := rev.BuildConfig.CodeConfig.S3Object
-	return codeRef{Bucket: o.Bucket, Key: o.Key, VersionID: o.VersionID}
+	return codeRef(o)
 }
 
 // ─── Starting a revision ─────────────────────────────────────────────────────
@@ -274,10 +274,11 @@ func (s *Service) ensureResumed() {
 	s.resumeOnce.Do(func() { s.Resume(context.Background()) })
 }
 
-// stopLifecycle stops the revision workers and waits for them until ctx ends.
+// StopRevisionWorker stops the revision workers and waits for them until ctx ends.
 // Revisions still Pending stay so and are resumed on the next start. The engine
-// calls it from its own Stop (router.Stopper).
-func (s *Service) stopLifecycle(ctx context.Context) {
+// calls it from its own Stop (router.Stopper); it is not named Stop so the two
+// do not collide.
+func (s *Service) StopRevisionWorker(ctx context.Context) {
 	lc := &s.lifecycleState
 	lc.wmu.Lock()
 	lc.stopped = true

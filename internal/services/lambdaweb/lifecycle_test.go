@@ -129,7 +129,7 @@ func newLifecycleFixture(t *testing.T) *lifecycleFixture {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		f.s.stopLifecycle(ctx)
+		f.s.StopRevisionWorker(ctx)
 	})
 	return f
 }
@@ -426,7 +426,7 @@ func TestRevisionLifecycle_resumesPendingRevisionsAtStart(t *testing.T) {
 	rev := f.createApp("shop").Revision
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	f.s.stopLifecycle(stopCtx)
+	f.s.StopRevisionWorker(stopCtx)
 	if got := f.revision("shop", rev.RevisionID); got.State != statePending {
 		t.Fatalf("State after Stop = %s, want Pending", got.State)
 	}
@@ -436,7 +436,7 @@ func TestRevisionLifecycle_resumesPendingRevisionsAtStart(t *testing.T) {
 	code.put("code", "v1.zip", goodPackage(t))
 	s2 := New(&config.Config{Region: "us-east-1", AccountID: "111122223333"}, f.store, zap.NewNop(), clock.NewMock())
 	s2.InitCodeSource(code)
-	t.Cleanup(func() { s2.stopLifecycle(context.Background()) })
+	t.Cleanup(func() { s2.StopRevisionWorker(context.Background()) })
 	_, aerr := s2.listWebFunctionRevisionsTyped(context.Background(), &listRequest{FunctionName: "shop"})
 	if aerr != nil {
 		t.Fatalf("list: %s", aerr.Message)
@@ -487,13 +487,13 @@ func TestStopLifecycle_leavesInterruptedRevisionsPending(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	done := make(chan struct{})
-	go func() { f.s.stopLifecycle(ctx); close(done) }()
+	go func() { f.s.StopRevisionWorker(ctx); close(done) }()
 
 	// Then: Stop returns, and the revision is still Pending, not Failed
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("stopLifecycle did not return")
+		t.Fatal("StopRevisionWorker did not return")
 	}
 	if got := f.revision("shop", rev.RevisionID); got.State != statePending {
 		t.Errorf("State = %s, want Pending", got.State)

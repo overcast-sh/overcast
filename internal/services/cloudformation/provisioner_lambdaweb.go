@@ -15,10 +15,12 @@ package cloudformation
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/overcast-sh/overcast/internal/config"
 )
@@ -187,10 +189,43 @@ func (h *lambdaWebRevisionHandler) Create(ctx context.Context, router http.Handl
 		return "", nil, err
 	}
 	noteUnconsumedProperties(ctx, cfnLambdaWebRevision, props, "FunctionName", "BuildConfig", "ServiceConfig", "Description", "KmsKeyArn")
+	// CloudFormation waits for a resource to stabilise, and an endpoint in the
+	// same stack can route only to an Active revision: wait out Pending.
+	if err := waitLambdaWebRevisionActive(ctx, router, rCtx.Region, fn, out.RevisionID); err != nil {
+		return "", nil, err
+	}
 	return out.RevisionARN, map[string]string{
 		"FunctionArn": out.FunctionARN, "RevisionArn": out.RevisionARN, "RevisionId": out.RevisionID,
-		"State": out.State, "StateReason": out.StateReason, "CreatedAt": out.CreatedAt,
+		"State": "Active", "StateReason": out.StateReason, "CreatedAt": out.CreatedAt,
 	}, nil
+}
+
+// waitLambdaWebRevisionActive polls the revision until it is Active, failing
+// with its stateReason if it becomes Failed. The wait is bounded by ctx and by
+// a minute, which is far beyond what an in-process package check takes.
+func waitLambdaWebRevisionActive(ctx context.Context, router http.Handler, region, fn, id string) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	for delay := time.Millisecond; ; delay = min(delay*2, 100*time.Millisecond) {
+		var got struct {
+			State       string `json:"state"`
+			StateReason string `json:"stateReason"`
+		}
+		if err := lambdaWebCall(ctx, router, region, http.MethodGet, lambdaWebFunctionPath(fn, "revisions", url.PathEscape(id)), "GetWebFunctionRevision", nil, &got); err != nil {
+			return err
+		}
+		switch got.State {
+		case "Active":
+			return nil
+		case "Failed":
+			return fmt.Errorf("revision %s failed: %s", id, got.StateReason)
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("revision %s did not become Active: %w", id, ctx.Err())
+		case <-time.After(delay):
+		}
+	}
 }
 
 // Update: every revision property is immutable, so any change replaces the
