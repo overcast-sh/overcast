@@ -7,10 +7,10 @@ package lambdaweb
 
 import (
 	"context"
-	"fmt"
+	"crypto/sha256"
+	"encoding/hex"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -237,26 +237,19 @@ func (s *Service) revisionView(fn *webFunction, rev *revision) *revisionView {
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 // The model's NextToken is a 36-character hex-and-hyphen string
-// (^[a-f0-9-]{36}$), so a token is the next index laid out as one.
-const tokenFormat = "7a3c1e55-0000-4000-8000-%012x"
-
-func encodeToken(next int) string { return fmt.Sprintf(tokenFormat, next) }
-
-func decodeToken(token string) (int, bool) {
-	const prefix = "7a3c1e55-0000-4000-8000-"
-	if len(token) != len(prefix)+12 || !strings.HasPrefix(token, prefix) {
-		return 0, false
-	}
-	n, err := strconv.ParseUint(token[len(prefix):], 16, 32)
-	if err != nil {
-		return 0, false
-	}
-	return int(n), true
+// (^[a-f0-9-]{36}$). A token names the last item of the page it ended, as a
+// digest of that item's key laid out as such a string, so the next page
+// resumes after that item however the list has changed since: a revision
+// created between two calls does not repeat or skip one.
+func encodeToken(key string) string {
+	h := sha256.Sum256([]byte(key))
+	x := hex.EncodeToString(h[:16])
+	return x[0:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:32]
 }
 
 // page returns the maxResults items of items that follow token, and the token
-// for the next page when there are more.
-func page[T any](items []T, maxResults *int, token string) ([]T, string, *protocol.AWSError) {
+// for the next page when there are more. key is the item's stable identity.
+func page[T any](items []T, key func(T) string, maxResults *int, token string) ([]T, string, *protocol.AWSError) {
 	size := defaultListPageSize
 	if maxResults != nil {
 		if *maxResults < 1 || *maxResults > 50 {
@@ -266,16 +259,21 @@ func page[T any](items []T, maxResults *int, token string) ([]T, string, *protoc
 	}
 	start := 0
 	if token != "" {
-		n, ok := decodeToken(token)
-		if !ok || n > len(items) {
+		start = -1
+		for i, it := range items {
+			if encodeToken(key(it)) == token {
+				start = i + 1
+				break
+			}
+		}
+		if start < 0 {
 			return nil, "", errBadToken
 		}
-		start = n
 	}
 	end := min(start+size, len(items))
 	next := ""
 	if end < len(items) {
-		next = encodeToken(end)
+		next = encodeToken(key(items[end-1]))
 	}
 	return items[start:end], next, nil
 }
@@ -597,7 +595,7 @@ func (s *Service) listWebFunctionsTyped(ctx context.Context, in *listRequest) (*
 			sums = append(sums, s.functionSummary(fn, false))
 		}
 	}
-	items, next, aerr := page(sums, in.MaxResults, in.NextToken)
+	items, next, aerr := page(sums, func(f functionSummary) string { return f.FunctionName }, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -731,7 +729,7 @@ func (s *Service) listWebFunctionRevisionsTyped(ctx context.Context, in *listReq
 			sums = append(sums, sum)
 		}
 	}
-	items, next, aerr := page(sums, in.MaxResults, in.NextToken)
+	items, next, aerr := page(sums, func(r revisionSummary) string { return r.RevisionID }, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -869,7 +867,7 @@ func (s *Service) listWebFunctionEndpointsTyped(ctx context.Context, in *listReq
 			sums = append(sums, sum)
 		}
 	}
-	items, next, aerr := page(sums, in.MaxResults, in.NextToken)
+	items, next, aerr := page(sums, func(e endpointSummary) string { return e.EndpointName }, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}

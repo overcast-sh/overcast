@@ -671,3 +671,49 @@ func TestResume_settlesEndpointsAStopLeftMidTransition(t *testing.T) {
 		return p.State == stateActive && u.UpdateStatus == updateSuccessful && !found
 	})
 }
+
+func TestListRevisions_pagesSurviveNewRevisions(t *testing.T) {
+	// Given: a function with four revisions, listed two at a time
+	f := newLifecycleFixture(t)
+	f.code.put("code", "v1.zip", goodPackage(t))
+	ctx := context.Background()
+	f.createApp("shop")
+	for range 3 {
+		if _, aerr := f.s.createWebFunctionRevisionTyped(ctx, &createRevisionRequest{FunctionName: "shop", revisionConfigIn: *testRevisionConfig("code", "v1.zip")}); aerr != nil {
+			t.Fatalf("create revision: %s", aerr.Message)
+		}
+	}
+	two := 2
+	first, aerr := f.s.listWebFunctionRevisionsTyped(ctx, &listRequest{FunctionName: "shop", MaxResults: &two})
+	if aerr != nil || first.NextToken == "" || len(first.Revisions) != 2 {
+		t.Fatalf("first page = %+v %v", first, aerr)
+	}
+
+	// When: another revision is created before the second page is read
+	if _, aerr := f.s.createWebFunctionRevisionTyped(ctx, &createRevisionRequest{FunctionName: "shop", revisionConfigIn: *testRevisionConfig("code", "v1.zip")}); aerr != nil {
+		t.Fatalf("create revision: %s", aerr.Message)
+	}
+	second, aerr := f.s.listWebFunctionRevisionsTyped(ctx, &listRequest{FunctionName: "shop", MaxResults: &two, NextToken: first.NextToken})
+	if aerr != nil {
+		t.Fatalf("second page: %s", aerr.Message)
+	}
+
+	// Then: the second page continues after the first, with nothing repeated or skipped
+	seen := map[string]bool{}
+	for _, r := range first.Revisions {
+		seen[r.RevisionID] = true
+	}
+	for _, r := range second.Revisions {
+		if seen[r.RevisionID] {
+			t.Errorf("revision %s appears on both pages", r.RevisionID)
+		}
+	}
+	if len(second.Revisions) != 2 {
+		t.Errorf("second page has %d revisions, want the 2 older ones", len(second.Revisions))
+	}
+
+	// And: a token this list never issued is refused
+	if _, aerr := f.s.listWebFunctionRevisionsTyped(ctx, &listRequest{FunctionName: "shop", NextToken: "00000000-0000-0000-0000-000000000000"}); aerr == nil {
+		t.Error("a foreign token was accepted")
+	}
+}
