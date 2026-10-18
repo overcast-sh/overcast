@@ -83,6 +83,16 @@ to AWS, and may differ in message text or edge cases.
 | `lambda-web:RequestCompleted` events are coalesced to one per endpoint per second | Not documented |
 | Filter names | The model's documentation lists them: `state` for functions and revisions; `authType`, `autoDeploymentMode`, `endpointType`, `state` and `updateStatus` for endpoints |
 
+## Measured
+
+`TestEndToEnd_loadReport` (`tests/integration/lambdawebdocker`) drives a real
+container through the real router. On a Windows 11 laptop with Docker Desktop:
+a cold start (first request, container created) took about 1.2 s; a warm request
+took 1.6 ms at the median and 2.5 ms at the 99th percentile; 32 concurrent
+keep-alive clients sustained about 6,000 requests per second with none failing.
+Expect cold starts of 0.4 to 1.2 s depending on the machine and whether the
+image is already pulled. The test asserts only loose bounds.
+
 ## Related
 
 - [Lambda Web Functions](../lambda-web.md)
