@@ -1,0 +1,3 @@
+* [cloudfront] a distribution can front a Lambda Web Function endpoint: an origin access control of type `lambda` with signing behavior `always-amz-auth` SigV4-signs origin requests for service `lambda` and passes the viewer `Authorization` header through (#2302).
+*! [cloudfront] `CreateOriginAccessControl`/`UpdateOriginAccessControl` reject an unknown origin type, signing protocol or signing behavior, and `always-amz-auth` on a non-`lambda` OAC, with `InvalidArgument`; a `lambda` OAC on a non-Web-Function origin is `InvalidDomainNameForOriginAccessControl` (#2302).
+  migration: use origin type `s3`, `mediastore`, `mediapackagev2` or `lambda`, signing protocol `sigv4` or `sigv4a`, and signing behavior `never`, `always`, `no-override` or `always-amz-auth` (lambda only).

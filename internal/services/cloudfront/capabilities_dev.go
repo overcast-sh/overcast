@@ -32,11 +32,11 @@ func init() {
 
 		// OAC / OAI
 		capabilities.Capability{Service: "cloudfront", Operation: "CreateOriginAccessControl", Category: "OAC / OAI",
-			Status: capabilities.StatusSupported, Notes: "Generates ID, returns ETag"},
+			Status: capabilities.StatusSupported, Notes: "Generates ID, returns ETag; validates origin type (s3, mediastore, mediapackagev2, lambda), signing protocol and behavior; always-amz-auth only for lambda"},
 		capabilities.Capability{Service: "cloudfront", Operation: "GetOriginAccessControl", Category: "OAC / OAI",
 			Status: capabilities.StatusSupported, Notes: "Returns OAC by ID with ETag"},
 		capabilities.Capability{Service: "cloudfront", Operation: "UpdateOriginAccessControl", Category: "OAC / OAI",
-			Status: capabilities.StatusSupported, Notes: "Requires If-Match ETag; bumps version"},
+			Status: capabilities.StatusSupported, Notes: "Requires If-Match ETag; bumps version; same validation as create"},
 		capabilities.Capability{Service: "cloudfront", Operation: "DeleteOriginAccessControl", Category: "OAC / OAI",
 			Status: capabilities.StatusSupported, Notes: "Requires If-Match ETag"},
 		capabilities.Capability{Service: "cloudfront", Operation: "ListOriginAccessControls", Category: "OAC / OAI",

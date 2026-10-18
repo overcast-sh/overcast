@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/protocol"
 	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
@@ -247,7 +248,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, originURL, err := h.dispatchToOrigins(ctx, r, reqPath, candidates, failoverCodes)
+	resp, originURL, err := h.dispatchToOrigins(ctx, r, distID, reqPath, candidates, failoverCodes)
 	if err != nil {
 		log.Error("origin request failed",
 			zap.String("originURL", originURL),
@@ -944,7 +945,7 @@ func requestCanFailOver(r *http.Request) bool {
 // Returns the response that should be served, the URL it came from (for error
 // logging), and an error only when no candidate produced a response at all.
 func (h *Handler) dispatchToOrigins(
-	ctx context.Context, r *http.Request, reqPath string,
+	ctx context.Context, r *http.Request, distID, reqPath string,
 	candidates []*Origin, failoverCodes map[int]bool,
 ) (*http.Response, string, error) {
 	log := h.log.WithRecorder(ctx)
@@ -974,6 +975,22 @@ func (h *Handler) dispatchToOrigins(
 		if origin.CustomHeaders != nil {
 			for _, ch := range origin.CustomHeaders.Items {
 				outReq.Header.Set(ch.HeaderName, ch.HeaderValue)
+			}
+		}
+
+		if origin.OriginAccessControlId != "" {
+			if oac, oacErr := h.store.GetOAC(ctx, origin.OriginAccessControlId); oacErr == nil && oac != nil &&
+				oac.OriginAccessControlConfig.OriginAccessControlOriginType == oacTypeLambda {
+				// Lambda Web Function origin: sign with the distribution's
+				// identity (aws:SourceArn). Other OAC types are stored, not applied.
+				arn := protocol.DistributionARN(h.accountID(), distID)
+				if signErr := h.signLambdaWebOrigin(ctx, outReq, origin.DomainName, arn, h.clk.Now()); signErr != nil {
+					lastErr = signErr
+					if isLast || !canFailOver {
+						return nil, originURL, lastErr
+					}
+					continue
+				}
 			}
 		}
 

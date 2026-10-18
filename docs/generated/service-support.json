@@ -2108,7 +2108,7 @@
           "operation": "CreateOriginAccessControl",
           "category": "OAC / OAI",
           "status": "✅ Supported",
-          "notes": "Generates ID, returns ETag"
+          "notes": "Generates ID, returns ETag; validates origin type (s3, mediastore, mediapackagev2, lambda), signing protocol and behavior; always-amz-auth only for lambda"
         },
         {
           "operation": "GetOriginAccessControl",
@@ -2120,7 +2120,7 @@
           "operation": "UpdateOriginAccessControl",
           "category": "OAC / OAI",
           "status": "✅ Supported",
-          "notes": "Requires If-Match ETag; bumps version"
+          "notes": "Requires If-Match ETag; bumps version; same validation as create"
         },
         {
           "operation": "DeleteOriginAccessControl",
