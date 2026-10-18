@@ -14,6 +14,14 @@ import "net/http"
 // response and handles preflight OPTIONS requests.
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A Lambda Web Function endpoint is the user's own web application: it
+		// answers its own preflights and sets its own CORS headers, as on AWS.
+		// (The console's test panel reaches endpoints through the invoke path,
+		// which keeps these headers so the browser can read the response.)
+		if m, ok := ParseHostRoute(r.Host); ok && m.Label == LabelLambdaWeb {
+			next.ServeHTTP(w, r)
+			return
+		}
 		h := w.Header()
 		h.Set("Access-Control-Allow-Origin", "*")
 		// Note: * is invalid for methods/headers per CORS spec; must use explicit lists

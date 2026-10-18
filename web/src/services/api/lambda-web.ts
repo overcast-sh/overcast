@@ -93,8 +93,21 @@ export const lambdaWeb = {
         method: request.method,
         headers: request.headers,
         body: request.body === undefined || request.body === "" ? undefined : request.body,
+        // A redirect is the application's answer. Following it would send the
+        // panel to the emulator's own root and show an unrelated response.
+        redirect: "manual",
       },
     )
+    if (res.type === "opaqueredirect") {
+      // The browser hides the status of a redirect it was told not to follow.
+      return {
+        status: 0,
+        statusText: "Redirect (the browser does not expose it)",
+        headers: [],
+        body: new Uint8Array(),
+        durationMs: performance.now() - started,
+      }
+    }
     const body = new Uint8Array(await res.arrayBuffer())
     return {
       status: res.status,

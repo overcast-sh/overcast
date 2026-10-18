@@ -104,6 +104,14 @@ var (
 	sysLogLevels = []string{"DEBUG", "INFO", "WARN"}
 )
 
+// supportedRuntime is the one runtime Web Functions run
+// (web-functions-runtimes.md; the AWS CLI model lists nodejs24.x alone).
+const supportedRuntime = "nodejs24.x"
+
+// maxEnvVarBytes is the quota on a revision's environment variables, summed
+// over names and values (the Lambda quotas page, Web Functions section).
+const maxEnvVarBytes = 32 * 1024
+
 // validateRevision checks a revision's build and service configuration. Web
 // Functions run Node.js only at launch, so any other runtime family is refused
 // (https://docs.aws.amazon.com/lambda/latest/dg/web-functions.md).
@@ -125,8 +133,8 @@ func validateRevision(bc *buildConfig, sc *serviceConfig, kmsKeyARN, description
 	if rt == "" || len(rt) > 30 || !runtimeRe.MatchString(rt) {
 		return validationError("buildConfig.runtimeConfig.runtime %q is not a valid runtime identifier.", rt)
 	}
-	if !strings.HasPrefix(rt, "nodejs") {
-		return validationError("Runtime %q is not supported: Web Functions support Node.js runtimes only.", rt)
+	if rt != supportedRuntime {
+		return validationError("Runtime %q is not supported: Web Functions support %s only.", rt, supportedRuntime)
 	}
 	if sc == nil || sc.ExecutionRoleARN == "" {
 		return validationError("serviceConfig.executionRoleArn is required.")
@@ -142,8 +150,15 @@ func validateRevision(bc *buildConfig, sc *serviceConfig, kmsKeyARN, description
 	}
 	// Per AWS docs (web-functions-revisions-env-vars.md): these names are
 	// reserved for Web Functions; specifying one makes Lambda reject the
-	// request to create a Web Function or revision. The page gives no size or
-	// count limit on environment variables, so none is enforced.
+	// request to create a Web Function or revision. The quotas page limits all
+	// environment variables of a revision to 32 KB in aggregate.
+	envBytes := 0
+	for name, val := range sc.EnvironmentVariables {
+		envBytes += len(name) + len(val)
+	}
+	if envBytes > maxEnvVarBytes {
+		return validationError("serviceConfig.environmentVariables are %d bytes in aggregate; the limit is %d (32 KB).", envBytes, maxEnvVarBytes)
+	}
 	for _, name := range slices.Sorted(maps.Keys(sc.EnvironmentVariables)) {
 		if slices.Contains(reservedEnvVars, name) {
 			return validationError("The environment variable %s is reserved and can't be set.", name)

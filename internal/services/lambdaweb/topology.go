@@ -69,7 +69,7 @@ func (s *Service) ContributeTopology(ctx context.Context, g *topology.Graph) err
 			}
 			node.WebEndpoints = append(node.WebEndpoints, topology.WebEndpoint{
 				Name: e.Name, Type: e.Type, AuthType: e.AuthType, AutoDeployment: e.AutoDeploy,
-				DomainName: e.DomainName, Serves: serves, Environments: s.liveEnvironments(fn.Name, e.Name),
+				DomainName: e.DomainName, Serves: serves, Environments: s.liveEnvironments(envRegion(e, region), fn.Name, e.Name),
 			})
 			anchors = append(anchors, topology.CFN(region, cfnWebEndpoint, e.ARN))
 		}
@@ -102,3 +102,14 @@ const (
 	cfnWebRevision = "AWS::Lambda::WebFunctionRevision"
 	cfnWebEndpoint = "AWS::Lambda::WebFunctionEndpoint"
 )
+
+// envRegion is the Region whose environments a topology node counts for e: a
+// HomeRegion endpoint's own, since the same function name can exist in several
+// Regions; every Region for MultiRegion and PerRegion endpoints, which are
+// served from more than one.
+func envRegion(e *endpoint, nodeRegion string) string {
+	if e.Type == endpointHomeRegion {
+		return nodeRegion
+	}
+	return ""
+}

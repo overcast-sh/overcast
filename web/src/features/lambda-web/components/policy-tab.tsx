@@ -84,11 +84,12 @@ export function PolicyTab({ functionArn }: { functionArn: string }) {
   const advisory = (
     <Advisory
       tone="info"
-      title="Stored, validated, not enforced"
-      docsPath="services/lambda-web/limitations.md#stored-never-run"
+      title="Checked when IAM enforcement is on"
+      docsPath="services/lambda-web/limitations.md#not-as-on-aws"
     >
-      A policy that grants access to an unspecified set of principals is refused, as on AWS. A
-      stored policy is returned as written; no request reaches an endpoint to be authorised by it.
+      A policy that grants access to an unspecified set of principals is refused, as on AWS. For an
+      IamAuth endpoint, requests are checked against the policy only when signature verification
+      and IAM enforcement are enabled (OVERCAST_SIGV4_VALIDATE and OVERCAST_ENFORCE_IAM).
     </Advisory>
   )
 

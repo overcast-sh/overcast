@@ -7,11 +7,12 @@ package lambdaweb
 
 import (
 	"context"
-	"fmt"
+	"crypto/sha256"
+	"encoding/hex"
 	"maps"
 	"slices"
-	"strconv"
 	"strings"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -237,26 +238,56 @@ func (s *Service) revisionView(fn *webFunction, rev *revision) *revisionView {
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
 // The model's NextToken is a 36-character hex-and-hyphen string
-// (^[a-f0-9-]{36}$), so a token is the next index laid out as one.
-const tokenFormat = "7a3c1e55-0000-4000-8000-%012x"
+// (^[a-f0-9-]{36}$). A token names the last item of the page it ended, as a
+// digest of that item's key laid out as such a string, so the next page
+// resumes after that item however the list has changed since: a revision
+// created between two calls does not repeat or skip one.
+func encodeToken(key string) string {
+	h := sha256.Sum256([]byte(key))
+	x := hex.EncodeToString(h[:16])
+	return x[0:8] + "-" + x[8:12] + "-" + x[12:16] + "-" + x[16:20] + "-" + x[20:32]
+}
 
-func encodeToken(next int) string { return fmt.Sprintf(tokenFormat, next) }
+// tokenBook remembers, for the most recent tokens, the key of the item each
+// ended on. When that item has been deleted by the time the next page is read,
+// the page resumes at the first item that sorts after it.
+type tokenBook struct {
+	mu    sync.Mutex
+	keys  map[string]string
+	order []string
+}
 
-func decodeToken(token string) (int, bool) {
-	const prefix = "7a3c1e55-0000-4000-8000-"
-	if len(token) != len(prefix)+12 || !strings.HasPrefix(token, prefix) {
-		return 0, false
+const tokenBookSize = 4096
+
+func (b *tokenBook) put(token, key string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.keys == nil {
+		b.keys = make(map[string]string, tokenBookSize)
 	}
-	n, err := strconv.ParseUint(token[len(prefix):], 16, 32)
-	if err != nil {
-		return 0, false
+	if _, ok := b.keys[token]; !ok {
+		if len(b.order) >= tokenBookSize {
+			delete(b.keys, b.order[0])
+			b.order = b.order[1:]
+		}
+		b.order = append(b.order, token)
 	}
-	return int(n), true
+	b.keys[token] = key
+}
+
+func (b *tokenBook) get(token string) (string, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	k, ok := b.keys[token]
+	return k, ok
 }
 
 // page returns the maxResults items of items that follow token, and the token
-// for the next page when there are more.
-func page[T any](items []T, maxResults *int, token string) ([]T, string, *protocol.AWSError) {
+// for the next page when there are more. key is an item's stable identity.
+// after reports whether an item sorts after a boundary key in the list's own
+// order; it lets a page resume past a deleted boundary item, and is nil for a
+// list with no such order (a token for a vanished item is then refused).
+func page[T any](book *tokenBook, items []T, key func(T) string, after func(T, string) bool, maxResults *int, token string) ([]T, string, *protocol.AWSError) {
 	size := defaultListPageSize
 	if maxResults != nil {
 		if *maxResults < 1 || *maxResults > 50 {
@@ -266,16 +297,33 @@ func page[T any](items []T, maxResults *int, token string) ([]T, string, *protoc
 	}
 	start := 0
 	if token != "" {
-		n, ok := decodeToken(token)
-		if !ok || n > len(items) {
-			return nil, "", errBadToken
+		start = -1
+		for i, it := range items {
+			if encodeToken(key(it)) == token {
+				start = i + 1
+				break
+			}
 		}
-		start = n
+		if start < 0 {
+			boundary, known := book.get(token)
+			if !known || after == nil {
+				return nil, "", errBadToken
+			}
+			start = len(items)
+			for i, it := range items {
+				if after(it, boundary) {
+					start = i
+					break
+				}
+			}
+		}
 	}
 	end := min(start+size, len(items))
 	next := ""
-	if end < len(items) {
-		next = encodeToken(end)
+	if end < len(items) && end > start {
+		last := key(items[end-1])
+		next = encodeToken(last)
+		book.put(next, last)
 	}
 	return items[start:end], next, nil
 }
@@ -597,7 +645,7 @@ func (s *Service) listWebFunctionsTyped(ctx context.Context, in *listRequest) (*
 			sums = append(sums, s.functionSummary(fn, false))
 		}
 	}
-	items, next, aerr := page(sums, in.MaxResults, in.NextToken)
+	items, next, aerr := page(&s.tokens, sums, func(f functionSummary) string { return f.FunctionName }, func(f functionSummary, b string) bool { return f.FunctionName > b }, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -731,7 +779,7 @@ func (s *Service) listWebFunctionRevisionsTyped(ctx context.Context, in *listReq
 			sums = append(sums, sum)
 		}
 	}
-	items, next, aerr := page(sums, in.MaxResults, in.NextToken)
+	items, next, aerr := page(&s.tokens, sums, func(r revisionSummary) string { return r.RevisionID }, nil, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -869,7 +917,7 @@ func (s *Service) listWebFunctionEndpointsTyped(ctx context.Context, in *listReq
 			sums = append(sums, sum)
 		}
 	}
-	items, next, aerr := page(sums, in.MaxResults, in.NextToken)
+	items, next, aerr := page(&s.tokens, sums, func(e endpointSummary) string { return e.EndpointName }, func(e endpointSummary, b string) bool { return e.EndpointName > b }, in.MaxResults, in.NextToken)
 	if aerr != nil {
 		return nil, aerr
 	}
@@ -1021,6 +1069,9 @@ func (s *Service) tagResourceTyped(ctx context.Context, in *tagResourceRequest) 
 		return nil, aerr
 	}
 	_, aerr = serviceutil.ApplyStoreTags(ctx, s.tagStore(), fn.ARN, in.Tags, tagCfg)
+	if aerr == nil {
+		s.invalidateRoutes() // the route table carries the tags that ABAC conditions read
+	}
 	return nil, aerr
 }
 
@@ -1036,6 +1087,9 @@ func (s *Service) untagResourceTyped(ctx context.Context, in *untagResourceReque
 		return nil, aerr
 	}
 	_, aerr = serviceutil.RemoveStoreTags(ctx, s.tagStore(), fn.ARN, in.TagKeys)
+	if aerr == nil {
+		s.invalidateRoutes()
+	}
 	return nil, aerr
 }
 
@@ -1104,6 +1158,7 @@ func (s *Service) putResourcePolicyTyped(ctx context.Context, in *putPolicyReque
 	if aerr := putRecord(ctx, s, nsPolicies, fn.ARN, rec); aerr != nil {
 		return nil, aerr
 	}
+	s.invalidateRoutes() // the route table carries the policy the next request is judged by
 	return &policyResponse{Policy: rec.Policy, RevisionID: rec.RevisionID}, nil
 }
 
@@ -1138,7 +1193,11 @@ func (s *Service) deleteResourcePolicyTyped(ctx context.Context, in *policyRef) 
 	if in.RevisionID != "" && cur.RevisionID != in.RevisionID {
 		return nil, conflict("The policy revision ID does not match the current policy revision.")
 	}
-	return nil, deleteRecord(ctx, s, nsPolicies, fn.ARN)
+	if aerr := deleteRecord(ctx, s, nsPolicies, fn.ARN); aerr != nil {
+		return nil, aerr
+	}
+	s.invalidateRoutes()
+	return nil, nil
 }
 
 // ─── Account settings ────────────────────────────────────────────────────────

@@ -19,14 +19,18 @@ The full divergence list behind [Lambda Web Functions](../lambda-web.md).
 | Configuration | On AWS | Overcast |
 | --- | --- | --- |
 | Revision code | Lambda downloads the zip, unpacks it into a microVM and starts it | A background worker checks the zip when the revision is created (a corrupt archive, an entry that escapes the root, more than 100,000 entries, or more than 512 MB unzipped (each entry also counts 512 bytes of archive header) makes it `Failed`). The first request starts a Docker container with the zip injected; a missing entry file shows up as `Runtime.ImportCodeError` |
-| Execution environment | Firecracker microVM | A container of `public.ecr.aws/lambda/nodejs:24` with 2 GiB and 2 vCPU (`LAMBDA_WEB_ENVIRONMENT_MEMORY_MB`) |
-| Capacity | Per-account service limits | `LAMBDA_WEB_MAX_ENVIRONMENTS` (default 8) containers per host; at the limit, idle environments of other endpoints are reclaimed, otherwise the request is refused with `Platform.EndpointMaxEnvThrottle` |
+| Execution environment | Firecracker microVM | A container of `public.ecr.aws/lambda/nodejs:24` with 2 GiB, 2 vCPU, 512 MB of `/tmp`, 1,024 open files and 1,024 processes and threads. Only `nodejs24.x` is accepted, as on AWS |
+| `/tmp` | Separate ephemeral storage of 512 MB | A 512 MB tmpfs, which is memory and counts against the environment's memory limit (2 GiB by default), so an application that fills `/tmp` can be killed for memory first |
+| Capacity | An account quota of 2,000 Arm64 vCPUs (about 1,000 environments), refused with `Platform.AccountActiveVCPUArm64Throttle` | A host limit, `LAMBDA_WEB_MAX_ENVIRONMENTS` (default 8): idle environments of other endpoints are reclaimed first, otherwise the request is refused with the same `Platform.AccountActiveVCPUArm64Throttle` and the account-level usage metric counts it. An endpoint's own `scalingConfig.maxEnvironments` is refused with `Platform.EndpointMaxEnvThrottle`. Draining environments can briefly exceed the host limit |
 | `runtimeConfig`, `serviceConfig` | Shape the execution environment | `timeoutSeconds`, `maxConcurrencyPerEnvironment`, `environmentVariables` and `telemetryConfig.loggingConfig` are honoured. `kmsKeyArn` is format-checked and echoed |
 | `egressNetworkConnectorArn` | Gives the revision VPC access | Format-checked and echoed; the container has Docker's default networking. A revision with a connector is refused on `MultiRegion` and `PerRegion` endpoints, as on AWS |
 | `scalingConfig`, `throttleConfig` | Cap environments and requests per second | Enforced. The default rate limit is 10,000 per second per endpoint and 100,000 per account, with a burst of a tenth of a second's allowance |
-| Resource policy and `IamAuth` | Authorise callers of the endpoint | Enforced for SigV4 and SigV4a signatures. The signature check follows the service-wide `SigV4Validate` setting and policy evaluation follows `EnforceIAM`. SigV4a is verified against Overcast's own signer only |
+| Resource policy and `IamAuth` | Authorise callers of the endpoint | Signature verification and policy evaluation are **off by default** (`OVERCAST_SIGV4_VALIDATE`, `OVERCAST_ENFORCE_IAM`): by default an `IamAuth` endpoint only checks that a request carries a SigV4-shaped `Authorization` and a content hash. With both on, SigV4 and SigV4a signatures are verified and the caller's IAM policy and the function's resource policy are evaluated. SigV4a is verified against Overcast's own signer only |
+| Execution role | The environment assumes `executionRoleArn` | The role is never assumed: the container gets the emulator's static credentials, so calls the role would deny succeed. The role, the bucket policy, the caller's S3 read access and `iam:PassRole` are not checked when a revision is created |
 | Rate limits and `IamAuth` | Throttling happens in front of the endpoint | The endpoint's and the account's limits are checked before authentication, so unsigned requests spend the endpoint's tokens and can starve legitimate callers of a low `rateLimit` |
-| Protocol | HTTP/1.1 and HTTP/2 over TLS | Plain HTTP; only HTTP/1.0 is refused (505) |
+| Protocol | HTTP/1.1; other versions are refused with `Platform.UnsupportedHttpVersion` | Plain HTTP; only HTTP/1.0 is refused (505) |
+| Request and response bodies | The request body is buffered before the application answers | Both are streamed in both directions, so an application that waits for its whole request before it responds works either way, and one that depends on the buffering does not |
+| Request headers | `Upgrade`, `Expect` and others are removed | `Upgrade` and its `Connection` token are removed (no WebSockets), as are the hop-by-hop and override headers; 429 responses also carry `Retry-After: 1`, which AWS does not document |
 | Client address | The client's | `RealIP` rewrites the remote address from `X-Forwarded-For`, so the application sees that address twice in the header |
 | `MultiRegion` and `PerRegion` | Replicate to the other Regions | Recorded in `regions` and `regionalEndpoints`; each Region's domain is served by this process |
 | Invoke path | None | Requests can also be sent to `/_overcast/lambdaweb/invoke/{id}/{region}/…` when the Host header cannot be set |
@@ -76,7 +80,7 @@ to AWS, and may differ in message text or edge cases.
 | A key whose current version is a delete marker is treated as missing | It reads as absent over S3 |
 | Package contents are checked by unzipping every entry, rejecting absolute paths and `..` | The documentation states the 512 MB limit and the entry file, not the checks Lambda runs |
 | A reserved environment variable is refused with `ValidationException` | Documented only as "Lambda rejects the request" |
-| The environment variable size and count are not limited | The Web Functions pages give no limit |
+| Environment variables are limited to 32 KB in aggregate (names plus values) | The Lambda quotas page, Web Functions section; whether AWS counts the `=` is not documented |
 | `stateReason` of a `Failed` revision reads "Lambda could not prepare the deployment package: …" | No example shows a value |
 | Platform error messages and a few of their status codes | The error type names are documented; messages are not |
 | 403 for every failed authentication or authorisation on an `IamAuth` endpoint | The documentation shows only `Forbidden` |

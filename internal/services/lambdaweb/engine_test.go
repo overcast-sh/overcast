@@ -752,3 +752,214 @@ func TestServe_genuineCloudFrontIdentityReachesTheAuthoriserButNotTheApplication
 		t.Errorf("authoriser source ARNs = %q, want %q", spy.arn, arn)
 	}
 }
+
+func TestServe_policyAndTagChangesReachTheRouteTable(t *testing.T) {
+	// Given: a function that has served a request, so its route table is built
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	f.do(d, "GET", "/", nil, nil)
+	fnARN := f.svc.functionARN("us-east-1", d.function)
+	route := func() (*policyRecord, map[string]string) {
+		tbl, err := f.svc.routes(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ro := tbl.byHost[d.id]
+		return ro.policy, tbl.tags[fnARN]
+	}
+	if p, tags := route(); p != nil || len(tags) != 0 {
+		t.Fatalf("before = %v %v", p, tags)
+	}
+
+	// When: a policy and a tag are added after traffic has started
+	policy := resourcePolicy(`{"Service":"cloudfront.amazonaws.com"}`, "")
+	if _, aerr := f.svc.putResourcePolicyTyped(context.Background(), &putPolicyRequest{ResourceARN: fnARN, Policy: policy}); aerr != nil {
+		t.Fatalf("put policy: %s", aerr.Message)
+	}
+	if _, aerr := f.svc.tagResourceTyped(context.Background(), &tagResourceRequest{Resource: fnARN, Tags: map[string]string{"team": "a"}}); aerr != nil {
+		t.Fatalf("tag: %s", aerr.Message)
+	}
+
+	// Then: the next request is judged by them
+	if p, tags := route(); p == nil || tags["team"] != "a" {
+		t.Errorf("after add = %v %v", p, tags)
+	}
+
+	// And when they are removed again, by the next request too
+	if _, aerr := f.svc.untagResourceTyped(context.Background(), &untagResourceRequest{Resource: fnARN, TagKeys: []string{"team"}}); aerr != nil {
+		t.Fatalf("untag: %s", aerr.Message)
+	}
+	if _, aerr := f.svc.deleteResourcePolicyTyped(context.Background(), &policyRef{ResourceARN: fnARN}); aerr != nil {
+		t.Fatalf("delete policy: %s", aerr.Message)
+	}
+	if p, tags := route(); p != nil || len(tags) != 0 {
+		t.Errorf("after remove = %v %v", p, tags)
+	}
+}
+
+func TestServe_aCrashedEnvironmentsContainerIsRemoved(t *testing.T) {
+	// Given: a running environment
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	f.do(d, "GET", "/", nil, nil)
+	f.prov.mu.Lock()
+	env := f.prov.envs[0]
+	f.prov.mu.Unlock()
+
+	// When: its process dies on its own
+	env.crash(exitReason{Code: 1})
+
+	// Then: the engine still asks the provider to remove it
+	eventually(t, "Stop to be called on the crashed environment", func() bool { return env.stopCalls.Load() >= 1 })
+}
+
+func TestServe_anApplicationsOwnCORSHeadersReplaceThePreset(t *testing.T) {
+	// Given: the emulator's permissive CORS in front, and an application that
+	// names its own origin
+	f := newDPFixture(t, dpOptions{
+		wrap: middleware.CORS,
+		handler: func(envSpec) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Access-Control-Allow-Origin", "https://app.example")
+			})
+		},
+	})
+	d := f.deploy(deployOpts{})
+
+	// When: a request goes through the invoke path (which keeps the middleware)
+	resp, _ := f.do(d, "GET", "/", nil, nil)
+
+	// Then: the browser sees one origin, the application's
+	if got := resp.Header.Values("Access-Control-Allow-Origin"); len(got) != 1 || got[0] != "https://app.example" {
+		t.Errorf("Access-Control-Allow-Origin = %q", got)
+	}
+}
+
+func TestServe_resetRetiresEndpointsTheStoreNoLongerHolds(t *testing.T) {
+	// Given: an endpoint that is serving, with a running environment
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	if resp, _ := f.do(d, "GET", "/", nil, nil); resp.StatusCode != 200 {
+		t.Fatalf("before reset = %d", resp.StatusCode)
+	}
+
+	// When: the store is wiped (POST /_overcast/reset) and the service settles
+	ctx := context.Background()
+	for _, ns := range []string{nsFunctions, nsRevisions, nsEndpoints, nsPolicies, nsTags} {
+		keys, _ := f.svc.store.List(ctx, ns, "")
+		for _, k := range keys {
+			_ = f.svc.store.Delete(ctx, ns, k)
+		}
+	}
+	if err := f.svc.DebugResetState(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Then: the deleted endpoint no longer serves, and its environment is stopped
+	if resp, _ := f.do(d, "GET", "/", nil, nil); resp.StatusCode != 404 {
+		t.Errorf("after reset = %d, want 404", resp.StatusCode)
+	}
+	eventually(t, "the environment to stop", func() bool { return f.prov.liveEnvs() == 0 })
+}
+
+func TestLiveEnvironments_countsOneRegionsEndpoint(t *testing.T) {
+	// Given: the same function and endpoint name in two Regions, with
+	// different numbers of environments
+	f := newDPFixture(t, dpOptions{})
+	mk := func(region string, n int32) *endpointRT {
+		rt := &endpointRT{region: region, function: "api", endpoint: "prod", pools: map[string]*pool{}}
+		rt.envs.Store(n)
+		return rt
+	}
+	f.svc.dp.rtMu.Lock()
+	f.svc.dp.rts = map[string]*endpointRT{"a": mk("us-east-1", 2), "b": mk("eu-west-1", 3)}
+	f.svc.dp.rtMu.Unlock()
+
+	// Then: each Region's node counts its own, and "" counts both
+	if got := f.svc.liveEnvironments("us-east-1", "api", "prod"); got != 2 {
+		t.Errorf("us-east-1 = %d, want 2", got)
+	}
+	if got := f.svc.liveEnvironments("eu-west-1", "api", "prod"); got != 3 {
+		t.Errorf("eu-west-1 = %d, want 3", got)
+	}
+	if got := f.svc.liveEnvironments("", "api", "prod"); got != 5 {
+		t.Errorf("all = %d, want 5", got)
+	}
+}
+
+func TestServe_aRetiredPoolStartsNothing(t *testing.T) {
+	// Given: a request that resolved its pool from a table that has since
+	// retired the revision
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	f.do(d, "GET", "/", nil, nil)
+	tbl, err := f.svc.routes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := &tbl.byHost[d.id].revs[0]
+	rr.pool.rt.mu.Lock()
+	delete(rr.pool.rt.pools, rr.pool.revID) // retirePools did this
+	rr.pool.rt.mu.Unlock()
+	for _, es := range rr.pool.snapshot() { // and its environments are gone
+		es.inflight.Store(es.limit)
+	}
+	before := f.prov.starts.Load()
+
+	// When: it asks for an environment
+	_, perr := f.svc.acquire(rr)
+
+	// Then: it is refused and nothing was started in a pool nothing will drain
+	if perr == nil || perr.Type != errTypeRevisionNotActive {
+		t.Errorf("acquire = %+v", perr)
+	}
+	if f.prov.starts.Load() != before {
+		t.Error("an environment was started in a retired pool")
+	}
+}
+
+func TestServe_upgradeHeadersAreRemovedFromTheRequest(t *testing.T) {
+	// Given: an application that reports the connection headers it received
+	f := newDPFixture(t, dpOptions{handler: func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "upgrade=%q connection=%q", r.Header.Get("Upgrade"), r.Header.Values("Connection"))
+		})
+	}})
+	d := f.deploy(deployOpts{})
+
+	// When: a client asks to upgrade to a WebSocket
+	resp, body := f.do(d, "GET", "/socket", nil, map[string]string{"Upgrade": "websocket", "Connection": "keep-alive, Upgrade"})
+
+	// Then: Lambda strips both, as it does for every request: the application
+	// answers an ordinary one
+	if resp.StatusCode != 200 || strings.Contains(strings.ToLower(body), "websocket") || strings.Contains(strings.ToLower(body), "upgrade=\"upgrade") {
+		t.Errorf("= %d %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `upgrade=""`) {
+		t.Errorf("application saw an Upgrade header: %s", body)
+	}
+}
+
+func TestServe_anApplicationsCORSHeadersReplaceTheWholePreset(t *testing.T) {
+	// Given: an application that sets only a credentials header
+	f := newDPFixture(t, dpOptions{
+		wrap: middleware.CORS,
+		handler: func(envSpec) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			})
+		},
+	})
+	d := f.deploy(deployOpts{})
+
+	// When: a request goes through the invoke path
+	resp, _ := f.do(d, "GET", "/", nil, nil)
+
+	// Then: the preset wildcard origin is gone, since it cannot accompany credentials
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want none", got)
+	}
+	if resp.Header.Get("Access-Control-Allow-Credentials") != "true" {
+		t.Error("the application's header was lost")
+	}
+}

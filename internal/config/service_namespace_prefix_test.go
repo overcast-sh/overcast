@@ -73,6 +73,7 @@ func TestServiceNamespacePrefix_allServicesAudit(t *testing.T) {
 		"cloudformation": "cfn",
 		"apigateway":     "apigw",
 		"eventbridge":    "eb",
+		"lambdaweb":      "lambda-web",
 	}
 
 	for _, svc := range services {

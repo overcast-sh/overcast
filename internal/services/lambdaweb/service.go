@@ -58,6 +58,10 @@ type Service struct {
 	// a single step. Writes are small and in-process.
 	mu sync.Mutex
 
+	// tokens remembers recent list tokens' boundary items, so a page can resume
+	// after an item that has since been deleted.
+	tokens tokenBook
+
 	// lifecycleState holds the change hook and the revision worker
 	// (hooks.go, lifecycle.go).
 	lifecycleState

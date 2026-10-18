@@ -20,9 +20,9 @@ const stored: WebPolicy = {
 }
 
 describe("PolicyTab", () => {
-  it("says the policy is validated but not enforced", async () => {
+  it("says the policy is checked only when IAM enforcement is on", async () => {
     renderTab(null)
-    expect(await screen.findByText("Stored, validated, not enforced")).toBeInTheDocument()
+    expect(await screen.findByText("Checked when IAM enforcement is on")).toBeInTheDocument()
   })
 
   it("starts a new policy from a template in the function's account", async () => {

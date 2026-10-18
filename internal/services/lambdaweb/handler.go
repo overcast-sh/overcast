@@ -63,6 +63,9 @@ type reqState struct {
 	es        *envState
 	perr      *platformError
 	logStream string
+	// w is the client's response writer, for the headers an application's own
+	// response replaces.
+	w http.ResponseWriter
 }
 
 type reqStateKey struct{}
@@ -227,10 +230,14 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 	// 8. proxy
 	st := &reqState{
 		id: id, endpoint: ep.Name, es: es, logStream: es.ref.LogStream,
-		host: s.forwardHost(r, ro), peerIP: peerIP(r),
+		host: s.forwardHost(r, ro), peerIP: peerIP(r), w: w,
 	}
 	st.path, st.rawPath = originalPath(r, ro)
 	out := r.WithContext(context.WithValue(ctx, reqStateKey{}, st))
+	// Lambda removes Upgrade (and the Connection token that names it) from a
+	// request. Go's proxy would otherwise notice it and tunnel a WebSocket.
+	out.Header.Del("Upgrade")
+	dropConnectionToken(out.Header, "upgrade")
 	es.proxy.ServeHTTP(w, out)
 	return st.perr, ev
 }
@@ -386,6 +393,23 @@ func rewriteRequest(pr *httputil.ProxyRequest, addr string) {
 
 // removedRequestHeaders are the request headers Lambda drops beyond the
 // hop-by-hop set Go's proxy already removes.
+// dropConnectionToken removes one token from the Connection header.
+func dropConnectionToken(h http.Header, token string) {
+	var keep []string
+	for _, v := range h.Values("Connection") {
+		for _, t := range strings.Split(v, ",") {
+			if t = strings.TrimSpace(t); t != "" && !strings.EqualFold(t, token) {
+				keep = append(keep, t)
+			}
+		}
+	}
+	if len(keep) == 0 {
+		h.Del("Connection")
+		return
+	}
+	h.Set("Connection", strings.Join(keep, ", "))
+}
+
 var removedRequestHeaders = []string{
 	"Expect", "Proxy-Connection", "X-Real-Ip",
 	"X-Http-Method-Override", "X-Http-Method", "X-Method-Override",
@@ -395,6 +419,23 @@ func modifyResponse(resp *http.Response) error {
 	st, _ := resp.Request.Context().Value(reqStateKey{}).(*reqState)
 	resp.Header.Del("Trailer")
 	resp.Trailer = nil
+	if st != nil && st.w != nil {
+		// The emulator's permissive CORS headers are already on the writer, and
+		// the proxy would add the application's own beside them. An application
+		// that speaks CORS replaces them.
+		// Any CORS header from the application means it speaks CORS: drop the whole
+		// preset, or a preset `*` would sit beside its own credentials header.
+		for k := range resp.Header {
+			if strings.HasPrefix(k, "Access-Control-") {
+				for pk := range st.w.Header() {
+					if strings.HasPrefix(pk, "Access-Control-") {
+						st.w.Header().Del(pk)
+					}
+				}
+				break
+			}
+		}
+	}
 	if st != nil {
 		resp.Header.Set("Lambda-Web-Request-Id", st.id)
 		resp.Header.Set("Lambda-Web-Logstream", st.logStream)

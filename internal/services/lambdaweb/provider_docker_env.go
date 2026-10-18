@@ -129,6 +129,11 @@ func (p *DockerProvider) createRequest(ctx context.Context, spec envSpec, image 
 			Memory:      bytes,
 			MemorySwap:  bytes, // equal to Memory: no swap
 			NanoCPUs:    webCPUs * 1_000_000_000,
+			// The execution environment's documented limits: 512 MB of /tmp, 1,024
+			// open files, 1,024 processes and threads (the Lambda quotas page).
+			Tmpfs:     map[string]string{"/tmp": "rw,size=512m,mode=1777"},
+			PidsLimit: webMaxPids,
+			Ulimits:   []docker.Ulimit{{Name: "nofile", Soft: webMaxFiles, Hard: webMaxFiles}},
 			// Published on an ephemeral loopback port; read back after the
 			// start. Used when Overcast runs on the host, where container
 			// addresses are not routable (Docker Desktop).

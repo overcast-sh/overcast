@@ -54,8 +54,8 @@ export function nameProblem(name: string): string | undefined {
 
 // ─── Revisions ────────────────────────────────────────────────────────────
 
-/** Web Functions run Node.js only. */
-export const RUNTIMES = ["nodejs24.x", "nodejs22.x", "nodejs20.x"] as const
+/** Web Functions run Node.js 24 only. */
+export const RUNTIMES = ["nodejs24.x"] as const
 
 export const TIMEOUT_RANGE = { min: 3, max: 900, default: 30 } as const
 export const CONCURRENCY_RANGE = { min: 1, max: 128, default: 64 } as const

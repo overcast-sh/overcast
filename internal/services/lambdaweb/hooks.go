@@ -2,7 +2,12 @@ package lambdaweb
 
 // hooks.go — how the control plane tells the data plane that state changed.
 
-import "context"
+import (
+	"context"
+	"sort"
+	"strconv"
+	"strings"
+)
 
 // InitChangeHook wires the function the control plane calls after every
 // successful write to a web function's revisions or endpoints, so the data
@@ -36,4 +41,43 @@ func (s *Service) onChange(_ context.Context, region, function string) error {
 		return nil
 	}
 	return s.changed(region, function)
+}
+
+// DebugNamespace names the service's runtime state in /_overcast/debug/state.
+// It makes the service a router.DebugStateProvider, which is how a reset
+// reaches it.
+func (s *Service) DebugNamespace() string { return "lambda-web:runtime" }
+
+// DebugStateKeys lists the endpoints with environments, as {function}/{endpoint}.
+func (s *Service) DebugStateKeys(context.Context) ([]string, error) {
+	s.dp.rtMu.Lock()
+	defer s.dp.rtMu.Unlock()
+	var keys []string
+	for _, rt := range s.dp.rts {
+		if rt.envs.Load() > 0 {
+			keys = append(keys, rt.function+"/"+rt.endpoint)
+		}
+	}
+	sort.Strings(keys)
+	return keys, nil
+}
+
+// DebugStateValues reports the live environment count per endpoint.
+func (s *Service) DebugStateValues(ctx context.Context) (map[string]string, error) {
+	keys, _ := s.DebugStateKeys(ctx)
+	out := make(map[string]string, len(keys))
+	for _, k := range keys {
+		fn, ep, _ := strings.Cut(k, "/")
+		out[k] = strconv.Itoa(s.liveEnvironments("", fn, ep)) + " environments"
+	}
+	return out, nil
+}
+
+// DebugResetState settles the data plane after the store was wiped: the route
+// table is rebuilt from what is left, which retires and drains every
+// environment of an endpoint that no longer exists.
+func (s *Service) DebugResetState(ctx context.Context) error {
+	s.invalidateRoutes()
+	_, err := s.routes(ctx)
+	return err
 }

@@ -267,7 +267,88 @@ func (s *Service) Resume(ctx context.Context) {
 			s.enqueueRevision(revKey{rev.Region, rev.Function, rev.ID})
 		}
 	}
+	s.settleEndpointsInBackground()
 }
+
+// unsettled reports whether an endpoint was left mid-transition by a stop: it
+// is Pending, Deleting, or has an update in progress.
+func unsettled(ep *endpoint) bool {
+	return epState(ep) == statePending || epState(ep) == stateDeleting || epUpdateStatus(ep) == updateInProgress
+}
+
+// settleEndpointsInBackground finishes the endpoints a stop left mid-transition
+// (Pending, Deleting, or updateStatus InProgress). It runs off the caller's
+// path because the control plane holds the service lock while it calls the
+// change hook, and Resume can be reached from there.
+func (s *Service) settleEndpointsInBackground() {
+	eps, aerr := scanRecords[endpoint](context.Background(), s, nsEndpoints, "")
+	if aerr != nil {
+		s.log.Error("lambda-web: could not scan for unsettled endpoints", zap.String("error", aerr.Message))
+		return
+	}
+	pending := false
+	for _, ep := range eps {
+		if unsettled(ep) {
+			pending = true
+			break
+		}
+	}
+	if !pending {
+		return
+	}
+	lc := &s.lifecycleState
+	lc.wmu.Lock()
+	defer lc.wmu.Unlock()
+	if lc.stopped {
+		return
+	}
+	lc.wg.Add(1)
+	go func() {
+		defer lc.wg.Done()
+		s.settleEndpoints(context.Background())
+	}()
+}
+
+// settleEndpoints completes each unsettled endpoint the way the interrupted
+// call would have: a Pending endpoint is registered with the data plane, a
+// Deleting one is removed, an update in progress is applied.
+func (s *Service) settleEndpoints(ctx context.Context) {
+	defer s.lock()()
+	eps, aerr := scanRecords[endpoint](ctx, s, nsEndpoints, "")
+	if aerr != nil {
+		return
+	}
+	for _, ep := range eps {
+		if !unsettled(ep) {
+			continue
+		}
+		fn, found, aerr := getRecord[webFunction](ctx, s, nsFunctions, functionKey(ep.Region, ep.Function))
+		if aerr != nil {
+			continue
+		}
+		if !found {
+			// An orphan: its function is gone, so nothing can finish or use it.
+			_ = deleteRecord(ctx, s, nsEndpoints, childKey(ep.Region, ep.Function, ep.Name))
+			continue
+		}
+		switch {
+		case epState(ep) == stateDeleting:
+			if aerr := deleteRecord(ctx, s, nsEndpoints, childKey(ep.Region, ep.Function, ep.Name)); aerr == nil {
+				s.publish(ctx, events.LambdaWebEndpointDeleted, fn, "", ep.Name)
+				_ = s.onChange(ctx, ep.Region, ep.Function)
+			}
+		case epState(ep) == statePending:
+			_ = s.registerEndpoint(ctx, fn, ep)
+		default:
+			_ = s.finishEndpointUpdate(ctx, fn, []*endpoint{ep}, s.onChange(ctx, ep.Region, ep.Function))
+		}
+	}
+}
+
+// ResumeAsync finishes, in the background, what the last stop interrupted:
+// Pending revisions and endpoints left mid-transition. The router calls it once
+// the service is wired; without it that work waits for the first API call.
+func (s *Service) ResumeAsync() { go s.ensureResumed() }
 
 // ensureResumed runs Resume once, on the first use of the service.
 func (s *Service) ensureResumed() {

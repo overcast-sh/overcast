@@ -83,7 +83,9 @@ type fakeEnv struct {
 	done    chan struct{}
 	once    sync.Once
 	stopped atomic.Bool
-	reason  atomic.Pointer[exitReason]
+	// stopCalls counts Stop calls: a crashed process still needs its container removed.
+	stopCalls atomic.Int32
+	reason    atomic.Pointer[exitReason]
 }
 
 func (e *fakeEnv) ID() string                     { return e.id }
@@ -98,6 +100,7 @@ func (e *fakeEnv) ExitReason() exitReason {
 }
 
 func (e *fakeEnv) Stop(context.Context, time.Duration) error {
+	e.stopCalls.Add(1)
 	e.finish(exitReason{Requested: true})
 	return nil
 }

@@ -297,7 +297,10 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	// debugProviders is built unconditionally: /_overcast/reset (always-on,
 	// below) needs it regardless of cfg.Debug, and it's used again for the
 	// debug-gated block right after.
-	debugProviders := []DebugStateProvider{ddbSvc, logsSvc, sqsSvc}
+	// lambdaWebSvc is built here, not with the other constructors below, so a
+	// reset can settle its data plane (New is pure assignment).
+	lambdaWebSvc := lambdaweb.New(cfg, store, logger, clk)
+	debugProviders := []DebugStateProvider{ddbSvc, logsSvc, sqsSvc, lambdaWebSvc}
 	// dockerStatusFn is assigned further down, once the Docker supervisor and
 	// its tracker exist. Handlers registered before then are handed a closure
 	// over the variable rather than its current (nil) value, so the debug
@@ -425,7 +428,6 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	prof.mark("  new: efs")
 	s3tablesSvc := s3tables.New(cfg, store, logger, clk)
 	prof.mark("  new: s3tables")
-	lambdaWebSvc := lambdaweb.New(cfg, store, logger, clk)
 	prof.mark("  new: lambdaweb")
 
 	prof.mark("service constructors (48)")
@@ -831,6 +833,7 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 	lwProvider.InitCode(codeSource)
 	lambdaWebSvc.InitProvider(lwProvider)
 	lambdaWebSvc.InitChangeHook(lambdaWebSvc.RoutesChanged)
+	lambdaWebSvc.ResumeAsync()
 	// IamAuth endpoints: SigV4/SigV4a checks always, signature verification and
 	// IAM evaluation with the same switches the rest of the emulator uses.
 	lambdaWebSvc.InitAuth(lambdaweb.NewAuthorizer(lambdaweb.AuthorizerOptions{
