@@ -106,11 +106,13 @@ export const WebFunctionNode = memo(function WebFunctionNode({ data }: NodeProps
           </span>
           {scaling.scaledToZero ? (
             <span
+              role="img"
+              aria-label="Scaled to zero"
               className="inline-flex shrink-0 items-center gap-0.5 italic"
-              title="Every endpoint has scaled to zero environments. The next request starts one."
+              title="Scaled to zero: every endpoint has no environments. The next request starts one."
             >
               <Moon className="size-3" aria-hidden />
-              scaled to zero
+              {environmentsText(0)}
             </span>
           ) : (
             scaling.environments > 0 && (

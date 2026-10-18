@@ -189,3 +189,16 @@ export function describeBody(bytes: Uint8Array, contentType: string | null): Des
   }
   return { kind: "text", text, size }
 }
+
+/**
+ * The error type a platform error's body names, for when the
+ * `lambda-web-error-type` header cannot be read (a browser hides it across
+ * origins). Only a type this table knows counts, so application text that
+ * merely looks like one is not taken for it.
+ */
+export function errorTypeInBody(text: string): string | undefined {
+  for (const match of text.matchAll(/\b(?:Platform|Runtime|Application|Overcast)\.[A-Za-z]+/g)) {
+    if (match[0] in ERROR_TYPES) return match[0]
+  }
+  return undefined
+}

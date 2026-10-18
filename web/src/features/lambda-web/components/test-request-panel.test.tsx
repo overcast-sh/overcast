@@ -179,3 +179,19 @@ describe("TestRequestPanel", () => {
     expect(screen.queryByRole("button", { name: "Send request" })).not.toBeInTheDocument()
   })
 })
+
+describe("TestRequestPanel without readable headers", () => {
+  it("takes the error type from the body when the browser hides the header", async () => {
+    server.use(
+      http.all(`${INVOKE}/*`, () =>
+        HttpResponse.text("The application failed to start: Runtime.ImportCodeError\nboom", {
+          status: 502,
+        }),
+      ),
+    )
+    const { user } = renderPanel()
+    await user.click(screen.getByRole("button", { name: "Send request" }))
+    expect(await screen.findByText("Runtime.ImportCodeError")).toBeInTheDocument()
+    expect(screen.getByText(/package failed to load/)).toBeInTheDocument()
+  })
+})

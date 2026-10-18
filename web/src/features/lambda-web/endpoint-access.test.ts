@@ -4,6 +4,7 @@ import {
   describeBody,
   describeErrorType,
   domainIdOf,
+  errorTypeInBody,
   endpointAddress,
   invokePath,
   invokeRegionOf,
@@ -158,5 +159,18 @@ describe("describeBody", () => {
     })
     // Not labelled, but not text either.
     expect(describeBody(new Uint8Array([0xff, 0xfe, 0x00, 0x01]), null).kind).toBe("binary")
+  })
+})
+
+describe("errorTypeInBody", () => {
+  it("finds the type a start failure names", () => {
+    expect(errorTypeInBody("The application failed to start: Application.InitCodeError boom")).toBe(
+      "Application.InitCodeError",
+    )
+  })
+
+  it("ignores something that only looks like a type", () => {
+    expect(errorTypeInBody("see Runtime.Nonsense and Foo.Bar")).toBeUndefined()
+    expect(errorTypeInBody("")).toBeUndefined()
   })
 })

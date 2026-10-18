@@ -152,7 +152,7 @@ describe("WebFunctionNode", () => {
       expect(within(dev).getByText("0 envs")).toBeInTheDocument()
       // The header sums the same rows.
       expect(screen.getAllByText("3 envs")).toHaveLength(1)
-      expect(screen.queryByText("scaled to zero")).not.toBeInTheDocument()
+      expect(screen.queryByLabelText("Scaled to zero")).not.toBeInTheDocument()
     })
 
     it("says the function is scaled to zero when no endpoint has an environment", async () => {
@@ -161,13 +161,13 @@ describe("WebFunctionNode", () => {
         webEndpoints: node.webEndpoints!.map((e) => ({ ...e, environments: 0 })),
       }
       renderNode(idle)
-      expect(await screen.findByText("scaled to zero")).toBeInTheDocument()
+      expect(await screen.findByLabelText("Scaled to zero")).toBeInTheDocument()
     })
 
     it("does not call a function with no endpoints scaled to zero", async () => {
       renderNode({ ...node, webEndpoints: [] })
       await screen.findByText("Web function")
-      expect(screen.queryByText("scaled to zero")).not.toBeInTheDocument()
+      expect(screen.queryByLabelText("Scaled to zero")).not.toBeInTheDocument()
     })
 
     it.each([

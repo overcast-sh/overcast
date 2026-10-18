@@ -16,6 +16,7 @@ import { invokeEndpointMutationOptions } from "../data"
 import {
   describeBody,
   describeErrorType,
+  errorTypeInBody,
   invokePath,
   methodHasBody,
   TEST_METHODS,
@@ -178,9 +179,12 @@ function TestResponse({ outcome: { response, likelyColdStart } }: { outcome: Out
   const header = (name: string) => response.headers.find(([n]) => n === name)?.[1]
   const requestId = header("lambda-web-request-id")
   const logStream = header("lambda-web-logstream")
-  const errorType = header("lambda-web-error-type")
   const contentType = header("content-type")
   const body = describeBody(response.body, contentType ?? null)
+  // The header is not readable across origins; a start failure names its type in the body.
+  const errorType =
+    header("lambda-web-error-type") ??
+    (response.status >= 400 ? errorTypeInBody(body.text) : undefined)
   return (
     <div
       role="group"
