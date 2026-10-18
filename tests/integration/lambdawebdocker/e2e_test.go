@@ -352,3 +352,69 @@ func waitUntil(t *testing.T, d time.Duration, cond func() bool, what string) {
 	}
 	t.Fatalf("timed out waiting for %s", what)
 }
+
+func TestEndToEnd_cloudFrontReachesAnIamAuthEndpointThroughItsOAC(t *testing.T) {
+	// Given: an IamAuth endpoint whose resource policy admits CloudFront
+	e := newE2E(t)
+	e.upload("echo.zip", map[string]string{"index.js": echoApp})
+	domain := e.deploy("fronted", revCfg("echo.zip", nil), types.AuthTypeIamAuth)
+	fn, err := e.web.GetWebFunction(e.ctx, &lambdaweb.GetWebFunctionInput{FunctionName: aws.String("fronted")})
+	if err != nil {
+		t.Fatalf("GetWebFunction: %v", err)
+	}
+	policy := `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"cloudfront.amazonaws.com"},` +
+		`"Action":"lambda:InvokeWebFunctionEndpoint","Resource":"*"}]}`
+	if _, err := e.web.PutResourcePolicy(e.ctx, &lambdaweb.PutResourcePolicyInput{ResourceArn: fn.FunctionArn, Policy: aws.String(policy)}); err != nil {
+		t.Fatalf("PutResourcePolicy: %v", err)
+	}
+	// the origin domain is the endpoint's, on a base that resolves to Overcast
+	labels := strings.SplitN(domain, ".", 5)
+	origin := strings.Join(labels[:4], ".") + ".localhost"
+
+	post := func(path, body string) string {
+		req, _ := http.NewRequest(http.MethodPost, e.srv.URL+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/xml")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("POST %s: %v", path, err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("POST %s = %d: %s", path, resp.StatusCode, b)
+		}
+		return string(b)
+	}
+	between := func(s, open, close string) string {
+		i := strings.Index(s, open) + len(open)
+		return s[i : i+strings.Index(s[i:], close)]
+	}
+	oac := post("/2020-05-31/origin-access-control", `<?xml version="1.0" encoding="UTF-8"?>
+<OriginAccessControlConfig xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/"><Name>fronted-oac</Name>
+<SigningProtocol>sigv4</SigningProtocol><SigningBehavior>always-amz-auth</SigningBehavior>
+<OriginAccessControlOriginType>lambda</OriginAccessControlOriginType></OriginAccessControlConfig>`)
+	dist := post("/2020-05-31/distribution", `<?xml version="1.0" encoding="UTF-8"?>
+<DistributionConfig xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/"><CallerReference>fronted</CallerReference>
+<Comment>lambda web origin</Comment><Enabled>true</Enabled>
+<Origins><Quantity>1</Quantity><Items><Origin><Id>web-1</Id><DomainName>`+origin+`</DomainName>
+<OriginAccessControlId>`+between(oac, "<Id>", "</Id>")+`</OriginAccessControlId>
+<CustomOriginConfig><HTTPPort>80</HTTPPort><HTTPSPort>443</HTTPSPort><OriginProtocolPolicy>http-only</OriginProtocolPolicy></CustomOriginConfig>
+</Origin></Items></Origins>
+<DefaultCacheBehavior><TargetOriginId>web-1</TargetOriginId><ViewerProtocolPolicy>allow-all</ViewerProtocolPolicy>
+<ForwardedValues><QueryString>false</QueryString><Headers><Quantity>1</Quantity><Items><Name>Authorization</Name></Items></Headers></ForwardedValues>
+</DefaultCacheBehavior></DistributionConfig>`)
+	distID := between(dist, "<Id>", "</Id>")
+
+	// When: a viewer with an application token requests through the distribution
+	resp, body := e.get(e.srv.Listener.Addr().String(), "/_overcast/cloudfront/distributions/"+distID+"/hello",
+		map[string]string{"Authorization": "Bearer app-jwt"})
+
+	// Then: the endpoint served it, and its application saw the viewer's token
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `"auth":"Bearer app-jwt"`) {
+		t.Errorf("through CloudFront = %d %s", resp.StatusCode, body)
+	}
+	// And: a direct, unsigned request is still refused
+	if direct, _ := e.get(domain, "/hello", nil); direct.StatusCode != http.StatusForbidden {
+		t.Errorf("direct unsigned = %d", direct.StatusCode)
+	}
+}

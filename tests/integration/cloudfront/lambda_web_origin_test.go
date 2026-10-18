@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -137,8 +134,8 @@ func TestUpdateOriginAccessControl_rejectsAlwaysAmzAuthOnS3(t *testing.T) {
 }
 
 // lambdaWebDistXML is a distribution whose only origin is a Web Function
-// endpoint domain with the given OAC. The stub port stands in for the
-// endpoint's HTTP port.
+// endpoint domain with the given OAC. The request path through a real endpoint
+// is tested in tests/integration/lambdawebdocker.
 func lambdaWebDistXML(ref, domain, oacID string, port string) string {
 	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <DistributionConfig xmlns="http://cloudfront.amazonaws.com/doc/2020-05-31/">
@@ -190,54 +187,5 @@ func TestCreateDistribution_lambdaOACRequiresWebFunctionDomain(t *testing.T) {
 	helpers.AssertStatus(t, bad, http.StatusBadRequest)
 	if code := errorCode(t, bad); code != "InvalidDomainNameForOriginAccessControl" {
 		t.Errorf("code = %q", code)
-	}
-}
-
-func TestProxy_lambdaWebOriginSignedByOAC(t *testing.T) {
-	// Given: a stub Web Function endpoint (the real data plane is not wired here)
-	var host string
-	var hdr http.Header
-	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host, hdr = r.Host, r.Header.Clone()
-		_, _ = io.WriteString(w, "from web function")
-	}))
-	defer stub.Close()
-	_, port, _ := net.SplitHostPort(strings.TrimPrefix(stub.URL, "http://"))
-	if _, err := net.LookupHost("probe.lambda-web.us-east-1.localhost"); err != nil {
-		t.Skipf("*.localhost does not resolve on this host: %v", err)
-	}
-
-	srv := helpers.NewTestServer(t)
-	resp := postOAC(t, srv, "sigv4", "always-amz-auth", "lambda")
-	var oac parsedOAC
-	_ = xml.Unmarshal(readBody(t, resp), &oac)
-	resp.Body.Close()
-	domain := "abc123.def456.lambda-web.us-east-1.localhost"
-	dist, _ := cfCreateDistFromXML(t, srv, lambdaWebDistXML("lw-ok", domain, oac.ID, port))
-
-	// When: a viewer with an application token requests through the distribution
-	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/_overcast/cloudfront/distributions/"+dist.ID+"/hello", nil)
-	req.Header.Set("Authorization", "Bearer app-jwt")
-	got, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("proxy request: %v", err)
-	}
-	defer got.Body.Close()
-
-	// Then: the endpoint is reached with its own domain as Host
-	helpers.AssertStatus(t, got, http.StatusOK)
-	if h, _, _ := net.SplitHostPort(host); h != domain {
-		t.Errorf("Host = %q, want %q", host, domain)
-	}
-	// And: CloudFront signed for service lambda and kept the viewer's Authorization
-	sig := hdr.Get("X-Amz-Cf-Authorization")
-	if !strings.Contains(sig, "/us-east-1/lambda/aws4_request") {
-		t.Errorf("signature = %q, want SigV4 scope us-east-1/lambda", sig)
-	}
-	if hdr.Get("Authorization") != "Bearer app-jwt" {
-		t.Errorf("Authorization = %q, want the viewer's", hdr.Get("Authorization"))
-	}
-	if hdr.Get("X-Amz-Content-Sha256") == "" {
-		t.Error("X-Amz-Content-Sha256 missing")
 	}
 }
