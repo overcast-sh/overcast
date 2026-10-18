@@ -56,6 +56,9 @@ func validatePolicy(doc string) *protocol.AWSError {
 		if st.Effect != "Allow" && st.Effect != "Deny" {
 			return validationError("Each policy statement needs an Effect of Allow or Deny.")
 		}
+		if st.Effect == "Allow" && principalHasPartialWildcard(st.Principal) {
+			return validationError("The policy names a principal with a wildcard in it. A principal is either fully specified or \"*\".")
+		}
 		if st.Effect == "Allow" && serviceutil.PrincipalIsWildcard(st.Principal) && !hasTrustedCondition(st.Condition) {
 			return validationError("The policy is public: it grants access to an unspecified set of principals. " +
 				"Name the principals, or constrain a trusted condition key such as aws:PrincipalOrgID.")
@@ -71,13 +74,71 @@ func hasTrustedCondition(cond any) bool {
 	if !ok {
 		return false
 	}
-	for _, keys := range ops {
+	for op, keys := range ops {
+		// A negated operator, or one that passes when the key is absent, does not
+		// pin the caller to anything.
+		lop := strings.ToLower(op)
+		if strings.Contains(lop, "not") || strings.HasSuffix(lop, "ifexists") {
+			continue
+		}
 		km, ok := keys.(map[string]any)
 		if !ok {
 			continue
 		}
 		for key, val := range km {
-			if trustedConditionKeys[strings.ToLower(key)] && fixedValue(val) {
+			lkey := strings.ToLower(key)
+			if trustedConditionKeys[lkey] && (fixedValue(val) || arnWithFixedAccount(lkey, val)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// arnKeys are the condition keys whose values are ARNs. A wildcard in the
+// resource part of one (a CloudFront distribution/*, any role in an account)
+// still pins the caller to a fixed account, which AWS accepts.
+var arnKeys = map[string]bool{"aws:sourcearn": true, "aws:principalarn": true, "aws:sourcevpcarn": true}
+
+// arnWithFixedAccount reports whether every value of an ARN-valued key is an
+// ARN whose account segment is present and has no wildcard.
+func arnWithFixedAccount(key string, v any) bool {
+	if !arnKeys[key] {
+		return false
+	}
+	switch t := v.(type) {
+	case string:
+		parts := strings.SplitN(t, ":", 6)
+		return len(parts) == 6 && parts[0] == "arn" && parts[4] != "" && !strings.ContainsAny(parts[4], "*?$")
+	case []any:
+		if len(t) == 0 {
+			return false
+		}
+		for _, item := range t {
+			if !arnWithFixedAccount(key, item) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// principalHasPartialWildcard reports a principal that has a wildcard inside
+// it, such as arn:aws:iam::*:root. Only a bare "*" is a wildcard principal.
+func principalHasPartialWildcard(p any) bool {
+	switch t := p.(type) {
+	case string:
+		return t != "*" && strings.Contains(t, "*")
+	case []any:
+		for _, item := range t {
+			if principalHasPartialWildcard(item) {
+				return true
+			}
+		}
+	case map[string]any:
+		for _, item := range t {
+			if principalHasPartialWildcard(item) {
 				return true
 			}
 		}
