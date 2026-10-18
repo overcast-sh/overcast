@@ -596,7 +596,14 @@ func TestEndpointLifecycle_deleteDrainsBeforeRemoving(t *testing.T) {
 	// Given: an Active endpoint
 	f := newLifecycleFixture(t)
 	f.code.put("code", "v1.zip", goodPackage(t))
-	f.createApp("shop")
+	out := f.createApp("shop")
+	// the revision becomes Active in the background and the endpoint follows;
+	// let that settle so its hook calls are not mistaken for the delete's
+	eventually(t, "the endpoint to follow the Active revision", func() bool {
+		ep := f.endpoint("shop", "dev")
+		return f.revision("shop", out.Revision.RevisionID).State == stateActive &&
+			len(ep.RevisionWeights) == 1 && ep.UpdateStatus == updateSuccessful
+	})
 	f.mu.Lock()
 	f.atHook = nil
 	f.mu.Unlock()
@@ -607,8 +614,11 @@ func TestEndpointLifecycle_deleteDrainsBeforeRemoving(t *testing.T) {
 	}
 
 	// Then: the data plane was told while it was Deleting, and then once more after it was gone
-	if len(f.atHook) != 1 || f.atHook[0] != "Deleting/Successful" {
-		t.Errorf("state at the hook = %v", f.atHook)
+	f.mu.Lock()
+	seen := append([]string(nil), f.atHook...)
+	f.mu.Unlock()
+	if len(seen) != 1 || seen[0] != "Deleting/Successful" {
+		t.Errorf("state at the hook = %v", seen)
 	}
 	if f.hooks() < 2 {
 		t.Errorf("hook calls = %d", f.hooks())

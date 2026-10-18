@@ -18,13 +18,14 @@ The full divergence list behind [Lambda Web Functions](../lambda-web.md).
 
 | Configuration | On AWS | Overcast |
 | --- | --- | --- |
-| Revision code | Lambda downloads the zip, unpacks it into a microVM and starts it | A background worker checks the zip when the revision is created (a corrupt archive, an entry that escapes the root or more than 512 MB unzipped makes it `Failed`). The first request starts a Docker container with the zip injected; a missing entry file shows up as `Runtime.ImportCodeError` |
+| Revision code | Lambda downloads the zip, unpacks it into a microVM and starts it | A background worker checks the zip when the revision is created (a corrupt archive, an entry that escapes the root, more than 100,000 entries, or more than 512 MB unzipped (each entry also counts 512 bytes of archive header) makes it `Failed`). The first request starts a Docker container with the zip injected; a missing entry file shows up as `Runtime.ImportCodeError` |
 | Execution environment | Firecracker microVM | A container of `public.ecr.aws/lambda/nodejs:24` with 2 GiB and 2 vCPU (`LAMBDA_WEB_ENVIRONMENT_MEMORY_MB`) |
 | Capacity | Per-account service limits | `LAMBDA_WEB_MAX_ENVIRONMENTS` (default 8) containers per host; at the limit, idle environments of other endpoints are reclaimed, otherwise the request is refused with `Platform.EndpointMaxEnvThrottle` |
 | `runtimeConfig`, `serviceConfig` | Shape the execution environment | `timeoutSeconds`, `maxConcurrencyPerEnvironment`, `environmentVariables` and `telemetryConfig.loggingConfig` are honoured. `kmsKeyArn` is format-checked and echoed |
 | `egressNetworkConnectorArn` | Gives the revision VPC access | Format-checked and echoed; the container has Docker's default networking. A revision with a connector is refused on `MultiRegion` and `PerRegion` endpoints, as on AWS |
 | `scalingConfig`, `throttleConfig` | Cap environments and requests per second | Enforced. The default rate limit is 10,000 per second per endpoint and 100,000 per account, with a burst of a tenth of a second's allowance |
 | Resource policy and `IamAuth` | Authorise callers of the endpoint | Enforced for SigV4 and SigV4a signatures. The signature check follows the service-wide `SigV4Validate` setting and policy evaluation follows `EnforceIAM`. SigV4a is verified against Overcast's own signer only |
+| Rate limits and `IamAuth` | Throttling happens in front of the endpoint | The endpoint's and the account's limits are checked before authentication, so unsigned requests spend the endpoint's tokens and can starve legitimate callers of a low `rateLimit` |
 | Protocol | HTTP/1.1 and HTTP/2 over TLS | Plain HTTP; only HTTP/1.0 is refused (505) |
 | Client address | The client's | `RealIP` rewrites the remote address from `X-Forwarded-For`, so the application sees that address twice in the header |
 | `MultiRegion` and `PerRegion` | Replicate to the other Regions | Recorded in `regions` and `regionalEndpoints`; each Region's domain is served by this process |
@@ -82,6 +83,17 @@ to AWS, and may differ in message text or edge cases.
 | Environments are reused first-fit, 80% headroom triggers a pre-start, a failed start backs off for 1 s | The documentation describes the behaviour, not the policy |
 | `lambda-web:RequestCompleted` events are coalesced to one per endpoint per second | Not documented |
 | Filter names | The model's documentation lists them: `state` for functions and revisions; `authType`, `autoDeploymentMode`, `endpointType`, `state` and `updateStatus` for endpoints |
+
+## Measured
+
+`TestEndToEnd_loadReport` (`tests/integration/lambdawebdocker`) drives a real
+container through the real router. On a Windows 11 laptop with Docker Desktop:
+a cold start (first request, container created) took about 1.2 s; a warm request
+took 1.6 ms at the median and 2.5 ms at the 99th percentile; 32 concurrent
+keep-alive clients sustained about 6,000 requests per second with none failing.
+Earlier runs on the same machine saw cold starts of 0.4 to 0.7 s; expect them to
+vary with the machine and with whether the image is already pulled. One run on
+one machine is not a benchmark: the test asserts only loose bounds.
 
 ## Related
 

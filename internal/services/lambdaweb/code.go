@@ -112,8 +112,15 @@ func validatePackage(b []byte) *packageError {
 	if err != nil {
 		return &packageError{codeInvalidPackage, "The deployment package is not a valid .zip file: " + err.Error()}
 	}
+	// The provider's archive costs a tar header per entry, so the same entry
+	// limit and header cost apply here: a package that passes this check must be
+	// one the provider can build.
+	if len(zr.File) > providerMaxPackageEntries {
+		return &packageError{codePackageTooLarge, fmt.Sprintf("The deployment package has more than %d entries.", providerMaxPackageEntries)}
+	}
 	var total int64
 	for _, f := range zr.File {
+		total += tarHeaderBytes
 		if !safeEntryName(f.Name) {
 			return &packageError{codeUnsafePath, fmt.Sprintf("The deployment package contains the entry %q, which is outside the package root.", f.Name)}
 		}

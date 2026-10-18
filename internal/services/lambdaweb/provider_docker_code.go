@@ -22,6 +22,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
@@ -30,7 +31,13 @@ import (
 // S3; the engine turns it into 409 RevisionNotActive and fails the revision.
 const codeUnavailableType = errTypeCodeUnavailable
 
-var errPackageTooLarge = errors.New("package exceeds 512 MB unzipped")
+var errPackageTooLarge = errors.New("package exceeds 512 MB unzipped (headers included)")
+
+// fetchTimeout bounds one read of a package from S3, so a hung read cannot hold
+// a build slot for good.
+const fetchTimeout = 2 * time.Minute
+
+var errPackageTooManyEntries = errors.New("package has too many entries")
 
 // tarKey identifies a pinned package version.
 func tarKey(ref codeRef) string { return ref.Bucket + "/" + ref.Key + "/" + ref.VersionID }
@@ -44,9 +51,16 @@ func codeTar(zipData []byte) ([]byte, error) {
 	}
 	// The declared sizes are checked before anything is inflated; the copy
 	// below checks the actual ones, since a header can lie.
+	if len(zr.File) > providerMaxPackageEntries {
+		return nil, errPackageTooManyEntries
+	}
 	var declared uint64
 	for _, f := range zr.File {
-		declared += f.UncompressedSize64
+		// One entry over the limit is refused before it can wrap the sum.
+		if f.UncompressedSize64 > providerMaxPackageBytes {
+			return nil, errPackageTooLarge
+		}
+		declared += f.UncompressedSize64 + tarHeaderBytes
 		if declared > providerMaxPackageBytes {
 			return nil, errPackageTooLarge
 		}
@@ -107,7 +121,7 @@ func codeTar(zipData []byte) ([]byte, error) {
 			if n != hdr.Size {
 				return nil, fmt.Errorf("%q does not match its declared size", f.Name)
 			}
-			total += n
+			total += n + tarHeaderBytes
 			if total > providerMaxPackageBytes {
 				return nil, errPackageTooLarge
 			}
@@ -244,7 +258,13 @@ func (p *DockerProvider) runBuild(ctx context.Context, ref codeRef, key string, 
 		f.fail = internalFailure("no code source is wired")
 		return
 	}
-	data, aerr := src.Fetch(ctx, ref)
+	// ctx is detached from the request that started the build (other starts
+	// wait on it), so a queued build waits for a slot rather than giving up.
+	p.buildSlots <- struct{}{}
+	defer func() { <-p.buildSlots }()
+	fctx, cancel := context.WithTimeout(ctx, fetchTimeout)
+	defer cancel()
+	data, aerr := src.Fetch(fctx, ref)
 	if aerr != nil {
 		f.fail = codeFetchFailure(aerr)
 		return

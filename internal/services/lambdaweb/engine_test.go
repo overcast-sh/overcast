@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 func TestServe_proxiesToAnEnvironmentAndAppliesHeaderRules(t *testing.T) {
@@ -616,5 +617,138 @@ func TestServe_aFailureMidBodyCutsTheConnectionInsteadOfAppendingAnError(t *test
 	}
 	if strings.Contains(string(body), "InternalError") || strings.Contains(string(body), "<Error>") {
 		t.Errorf("an error was appended to the stream: %q", body)
+	}
+}
+
+func TestServe_throttleComesBeforeAuthentication(t *testing.T) {
+	// Given: an IamAuth endpoint limited to 100 per second whose authoriser
+	// counts the requests it is asked to verify
+	var verified atomic.Int32
+	f := newDPFixture(t, dpOptions{authorize: countingDeny{&verified}})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authIam, AutoDeploymentMode: deployLatestRevision, ThrottleConfig: &throttleCfg{RateLimit: intp(100)}}})
+
+	// When: a flood of unsigned requests arrives
+	throttled := 0
+	for range 60 {
+		resp, _ := f.do(d, "GET", "/", nil, nil)
+		if resp.StatusCode == 429 {
+			throttled++
+		}
+	}
+
+	// Then: the burst (10) is verified and the rest never reach the authoriser
+	// (the mock clock does not advance, so the count is exact; nothing in the
+	// fixture's do or deploy moves it)
+	if throttled != 50 || verified.Load() != 10 {
+		t.Errorf("throttled=%d verified=%d, want 50 and 10", throttled, verified.Load())
+	}
+}
+
+func TestServe_anEndpointThrottledRequestDoesNotSpendTheAccountLimit(t *testing.T) {
+	// Given: an endpoint limited to 100 per second (a burst of 10) and an account
+	// limit of 1000 per second (a burst of 100); the mock clock stands still
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authApplicationManaged, AutoDeploymentMode: deployLatestRevision, ThrottleConfig: &throttleCfg{RateLimit: intp(100)}}})
+	f.svc.startEngine()
+	f.svc.dp.acct.Store(newLimiter(1000))
+
+	// When: fifty requests arrive in one instant
+	ok := 0
+	for range 50 {
+		if resp, _ := f.do(d, "GET", "/", nil, nil); resp.StatusCode == 200 {
+			ok++
+		}
+	}
+
+	// Then: the endpoint let its burst through, and the account was charged for those only
+	if ok != 10 {
+		t.Fatalf("ok = %d, want 10", ok)
+	}
+	left := 0
+	for f.svc.dp.acct.Load().allow(f.clk.Now().UnixNano()) {
+		left++
+	}
+	if left != 90 {
+		t.Errorf("account tokens left = %d, want 90", left)
+	}
+}
+
+type countingDeny struct{ n *atomic.Int32 }
+
+func (c countingDeny) Authorize(context.Context, *http.Request, authContext) *platformError {
+	c.n.Add(1)
+	return errForbidden()
+}
+
+// sourceSpy records the CloudFront identity the authoriser was given.
+type sourceSpy struct {
+	mu  sync.Mutex
+	arn []string
+}
+
+func (s *sourceSpy) Authorize(_ context.Context, _ *http.Request, c authContext) *platformError {
+	s.mu.Lock()
+	s.arn = append(s.arn, c.SourceARN)
+	s.mu.Unlock()
+	return nil
+}
+
+func TestServe_forgedCloudFrontIdentityIsStrippedAndNeverTrusted(t *testing.T) {
+	// Given: an IamAuth endpoint behind an authoriser that records the source ARN
+	spy := &sourceSpy{}
+	f := newDPFixture(t, dpOptions{authorize: spy, handler: func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "arn=%q token=%q", r.Header.Get(serviceutil.CloudFrontSourceARNHeader), r.Header.Get(serviceutil.InternalTrustHeader))
+		})
+	}})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authIam, AutoDeploymentMode: deployLatestRevision}})
+
+	// When: a client claims to be a CloudFront distribution without the
+	// process's secret
+	_, body := f.do(d, "GET", "/", nil, map[string]string{
+		serviceutil.CloudFrontSourceARNHeader: "arn:aws:cloudfront::111122223333:distribution/EFORGED",
+		serviceutil.InternalTrustHeader:       "guess",
+	})
+
+	// Then: the application never sees either header, and the authoriser is
+	// told there is no distribution
+	if body != `arn="" token=""` {
+		t.Errorf("application saw %s", body)
+	}
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if len(spy.arn) != 1 || spy.arn[0] != "" {
+		t.Errorf("authoriser source ARNs = %q, want one empty", spy.arn)
+	}
+}
+
+func TestServe_genuineCloudFrontIdentityReachesTheAuthoriserButNotTheApplication(t *testing.T) {
+	// Given: the same endpoint, and a request stamped the way CloudFront in this
+	// process stamps it
+	spy := &sourceSpy{}
+	f := newDPFixture(t, dpOptions{authorize: spy, handler: func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "arn=%q token=%q", r.Header.Get(serviceutil.CloudFrontSourceARNHeader), r.Header.Get(serviceutil.InternalTrustHeader))
+		})
+	}})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authIam, AutoDeploymentMode: deployLatestRevision}})
+	h := http.Header{}
+	const arn = "arn:aws:cloudfront::111122223333:distribution/EREAL"
+	serviceutil.SetCloudFrontSource(h, arn)
+
+	// When: it arrives
+	_, body := f.do(d, "GET", "/", nil, map[string]string{
+		serviceutil.CloudFrontSourceARNHeader: h.Get(serviceutil.CloudFrontSourceARNHeader),
+		serviceutil.InternalTrustHeader:       h.Get(serviceutil.InternalTrustHeader),
+	})
+
+	// Then: the authoriser sees the distribution, and the application still sees nothing
+	if body != `arn="" token=""` {
+		t.Errorf("application saw %s", body)
+	}
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if len(spy.arn) != 1 || spy.arn[0] != arn {
+		t.Errorf("authoriser source ARNs = %q, want %q", spy.arn, arn)
 	}
 }

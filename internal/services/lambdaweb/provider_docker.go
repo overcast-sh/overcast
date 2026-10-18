@@ -73,6 +73,15 @@ const (
 
 	// providerMaxPackageBytes bounds a package unzipped.
 	providerMaxPackageBytes = 512 << 20
+	// providerMaxPackageEntries bounds the entries of a package. Every entry
+	// costs a tar header however small it is, so an archive of millions of
+	// empty files would otherwise inflate far past the byte limit.
+	providerMaxPackageEntries = 100_000
+	// tarHeaderBytes is what an entry's header costs in the tar, counted
+	// toward providerMaxPackageBytes.
+	tarHeaderBytes = 512
+	// maxConcurrentBuilds is how many packages are prepared at once.
+	maxConcurrentBuilds = 2
 	// outputTailBytes bounds the process output quoted in an initFailure.
 	outputTailBytes = 4 << 10
 )
@@ -106,6 +115,9 @@ type DockerProvider struct {
 	images imageCache
 	tars   *tarCache
 	builds buildFlights
+	// buildSlots bounds the packages prepared at once: each holds its zip and
+	// its tar in memory while it is built.
+	buildSlots chan struct{}
 
 	envs    sync.Map // container id → *dockerEnv
 	nameSeq atomic.Uint64
@@ -120,10 +132,11 @@ func NewDockerProvider(cfg *config.Config, logger *zap.Logger, clk clock.Clock) 
 		logger = zap.NewNop()
 	}
 	return &DockerProvider{
-		cfg:  cfg,
-		log:  logger,
-		clk:  clk,
-		tars: newTarCache(int64(cfg.LambdaTarCacheMB) * 1024 * 1024),
+		cfg:        cfg,
+		log:        logger,
+		clk:        clk,
+		tars:       newTarCache(int64(cfg.LambdaTarCacheMB) * 1024 * 1024),
+		buildSlots: make(chan struct{}, maxConcurrentBuilds),
 	}
 }
 

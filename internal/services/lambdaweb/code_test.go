@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -231,5 +232,25 @@ func TestValidateRevision_rejectsReservedEnvironmentVariables(t *testing.T) {
 	in.Service.EnvironmentVariables = map[string]string{"AWS_LAMBDA_NODEJS_ENTRYPOINT": "dist/index.js", "AWS_PROFILE": "x", "NODE_OPTIONS": "--x"}
 	if aerr := validateRevision(in.BuildConfig, in.Service, "", ""); aerr != nil {
 		t.Errorf("ordinary names refused: %+v", aerr)
+	}
+}
+
+func TestValidatePackage_tooManyEntries(t *testing.T) {
+	// Given: a zip of empty files, one past the entry limit the provider builds
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for i := range providerMaxPackageEntries + 1 {
+		if _, err := zw.Create(fmt.Sprintf("f%d", i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// When / Then: the revision's check refuses it, as the provider would
+	perr := validatePackage(buf.Bytes())
+	if perr == nil || perr.Code != codePackageTooLarge {
+		t.Errorf("validatePackage = %+v, want %s", perr, codePackageTooLarge)
 	}
 }

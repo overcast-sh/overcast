@@ -11,8 +11,10 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -416,5 +418,80 @@ func TestEndToEnd_cloudFrontReachesAnIamAuthEndpointThroughItsOAC(t *testing.T) 
 	// And: a direct, unsigned request is still refused
 	if direct, _ := e.get(domain, "/hello", nil); direct.StatusCode != http.StatusForbidden {
 		t.Errorf("direct unsigned = %d", direct.StatusCode)
+	}
+}
+
+// TestEndToEnd_loadReport measures the serving path against a real container:
+// the cold start, the warm latency, and the throughput under concurrency. It
+// asserts only loose bounds (nothing fails, nothing is pathologically slow);
+// the numbers are in the log (go test -v) and in docs/services/lambda-web/limitations.md.
+func TestEndToEnd_loadReport(t *testing.T) {
+	if testing.Short() {
+		t.Skip("load report skipped in -short mode")
+	}
+	e := newE2E(t)
+	e.upload("echo.zip", map[string]string{"index.js": echoApp})
+	domain := e.deploy("load", revCfg("echo.zip", nil), types.AuthTypeApplicationManaged)
+
+	// cold: the first request starts a container
+	t0 := time.Now()
+	if resp, body := e.get(domain, "/", nil); resp.StatusCode != 200 {
+		t.Fatalf("cold = %d %s", resp.StatusCode, body)
+	}
+	cold := time.Since(t0)
+
+	// warm, one at a time
+	lat := make([]time.Duration, 0, 200)
+	for range 200 {
+		s := time.Now()
+		if resp, _ := e.get(domain, "/", nil); resp.StatusCode != 200 {
+			t.Fatalf("warm = %d", resp.StatusCode)
+		}
+		lat = append(lat, time.Since(s))
+	}
+	sort.Slice(lat, func(i, j int) bool { return lat[i] < lat[j] })
+	p50, p99 := lat[len(lat)/2], lat[len(lat)*99/100]
+
+	// concurrent, with connections kept alive
+	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{MaxIdleConnsPerHost: 64}}
+	var ok, bad, throttled atomic.Int64
+	stop := time.Now().Add(3 * time.Second)
+	var wg sync.WaitGroup
+	for range 32 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for time.Now().Before(stop) {
+				req, _ := http.NewRequest("GET", e.srv.URL+"/", nil)
+				req.Host = domain
+				resp, err := client.Do(req)
+				if err != nil {
+					bad.Add(1)
+					continue
+				}
+				_, _ = io.Copy(io.Discard, resp.Body)
+				resp.Body.Close()
+				if resp.StatusCode == 200 {
+					ok.Add(1)
+				} else if resp.StatusCode == 429 {
+					throttled.Add(1) // the default endpoint limit (10,000/s) was reached: not a failure
+				} else {
+					bad.Add(1)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	rps := float64(ok.Load()) / 3
+
+	t.Logf("cold start %v; warm p50 %v p99 %v; %d concurrent clients: %.0f req/s, %d failed, %d throttled", cold, p50, p99, 32, rps, bad.Load(), throttled.Load())
+	if bad.Load() != 0 {
+		t.Errorf("%d requests failed under load", bad.Load())
+	}
+	if p50 > 100*time.Millisecond {
+		t.Errorf("warm p50 = %v", p50)
+	}
+	if rps < 100 {
+		t.Errorf("throughput = %.0f req/s", rps)
 	}
 }
