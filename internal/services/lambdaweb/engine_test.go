@@ -861,3 +861,59 @@ func TestServe_resetRetiresEndpointsTheStoreNoLongerHolds(t *testing.T) {
 	}
 	eventually(t, "the environment to stop", func() bool { return f.prov.liveEnvs() == 0 })
 }
+
+func TestLiveEnvironments_countsOneRegionsEndpoint(t *testing.T) {
+	// Given: the same function and endpoint name in two Regions, with
+	// different numbers of environments
+	f := newDPFixture(t, dpOptions{})
+	mk := func(region string, n int32) *endpointRT {
+		rt := &endpointRT{region: region, function: "api", endpoint: "prod", pools: map[string]*pool{}}
+		rt.envs.Store(n)
+		return rt
+	}
+	f.svc.dp.rtMu.Lock()
+	f.svc.dp.rts = map[string]*endpointRT{"a": mk("us-east-1", 2), "b": mk("eu-west-1", 3)}
+	f.svc.dp.rtMu.Unlock()
+
+	// Then: each Region's node counts its own, and "" counts both
+	if got := f.svc.liveEnvironments("us-east-1", "api", "prod"); got != 2 {
+		t.Errorf("us-east-1 = %d, want 2", got)
+	}
+	if got := f.svc.liveEnvironments("eu-west-1", "api", "prod"); got != 3 {
+		t.Errorf("eu-west-1 = %d, want 3", got)
+	}
+	if got := f.svc.liveEnvironments("", "api", "prod"); got != 5 {
+		t.Errorf("all = %d, want 5", got)
+	}
+}
+
+func TestServe_aRetiredPoolStartsNothing(t *testing.T) {
+	// Given: a request that resolved its pool from a table that has since
+	// retired the revision
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	f.do(d, "GET", "/", nil, nil)
+	tbl, err := f.svc.routes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := &tbl.byHost[d.id].revs[0]
+	rr.pool.rt.mu.Lock()
+	delete(rr.pool.rt.pools, rr.pool.revID) // retirePools did this
+	rr.pool.rt.mu.Unlock()
+	for _, es := range rr.pool.snapshot() { // and its environments are gone
+		es.inflight.Store(es.limit)
+	}
+	before := f.prov.starts.Load()
+
+	// When: it asks for an environment
+	_, perr := f.svc.acquire(rr)
+
+	// Then: it is refused and nothing was started in a pool nothing will drain
+	if perr == nil || perr.Type != errTypeRevisionNotActive {
+		t.Errorf("acquire = %+v", perr)
+	}
+	if f.prov.starts.Load() != before {
+		t.Error("an environment was started in a retired pool")
+	}
+}

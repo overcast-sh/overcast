@@ -406,6 +406,11 @@ func (rt *endpointRT) pool(revID string) *pool {
 func (s *Service) acquireSlow(rt *endpointRT, p *pool, rev *revision) (acquisition, *platformError) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+	// A request routed by a table that has since retired this revision must not
+	// start an environment in a pool nothing will drain.
+	if cur, ok := rt.pools[p.revID]; !ok || cur != p {
+		return acquisition{}, errRevisionNotActive()
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	// Another request may have started an environment while we waited.
@@ -806,14 +811,15 @@ func (noTelemetry) EnvironmentSpinDown(spinDownEvent) {}
 func (noTelemetry) RequestDone(requestEvent)          {}
 func (noTelemetry) Throttled(throttleEvent)           {}
 
-// liveEnvironments counts the environments an endpoint has running or starting,
+// liveEnvironments counts the environments an endpoint has running or starting
+// in region ("" for every region),
 // across its domains and revisions.
-func (s *Service) liveEnvironments(function, endpoint string) int {
+func (s *Service) liveEnvironments(region, function, endpoint string) int {
 	s.dp.rtMu.Lock()
 	defer s.dp.rtMu.Unlock()
 	n := 0
 	for _, rt := range s.dp.rts {
-		if rt.function == function && rt.endpoint == endpoint {
+		if rt.function == function && rt.endpoint == endpoint && (region == "" || rt.region == region) {
 			n += int(rt.envs.Load())
 		}
 	}

@@ -68,7 +68,7 @@ func (s *Service) DebugStateValues(ctx context.Context) (map[string]string, erro
 	out := make(map[string]string, len(keys))
 	for _, k := range keys {
 		fn, ep, _ := strings.Cut(k, "/")
-		out[k] = strconv.Itoa(s.liveEnvironments(fn, ep)) + " environments"
+		out[k] = strconv.Itoa(s.liveEnvironments("", fn, ep)) + " environments"
 	}
 	return out, nil
 }
