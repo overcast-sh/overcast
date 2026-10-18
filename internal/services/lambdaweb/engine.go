@@ -74,6 +74,12 @@ type dataPlane struct {
 	// revision Failed. Nil until wired.
 	codeGone func(region, function, revisionID, detail string)
 
+	// kick asks the rebuild loop to refresh the routing table after a control
+	// plane change, so a deleted endpoint's environments drain without waiting
+	// for the next request. started is set once kick exists.
+	kick    chan struct{}
+	started atomic.Bool
+
 	startOnce sync.Once
 	stop      chan struct{}
 	wg        sync.WaitGroup
@@ -88,9 +94,39 @@ func (s *Service) startEngine() {
 		s.dp.ctx, s.dp.cancel = context.WithCancel(context.Background())
 		s.dp.stop = make(chan struct{})
 		s.dp.acct.Store(newLimiter(accountRateLimit))
-		s.dp.wg.Add(1)
+		s.dp.codeGone = func(region, function, revisionID, detail string) {
+			s.markRevisionFailed(context.Background(), region, function, revisionID, "CodeUnavailable", detail)
+		}
+		s.dp.kick = make(chan struct{}, 1)
+		s.dp.started.Store(true)
+		s.dp.wg.Add(2)
 		go s.sweepLoop()
+		go s.rebuildLoop()
 	})
+}
+
+// RoutesChanged is the control plane's change hook (InitChangeHook): the routing
+// table is stale, and once the data plane is running it is refreshed at once.
+func (s *Service) RoutesChanged(_, _ string) {
+	s.invalidateRoutes()
+	if s.dp.started.Load() {
+		select {
+		case s.dp.kick <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (s *Service) rebuildLoop() {
+	defer s.dp.wg.Done()
+	for {
+		select {
+		case <-s.dp.kick:
+			_, _ = s.rebuildRoutes(s.dp.ctx)
+		case <-s.dp.stop:
+			return
+		}
+	}
 }
 
 // ─── Endpoint runtime ────────────────────────────────────────────────────────
@@ -711,6 +747,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+	s.StopRevisionWorker(ctx)
 	var err error
 	if st, ok := s.provider.(interface{ Stop(context.Context) error }); ok {
 		err = st.Stop(ctx)

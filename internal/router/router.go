@@ -819,6 +819,8 @@ func New(cfg *config.Config, store state.Store, logger *zap.Logger, clk clock.Cl
 		lwTel.InitMetrics(svcMetrics)
 	}
 	lambdaWebSvc.InitTelemetry(lwTel)
+	lambdaWebSvc.InitCodeSource(lambdaweb.NewS3CodeSource(s3Svc))
+	lambdaWebSvc.InitChangeHook(lambdaWebSvc.RoutesChanged)
 	// IamAuth endpoints: SigV4/SigV4a checks always, signature verification and
 	// IAM evaluation with the same switches the rest of the emulator uses.
 	lambdaWebSvc.InitAuth(lambdaweb.NewAuthorizer(lambdaweb.AuthorizerOptions{
