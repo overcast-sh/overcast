@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/overcast-sh/overcast/internal/middleware"
+	"github.com/overcast-sh/overcast/internal/serviceutil"
 )
 
 func TestServe_proxiesToAnEnvironmentAndAppliesHeaderRules(t *testing.T) {
@@ -676,4 +677,77 @@ type countingDeny struct{ n *atomic.Int32 }
 func (c countingDeny) Authorize(context.Context, *http.Request, authContext) *platformError {
 	c.n.Add(1)
 	return errForbidden()
+}
+
+// sourceSpy records the CloudFront identity the authoriser was given.
+type sourceSpy struct {
+	mu  sync.Mutex
+	arn []string
+}
+
+func (s *sourceSpy) Authorize(_ context.Context, _ *http.Request, c authContext) *platformError {
+	s.mu.Lock()
+	s.arn = append(s.arn, c.SourceARN)
+	s.mu.Unlock()
+	return nil
+}
+
+func TestServe_forgedCloudFrontIdentityIsStrippedAndNeverTrusted(t *testing.T) {
+	// Given: an IamAuth endpoint behind an authoriser that records the source ARN
+	spy := &sourceSpy{}
+	f := newDPFixture(t, dpOptions{authorize: spy, handler: func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "arn=%q token=%q", r.Header.Get(serviceutil.CloudFrontSourceARNHeader), r.Header.Get(serviceutil.InternalTrustHeader))
+		})
+	}})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authIam, AutoDeploymentMode: deployLatestRevision}})
+
+	// When: a client claims to be a CloudFront distribution without the
+	// process's secret
+	_, body := f.do(d, "GET", "/", nil, map[string]string{
+		serviceutil.CloudFrontSourceARNHeader: "arn:aws:cloudfront::111122223333:distribution/EFORGED",
+		serviceutil.InternalTrustHeader:       "guess",
+	})
+
+	// Then: the application never sees either header, and the authoriser is
+	// told there is no distribution
+	if body != `arn="" token=""` {
+		t.Errorf("application saw %s", body)
+	}
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if len(spy.arn) != 1 || spy.arn[0] != "" {
+		t.Errorf("authoriser source ARNs = %q, want one empty", spy.arn)
+	}
+}
+
+func TestServe_genuineCloudFrontIdentityReachesTheAuthoriserButNotTheApplication(t *testing.T) {
+	// Given: the same endpoint, and a request stamped the way CloudFront in this
+	// process stamps it
+	spy := &sourceSpy{}
+	f := newDPFixture(t, dpOptions{authorize: spy, handler: func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "arn=%q token=%q", r.Header.Get(serviceutil.CloudFrontSourceARNHeader), r.Header.Get(serviceutil.InternalTrustHeader))
+		})
+	}})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authIam, AutoDeploymentMode: deployLatestRevision}})
+	h := http.Header{}
+	const arn = "arn:aws:cloudfront::111122223333:distribution/EREAL"
+	serviceutil.SetCloudFrontSource(h, arn)
+
+	// When: it arrives
+	_, body := f.do(d, "GET", "/", nil, map[string]string{
+		serviceutil.CloudFrontSourceARNHeader: h.Get(serviceutil.CloudFrontSourceARNHeader),
+		serviceutil.InternalTrustHeader:       h.Get(serviceutil.InternalTrustHeader),
+	})
+
+	// Then: the authoriser sees the distribution, and the application still sees nothing
+	if body != `arn="" token=""` {
+		t.Errorf("application saw %s", body)
+	}
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if len(spy.arn) != 1 || spy.arn[0] != arn {
+		t.Errorf("authoriser source ARNs = %q, want %q", spy.arn, arn)
+	}
 }
