@@ -1,0 +1,272 @@
+package lambdawebdocker_test
+
+// End to end: the real router with Docker, a Node.js server uploaded to S3, a
+// web function created through the AWS SDK, and HTTP requests to its endpoint's
+// domain — the path a user takes. Like the rest of this package it needs a
+// Docker daemon and skips without one.
+
+import (
+	"archive/zip"
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/lambdaweb"
+	"github.com/aws/aws-sdk-go-v2/service/lambdaweb/types"
+	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+
+	"github.com/overcast-sh/overcast/tests/helpers"
+)
+
+// echoApp is a dependency-free Node.js server: it answers with what it saw.
+const echoApp = `
+const http = require('http');
+const [host, port] = process.env.AWS_LAMBDA_HTTP_ENDPOINT.split(':');
+http.createServer((req, res) => {
+  console.log({ msg: 'handling', path: req.url });
+  res.setHeader('x-app', 'echo');
+  res.end(JSON.stringify({
+    version: process.env.APP_VERSION || 'v1',
+    method: req.method, url: req.url, host: req.headers.host,
+    requestId: req.headers['lambda-web-request-id'], endpoint: req.headers['lambda-web-endpoint-name'],
+    xff: req.headers['x-forwarded-for'], auth: req.headers['authorization'] || null,
+  }));
+}).listen(port, host);
+`
+
+type e2e struct {
+	t    *testing.T
+	ctx  context.Context
+	srv  *helpers.TestServer
+	web  *lambdaweb.Client
+	s3   *awss3.Client
+	http *http.Client
+}
+
+func newE2E(t *testing.T) *e2e {
+	t.Helper()
+	helpers.SkipWithoutDocker(t)
+	srv := helpers.NewTestServer(t, helpers.WithLambdaDocker())
+	creds := credentials.NewStaticCredentialsProvider("test", "test", "")
+	e := &e2e{
+		t: t, ctx: context.Background(), srv: srv,
+		web:  lambdaweb.New(lambdaweb.Options{Region: "us-east-1", Credentials: creds, BaseEndpoint: aws.String(srv.URL), HTTPClient: http.DefaultClient}),
+		s3:   awss3.New(awss3.Options{Region: "us-east-1", Credentials: creds, BaseEndpoint: aws.String(srv.URL), HTTPClient: http.DefaultClient, UsePathStyle: true}),
+		http: &http.Client{Timeout: 90 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+	}
+	if _, err := e.s3.CreateBucket(e.ctx, &awss3.CreateBucketInput{Bucket: aws.String("code")}); err != nil {
+		t.Fatalf("CreateBucket: %v", err)
+	}
+	if _, err := e.s3.PutBucketVersioning(e.ctx, &awss3.PutBucketVersioningInput{
+		Bucket: aws.String("code"), VersioningConfiguration: &s3types.VersioningConfiguration{Status: s3types.BucketVersioningStatusEnabled},
+	}); err != nil {
+		t.Fatalf("PutBucketVersioning: %v", err)
+	}
+	return e
+}
+
+func (e *e2e) upload(key string, files map[string]string) {
+	e.t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for name, body := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(body))
+	}
+	_ = zw.Close()
+	if _, err := e.s3.PutObject(e.ctx, &awss3.PutObjectInput{Bucket: aws.String("code"), Key: aws.String(key), Body: bytes.NewReader(buf.Bytes())}); err != nil {
+		e.t.Fatalf("PutObject: %v", err)
+	}
+}
+
+func revCfg(key string, env map[string]string) *types.RevisionConfig {
+	return &types.RevisionConfig{
+		BuildConfig: &types.BuildConfig{
+			CodeConfig:    &types.CodeConfig{S3Object: &types.S3Object{Bucket: aws.String("code"), Key: aws.String(key)}},
+			RuntimeConfig: &types.RuntimeConfig{Runtime: aws.String("nodejs24.x")},
+		},
+		ServiceConfig: &types.ServiceConfig{ExecutionRoleArn: aws.String("arn:aws:iam::000000000000:role/web"), EnvironmentVariables: env},
+	}
+}
+
+// deploy creates a web function with one LatestRevision endpoint and waits for
+// its revision to be Active; it returns the endpoint's domain.
+func (e *e2e) deploy(name string, rc *types.RevisionConfig, auth types.AuthType) string {
+	e.t.Helper()
+	out, err := e.web.CreateWebFunction(e.ctx, &lambdaweb.CreateWebFunctionInput{
+		FunctionName: aws.String(name), RevisionConfig: rc,
+		EndpointConfig: &types.EndpointConfig{
+			EndpointName: aws.String("prod"), EndpointType: types.EndpointTypeHomeRegion, AuthType: auth,
+			AutoDeploymentMode: types.AutoDeploymentModeLatestRevision,
+		},
+	})
+	if err != nil {
+		e.t.Fatalf("CreateWebFunction: %v", err)
+	}
+	e.waitServing(name, aws.ToString(out.Revision.RevisionId))
+	return aws.ToString(out.Endpoint.DomainName)
+}
+
+func (e *e2e) waitServing(fn, revID string) {
+	e.t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		ep, err := e.web.GetWebFunctionEndpoint(e.ctx, &lambdaweb.GetWebFunctionEndpointInput{FunctionName: aws.String(fn), EndpointName: aws.String("prod")})
+		if err == nil && ep.State == types.EndpointStateActive && len(ep.RevisionWeights) == 1 && aws.ToString(ep.RevisionWeights[0].RevisionId) == revID {
+			return
+		}
+		if time.Now().After(deadline) {
+			e.t.Fatalf("endpoint does not serve %s: %+v %v", revID, ep, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// get sends a request the way a client does: to Overcast, with the endpoint's
+// domain as the Host, which host routing resolves. The first request after the server starts
+// can arrive before the Docker probe finishes; those answer 502 without an
+// error type, so it retries them for a while.
+func (e *e2e) get(domain, path string, hdr map[string]string) (*http.Response, string) {
+	e.t.Helper()
+	deadline := time.Now().Add(60 * time.Second)
+	for {
+		req, _ := http.NewRequest("GET", e.srv.URL+path, nil)
+		req.Host = domain
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		resp, err := e.http.Do(req)
+		if err != nil {
+			e.t.Fatalf("GET %s: %v", path, err)
+		}
+		b, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode == 502 && resp.Header.Get("Lambda-Web-Error-Type") == "" && time.Now().Before(deadline) {
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		return resp, string(b)
+	}
+}
+
+func TestEndToEnd_serveAnEndpointFromAnS3Package(t *testing.T) {
+	// Given: a Node.js server uploaded to S3 and deployed behind an endpoint
+	e := newE2E(t)
+	e.upload("echo.zip", map[string]string{"index.js": echoApp})
+	domain := e.deploy("echo", revCfg("echo.zip", nil), types.AuthTypeApplicationManaged)
+
+	// When: a request arrives for the endpoint's domain
+	start := time.Now()
+	resp, body := e.get(domain, "/hello/world?x=1&y=%2F", map[string]string{"X-Forwarded-For": "1.2.3.4"})
+	cold := time.Since(start)
+
+	// Then: the container answered, with the request exactly as sent
+	if resp.StatusCode != 200 {
+		t.Fatalf("status %d: %s", resp.StatusCode, body)
+	}
+	for _, want := range []string{`"url":"/hello/world?x=1&y=%2F"`, `"host":"` + domain + `"`, `"endpoint":"prod"`, `"version":"v1"`, `"xff":"1.2.3.4, `} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %s:\n%s", want, body)
+		}
+	}
+	if resp.Header.Get("X-App") != "echo" || resp.Header.Get("Lambda-Web-Request-Id") == "" || resp.Header.Get("Lambda-Web-Logstream") == "" {
+		t.Errorf("headers = %v", resp.Header)
+	}
+	t.Logf("cold start request: %v", cold)
+
+	// And: a warm request is much faster than the cold one
+	var warmTotal time.Duration
+	for range 20 {
+		s := time.Now()
+		r, _ := e.get(domain, "/", nil)
+		warmTotal += time.Since(s)
+		if r.StatusCode != 200 {
+			t.Fatalf("warm request = %d", r.StatusCode)
+		}
+	}
+	t.Logf("warm request average: %v", warmTotal/20)
+}
+
+func TestEndToEnd_newRevisionIsServedByLatestRevision(t *testing.T) {
+	e := newE2E(t)
+	e.upload("v1.zip", map[string]string{"index.js": echoApp})
+	e.upload("v2.zip", map[string]string{"index.js": echoApp})
+	domain := e.deploy("rolling", revCfg("v1.zip", map[string]string{"APP_VERSION": "v1"}), types.AuthTypeApplicationManaged)
+	if _, body := e.get(domain, "/", nil); !strings.Contains(body, `"version":"v1"`) {
+		t.Fatalf("first revision: %s", body)
+	}
+
+	// When: a second revision is created
+	rc := revCfg("v2.zip", map[string]string{"APP_VERSION": "v2"})
+	out, err := e.web.CreateWebFunctionRevision(e.ctx, &lambdaweb.CreateWebFunctionRevisionInput{FunctionName: aws.String("rolling"), BuildConfig: rc.BuildConfig, ServiceConfig: rc.ServiceConfig})
+	if err != nil {
+		t.Fatalf("CreateWebFunctionRevision: %v", err)
+	}
+	e.waitServing("rolling", aws.ToString(out.RevisionId))
+
+	// Then: requests reach it
+	if _, body := e.get(domain, "/", nil); !strings.Contains(body, `"version":"v2"`) {
+		t.Errorf("second revision: %s", body)
+	}
+}
+
+func TestEndToEnd_iamAuthRefusesAnUnsignedRequest(t *testing.T) {
+	e := newE2E(t)
+	e.upload("echo.zip", map[string]string{"index.js": echoApp})
+	domain := e.deploy("private", revCfg("echo.zip", nil), types.AuthTypeIamAuth)
+	resp, _ := e.get(domain, "/", nil)
+	if resp.StatusCode != 403 || resp.Header.Get("Lambda-Web-Error-Type") != "" {
+		t.Errorf("unsigned = %d %q", resp.StatusCode, resp.Header.Get("Lambda-Web-Error-Type"))
+	}
+}
+
+func TestEndToEnd_aBrokenEntryFileIsA502WithItsType(t *testing.T) {
+	e := newE2E(t)
+	e.upload("bad.zip", map[string]string{"index.js": "require('./does-not-exist')"})
+	domain := e.deploy("broken", revCfg("bad.zip", nil), types.AuthTypeApplicationManaged)
+	resp, body := e.get(domain, "/", nil)
+	if resp.StatusCode != 502 || resp.Header.Get("Lambda-Web-Error-Type") != "Runtime.ImportCodeError" {
+		t.Errorf("= %d %q: %s", resp.StatusCode, resp.Header.Get("Lambda-Web-Error-Type"), body)
+	}
+}
+
+func TestEndToEnd_concurrentRequestsShareWarmEnvironments(t *testing.T) {
+	e := newE2E(t)
+	e.upload("echo.zip", map[string]string{"index.js": echoApp})
+	domain := e.deploy("busy", revCfg("echo.zip", nil), types.AuthTypeApplicationManaged)
+	e.get(domain, "/", nil) // warm
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	failures := 0
+	for range 50 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, _ := e.get(domain, "/", nil)
+			if resp.StatusCode != 200 {
+				mu.Lock()
+				failures++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if failures != 0 {
+		t.Errorf("%d of 50 concurrent requests failed", failures)
+	}
+}
+
+var _ = fmt.Sprintf
