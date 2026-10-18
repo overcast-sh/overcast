@@ -48,7 +48,7 @@ func (s *Service) envSpecFor(rt *endpointRT, rev *revision, es *envState) envSpe
 	}
 	return envSpec{
 		Region: rt.region, Function: rt.function, Endpoint: rt.endpoint, Revision: rev,
-		Code:     codeRef{Bucket: obj.Bucket, Key: obj.Key, VersionID: obj.VersionID},
+		Code:     codeRef(obj),
 		Env:      rev.Service.EnvironmentVariables,
 		MemoryMB: mem, InitTimeout: initTimeout,
 		LogGroup: es.ref.LogGroup, LogStream: es.ref.LogStream,
