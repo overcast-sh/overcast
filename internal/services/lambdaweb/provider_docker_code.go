@@ -22,6 +22,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/overcast-sh/overcast/internal/protocol"
 )
@@ -30,7 +31,11 @@ import (
 // S3; the engine turns it into 409 RevisionNotActive and fails the revision.
 const codeUnavailableType = errTypeCodeUnavailable
 
-var errPackageTooLarge = errors.New("package exceeds 512 MB unzipped")
+var errPackageTooLarge = errors.New("package exceeds 512 MB unzipped (headers included)")
+
+// fetchTimeout bounds one read of a package from S3, so a hung read cannot hold
+// a build slot for good.
+const fetchTimeout = 2 * time.Minute
 
 var errPackageTooManyEntries = errors.New("package has too many entries")
 
@@ -51,6 +56,10 @@ func codeTar(zipData []byte) ([]byte, error) {
 	}
 	var declared uint64
 	for _, f := range zr.File {
+		// One entry over the limit is refused before it can wrap the sum.
+		if f.UncompressedSize64 > providerMaxPackageBytes {
+			return nil, errPackageTooLarge
+		}
 		declared += f.UncompressedSize64 + tarHeaderBytes
 		if declared > providerMaxPackageBytes {
 			return nil, errPackageTooLarge
@@ -249,14 +258,13 @@ func (p *DockerProvider) runBuild(ctx context.Context, ref codeRef, key string, 
 		f.fail = internalFailure("no code source is wired")
 		return
 	}
-	select {
-	case p.buildSlots <- struct{}{}:
-		defer func() { <-p.buildSlots }()
-	case <-ctx.Done():
-		f.fail = internalFailure("environment start cancelled: " + ctx.Err().Error())
-		return
-	}
-	data, aerr := src.Fetch(ctx, ref)
+	// ctx is detached from the request that started the build (other starts
+	// wait on it), so a queued build waits for a slot rather than giving up.
+	p.buildSlots <- struct{}{}
+	defer func() { <-p.buildSlots }()
+	fctx, cancel := context.WithTimeout(ctx, fetchTimeout)
+	defer cancel()
+	data, aerr := src.Fetch(fctx, ref)
 	if aerr != nil {
 		f.fail = codeFetchFailure(aerr)
 		return

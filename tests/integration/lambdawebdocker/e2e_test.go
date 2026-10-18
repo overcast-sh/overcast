@@ -454,7 +454,7 @@ func TestEndToEnd_loadReport(t *testing.T) {
 
 	// concurrent, with connections kept alive
 	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{MaxIdleConnsPerHost: 64}}
-	var ok, bad atomic.Int64
+	var ok, bad, throttled atomic.Int64
 	stop := time.Now().Add(3 * time.Second)
 	var wg sync.WaitGroup
 	for range 32 {
@@ -473,6 +473,8 @@ func TestEndToEnd_loadReport(t *testing.T) {
 				resp.Body.Close()
 				if resp.StatusCode == 200 {
 					ok.Add(1)
+				} else if resp.StatusCode == 429 {
+					throttled.Add(1) // the default endpoint limit (10,000/s) was reached: not a failure
 				} else {
 					bad.Add(1)
 				}
@@ -482,7 +484,7 @@ func TestEndToEnd_loadReport(t *testing.T) {
 	wg.Wait()
 	rps := float64(ok.Load()) / 3
 
-	t.Logf("cold start %v; warm p50 %v p99 %v; %d concurrent clients: %.0f req/s, %d failed", cold, p50, p99, 32, rps, bad.Load())
+	t.Logf("cold start %v; warm p50 %v p99 %v; %d concurrent clients: %.0f req/s, %d failed, %d throttled", cold, p50, p99, 32, rps, bad.Load(), throttled.Load())
 	if bad.Load() != 0 {
 		t.Errorf("%d requests failed under load", bad.Load())
 	}

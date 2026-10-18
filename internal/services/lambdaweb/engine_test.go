@@ -637,7 +637,8 @@ func TestServe_throttleComesBeforeAuthentication(t *testing.T) {
 	}
 
 	// Then: the burst (10) is verified and the rest never reach the authoriser
-	// (the mock clock does not advance, so the count is exact)
+	// (the mock clock does not advance, so the count is exact; nothing in the
+	// fixture's do or deploy moves it)
 	if throttled != 50 || verified.Load() != 10 {
 		t.Errorf("throttled=%d verified=%d, want 50 and 10", throttled, verified.Load())
 	}

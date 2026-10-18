@@ -86,6 +86,8 @@ func TestDockerProvider_buildsAtMostAFewPackagesAtOnce(t *testing.T) {
 	src := &gatedSource{release: make(chan struct{}), pkg: zipBytes(t, map[string]string{"index.js": "x"})}
 	p := NewDockerProvider(&config.Config{LambdaTarCacheMB: 64}, zap.NewNop(), nil)
 	p.InitCode(src)
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(src.release) }) }) // never leave fetches parked
 	var wg sync.WaitGroup
 	for i := range 3 * maxConcurrentBuilds {
 		wg.Add(1)
@@ -102,7 +104,7 @@ func TestDockerProvider_buildsAtMostAFewPackagesAtOnce(t *testing.T) {
 
 	// Then: no more than the limit are in flight, and all finish once released
 	assert.EqualValues(t, maxConcurrentBuilds, src.live.Load())
-	close(src.release)
+	once.Do(func() { close(src.release) })
 	wg.Wait()
 	assert.LessOrEqual(t, src.peak.Load(), int32(maxConcurrentBuilds))
 }
