@@ -86,6 +86,11 @@ func TestDockerProvider_createRequestShape(t *testing.T) {
 	assert.Equal(t, hc.Memory, hc.MemorySwap)
 	assert.Equal(t, int64(2_000_000_000), hc.NanoCPUs)
 	assert.Equal(t, "overcast_unit_control", hc.NetworkMode)
+	// And: the documented execution-environment limits: 512 MB of /tmp, 1,024
+	// files, 1,024 processes and threads
+	assert.Equal(t, "rw,size=512m,mode=1777", hc.Tmpfs["/tmp"])
+	assert.Equal(t, int64(1024), hc.PidsLimit)
+	assert.Equal(t, []docker.Ulimit{{Name: "nofile", Soft: 1024, Hard: 1024}}, hc.Ulimits)
 	require.Len(t, hc.PortBindings["8080/tcp"], 1)
 	assert.Equal(t, "127.0.0.1", hc.PortBindings["8080/tcp"][0].HostIP)
 	assert.Equal(t, "0", hc.PortBindings["8080/tcp"][0].HostPort)

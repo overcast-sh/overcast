@@ -917,3 +917,25 @@ func TestServe_aRetiredPoolStartsNothing(t *testing.T) {
 		t.Error("an environment was started in a retired pool")
 	}
 }
+
+func TestServe_upgradeHeadersAreRemovedFromTheRequest(t *testing.T) {
+	// Given: an application that reports the connection headers it received
+	f := newDPFixture(t, dpOptions{handler: func(envSpec) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "upgrade=%q connection=%q", r.Header.Get("Upgrade"), r.Header.Values("Connection"))
+		})
+	}})
+	d := f.deploy(deployOpts{})
+
+	// When: a client asks to upgrade to a WebSocket
+	resp, body := f.do(d, "GET", "/socket", nil, map[string]string{"Upgrade": "websocket", "Connection": "keep-alive, Upgrade"})
+
+	// Then: Lambda strips both, as it does for every request: the application
+	// answers an ordinary one
+	if resp.StatusCode != 200 || strings.Contains(strings.ToLower(body), "websocket") || strings.Contains(strings.ToLower(body), "upgrade=\"upgrade") {
+		t.Errorf("= %d %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, `upgrade=""`) {
+		t.Errorf("application saw an Upgrade header: %s", body)
+	}
+}

@@ -64,6 +64,8 @@ const (
 	webListenAddr   = "0.0.0.0:8080"
 	defaultMemoryMB = 2048
 	webCPUs         = 2
+	webMaxFiles     = 1024 // open files per environment
+	webMaxPids      = 1024 // processes and threads per environment
 
 	// Exit codes bootstrap.mjs ends the process with when the entry file
 	// cannot be loaded (EXIT_IMPORT_ERROR) or throws as it runs

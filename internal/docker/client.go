@@ -248,6 +248,13 @@ func ManagedLabels(service, resourceID string) map[string]string {
 	}
 }
 
+// Ulimit is one resource limit of a container (docker run --ulimit).
+type Ulimit struct {
+	Name string `json:"Name"`
+	Soft int64  `json:"Soft"`
+	Hard int64  `json:"Hard"`
+}
+
 // HostConfig describes the host-side container configuration.
 type HostConfig struct {
 	Binds        []string                 `json:"Binds,omitempty"`
@@ -259,6 +266,10 @@ type HostConfig struct {
 	PortBindings map[string][]PortBinding `json:"PortBindings,omitempty"`
 	Privileged   bool                     `json:"Privileged,omitempty"` // required by k3s
 	Tmpfs        map[string]string        `json:"Tmpfs,omitempty"`      // tmpfs mounts (path → options)
+	// PidsLimit caps the processes and threads in the container (0 = unset).
+	PidsLimit int64 `json:"PidsLimit,omitempty"`
+	// Ulimits are per-process resource limits, such as open files.
+	Ulimits []Ulimit `json:"Ulimits,omitempty"`
 	// CapAdd grants individual Linux capabilities on top of Docker's default
 	// set, named without the "CAP_" prefix (e.g. "DAC_READ_SEARCH"). Prefer it
 	// to Privileged: one capability is auditable, --privileged is not.

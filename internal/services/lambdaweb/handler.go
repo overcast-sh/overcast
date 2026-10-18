@@ -234,6 +234,10 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 	}
 	st.path, st.rawPath = originalPath(r, ro)
 	out := r.WithContext(context.WithValue(ctx, reqStateKey{}, st))
+	// Lambda removes Upgrade (and the Connection token that names it) from a
+	// request. Go's proxy would otherwise notice it and tunnel a WebSocket.
+	out.Header.Del("Upgrade")
+	dropConnectionToken(out.Header, "upgrade")
 	es.proxy.ServeHTTP(w, out)
 	return st.perr, ev
 }
@@ -389,6 +393,23 @@ func rewriteRequest(pr *httputil.ProxyRequest, addr string) {
 
 // removedRequestHeaders are the request headers Lambda drops beyond the
 // hop-by-hop set Go's proxy already removes.
+// dropConnectionToken removes one token from the Connection header.
+func dropConnectionToken(h http.Header, token string) {
+	var keep []string
+	for _, v := range h.Values("Connection") {
+		for _, t := range strings.Split(v, ",") {
+			if t = strings.TrimSpace(t); t != "" && !strings.EqualFold(t, token) {
+				keep = append(keep, t)
+			}
+		}
+	}
+	if len(keep) == 0 {
+		h.Del("Connection")
+		return
+	}
+	h.Set("Connection", strings.Join(keep, ", "))
+}
+
 var removedRequestHeaders = []string{
 	"Expect", "Proxy-Connection", "X-Real-Ip",
 	"X-Http-Method-Override", "X-Http-Method", "X-Method-Override",
