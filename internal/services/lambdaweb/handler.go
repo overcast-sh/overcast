@@ -63,6 +63,9 @@ type reqState struct {
 	es        *envState
 	perr      *platformError
 	logStream string
+	// w is the client's response writer, for the headers an application's own
+	// response replaces.
+	w http.ResponseWriter
 }
 
 type reqStateKey struct{}
@@ -227,7 +230,7 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 	// 8. proxy
 	st := &reqState{
 		id: id, endpoint: ep.Name, es: es, logStream: es.ref.LogStream,
-		host: s.forwardHost(r, ro), peerIP: peerIP(r),
+		host: s.forwardHost(r, ro), peerIP: peerIP(r), w: w,
 	}
 	st.path, st.rawPath = originalPath(r, ro)
 	out := r.WithContext(context.WithValue(ctx, reqStateKey{}, st))
@@ -395,6 +398,16 @@ func modifyResponse(resp *http.Response) error {
 	st, _ := resp.Request.Context().Value(reqStateKey{}).(*reqState)
 	resp.Header.Del("Trailer")
 	resp.Trailer = nil
+	if st != nil && st.w != nil {
+		// The emulator's permissive CORS headers are already on the writer, and
+		// the proxy would add the application's own beside them. An application
+		// that speaks CORS replaces them.
+		for k := range resp.Header {
+			if strings.HasPrefix(k, "Access-Control-") {
+				st.w.Header().Del(k)
+			}
+		}
+	}
 	if st != nil {
 		resp.Header.Set("Lambda-Web-Request-Id", st.id)
 		resp.Header.Set("Lambda-Web-Logstream", st.logStream)

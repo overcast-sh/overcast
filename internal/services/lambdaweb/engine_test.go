@@ -812,3 +812,25 @@ func TestServe_aCrashedEnvironmentsContainerIsRemoved(t *testing.T) {
 	// Then: the engine still asks the provider to remove it
 	eventually(t, "Stop to be called on the crashed environment", func() bool { return env.stopCalls.Load() >= 1 })
 }
+
+func TestServe_anApplicationsOwnCORSHeadersReplaceThePreset(t *testing.T) {
+	// Given: the emulator's permissive CORS in front, and an application that
+	// names its own origin
+	f := newDPFixture(t, dpOptions{
+		wrap: middleware.CORS,
+		handler: func(envSpec) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Access-Control-Allow-Origin", "https://app.example")
+			})
+		},
+	})
+	d := f.deploy(deployOpts{})
+
+	// When: a request goes through the invoke path (which keeps the middleware)
+	resp, _ := f.do(d, "GET", "/", nil, nil)
+
+	// Then: the browser sees one origin, the application's
+	if got := resp.Header.Values("Access-Control-Allow-Origin"); len(got) != 1 || got[0] != "https://app.example" {
+		t.Errorf("Access-Control-Allow-Origin = %q", got)
+	}
+}
