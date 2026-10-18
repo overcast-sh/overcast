@@ -598,6 +598,18 @@ func (s *Service) environmentExited(es *envState) {
 	}
 	s.removeEnv(es, true)
 	s.telemetrySpinDown(es, false)
+	// The process is gone but its container is not: remove it, or a crash-looping
+	// revision leaves one behind per restart. Stop is idempotent.
+	if es.env != nil {
+		go func(env environment, tr *http.Transport) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = env.Stop(ctx, stopGrace)
+			if tr != nil {
+				tr.CloseIdleConnections()
+			}
+		}(es.env, es.tr)
+	}
 }
 
 // removeEnv takes es out of service and releases its counters, once. New

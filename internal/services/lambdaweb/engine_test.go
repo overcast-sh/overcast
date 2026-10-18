@@ -752,3 +752,63 @@ func TestServe_genuineCloudFrontIdentityReachesTheAuthoriserButNotTheApplication
 		t.Errorf("authoriser source ARNs = %q, want %q", spy.arn, arn)
 	}
 }
+
+func TestServe_policyAndTagChangesReachTheRouteTable(t *testing.T) {
+	// Given: a function that has served a request, so its route table is built
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	f.do(d, "GET", "/", nil, nil)
+	fnARN := f.svc.functionARN("us-east-1", d.function)
+	route := func() (*policyRecord, map[string]string) {
+		tbl, err := f.svc.routes(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ro := tbl.byHost[d.id]
+		return ro.policy, tbl.tags[fnARN]
+	}
+	if p, tags := route(); p != nil || len(tags) != 0 {
+		t.Fatalf("before = %v %v", p, tags)
+	}
+
+	// When: a policy and a tag are added after traffic has started
+	policy := resourcePolicy(`{"Service":"cloudfront.amazonaws.com"}`, "")
+	if _, aerr := f.svc.putResourcePolicyTyped(context.Background(), &putPolicyRequest{ResourceARN: fnARN, Policy: policy}); aerr != nil {
+		t.Fatalf("put policy: %s", aerr.Message)
+	}
+	if _, aerr := f.svc.tagResourceTyped(context.Background(), &tagResourceRequest{Resource: fnARN, Tags: map[string]string{"team": "a"}}); aerr != nil {
+		t.Fatalf("tag: %s", aerr.Message)
+	}
+
+	// Then: the next request is judged by them
+	if p, tags := route(); p == nil || tags["team"] != "a" {
+		t.Errorf("after add = %v %v", p, tags)
+	}
+
+	// And when they are removed again, by the next request too
+	if _, aerr := f.svc.untagResourceTyped(context.Background(), &untagResourceRequest{Resource: fnARN, TagKeys: []string{"team"}}); aerr != nil {
+		t.Fatalf("untag: %s", aerr.Message)
+	}
+	if _, aerr := f.svc.deleteResourcePolicyTyped(context.Background(), &policyRef{ResourceARN: fnARN}); aerr != nil {
+		t.Fatalf("delete policy: %s", aerr.Message)
+	}
+	if p, tags := route(); p != nil || len(tags) != 0 {
+		t.Errorf("after remove = %v %v", p, tags)
+	}
+}
+
+func TestServe_aCrashedEnvironmentsContainerIsRemoved(t *testing.T) {
+	// Given: a running environment
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{})
+	f.do(d, "GET", "/", nil, nil)
+	f.prov.mu.Lock()
+	env := f.prov.envs[0]
+	f.prov.mu.Unlock()
+
+	// When: its process dies on its own
+	env.crash(exitReason{Code: 1})
+
+	// Then: the engine still asks the provider to remove it
+	eventually(t, "Stop to be called on the crashed environment", func() bool { return env.stopCalls.Load() >= 1 })
+}

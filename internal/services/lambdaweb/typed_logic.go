@@ -1021,6 +1021,9 @@ func (s *Service) tagResourceTyped(ctx context.Context, in *tagResourceRequest) 
 		return nil, aerr
 	}
 	_, aerr = serviceutil.ApplyStoreTags(ctx, s.tagStore(), fn.ARN, in.Tags, tagCfg)
+	if aerr == nil {
+		s.invalidateRoutes() // the route table carries the tags that ABAC conditions read
+	}
 	return nil, aerr
 }
 
@@ -1036,6 +1039,9 @@ func (s *Service) untagResourceTyped(ctx context.Context, in *untagResourceReque
 		return nil, aerr
 	}
 	_, aerr = serviceutil.RemoveStoreTags(ctx, s.tagStore(), fn.ARN, in.TagKeys)
+	if aerr == nil {
+		s.invalidateRoutes()
+	}
 	return nil, aerr
 }
 
@@ -1104,6 +1110,7 @@ func (s *Service) putResourcePolicyTyped(ctx context.Context, in *putPolicyReque
 	if aerr := putRecord(ctx, s, nsPolicies, fn.ARN, rec); aerr != nil {
 		return nil, aerr
 	}
+	s.invalidateRoutes() // the route table carries the policy the next request is judged by
 	return &policyResponse{Policy: rec.Policy, RevisionID: rec.RevisionID}, nil
 }
 
@@ -1138,7 +1145,11 @@ func (s *Service) deleteResourcePolicyTyped(ctx context.Context, in *policyRef) 
 	if in.RevisionID != "" && cur.RevisionID != in.RevisionID {
 		return nil, conflict("The policy revision ID does not match the current policy revision.")
 	}
-	return nil, deleteRecord(ctx, s, nsPolicies, fn.ARN)
+	if aerr := deleteRecord(ctx, s, nsPolicies, fn.ARN); aerr != nil {
+		return nil, aerr
+	}
+	s.invalidateRoutes()
+	return nil, nil
 }
 
 // ─── Account settings ────────────────────────────────────────────────────────
