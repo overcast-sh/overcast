@@ -21,8 +21,10 @@ client ── Host: {id}.{shard}.lambda-web.{region}.{base}[:port] ──► Ove
       1. protocol checks        HTTP/1.1 only (505), method set (400), Host present (400), header block ≤128 KiB (431)
       2. route                  host → endpoint via the in-memory routing table (no store read)  (404 InvalidEndpoint)
       3. state                  endpoint Active (409 EndpointNotActive); rateLimit 0 → 503 EndpointDisabled
-      4. auth                   IamAuth → invokeAuth.Authorize (403, no lambda-web-error-type); ApplicationManaged → strip SigV4
-      5. throttle               endpoint rate (429 EndpointRequestThrottle), account rate (AccountRequestThrottle)
+      4. throttle               endpoint rate (429 EndpointRequestThrottle) then account rate (AccountRequestThrottle): before
+                                auth, so unsigned floods never reach signature verification; endpoint first, so what it
+                                refuses does not spend the account's tokens
+      5. auth                   IamAuth → invokeAuth.Authorize (403, no lambda-web-error-type); ApplicationManaged → strip SigV4
       6. revision               weighted pick of ≤2 revisions; revision Active else 409 RevisionNotActive
       7. environment            pool.acquire(revision) → env with spare concurrency, or start one (cold start), or 429
       8. proxy                  streamed reverse proxy; timeoutSeconds → 504 Runtime.RequestTimeout

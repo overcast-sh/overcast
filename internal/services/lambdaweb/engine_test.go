@@ -618,3 +618,62 @@ func TestServe_aFailureMidBodyCutsTheConnectionInsteadOfAppendingAnError(t *test
 		t.Errorf("an error was appended to the stream: %q", body)
 	}
 }
+
+func TestServe_throttleComesBeforeAuthentication(t *testing.T) {
+	// Given: an IamAuth endpoint limited to 100 per second whose authoriser
+	// counts the requests it is asked to verify
+	var verified atomic.Int32
+	f := newDPFixture(t, dpOptions{authorize: countingDeny{&verified}})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authIam, AutoDeploymentMode: deployLatestRevision, ThrottleConfig: &throttleCfg{RateLimit: intp(100)}}})
+
+	// When: a flood of unsigned requests arrives
+	throttled := 0
+	for range 60 {
+		resp, _ := f.do(d, "GET", "/", nil, nil)
+		if resp.StatusCode == 429 {
+			throttled++
+		}
+	}
+
+	// Then: the burst (10) is verified and the rest never reach the authoriser
+	// (the mock clock does not advance, so the count is exact)
+	if throttled != 50 || verified.Load() != 10 {
+		t.Errorf("throttled=%d verified=%d, want 50 and 10", throttled, verified.Load())
+	}
+}
+
+func TestServe_anEndpointThrottledRequestDoesNotSpendTheAccountLimit(t *testing.T) {
+	// Given: an endpoint limited to 100 per second (a burst of 10) and an account
+	// limit of 1000 per second (a burst of 100); the mock clock stands still
+	f := newDPFixture(t, dpOptions{})
+	d := f.deploy(deployOpts{endpointCfg: &endpointConfigIn{EndpointType: endpointHomeRegion, AuthType: authApplicationManaged, AutoDeploymentMode: deployLatestRevision, ThrottleConfig: &throttleCfg{RateLimit: intp(100)}}})
+	f.svc.startEngine()
+	f.svc.dp.acct.Store(newLimiter(1000))
+
+	// When: fifty requests arrive in one instant
+	ok := 0
+	for range 50 {
+		if resp, _ := f.do(d, "GET", "/", nil, nil); resp.StatusCode == 200 {
+			ok++
+		}
+	}
+
+	// Then: the endpoint let its burst through, and the account was charged for those only
+	if ok != 10 {
+		t.Fatalf("ok = %d, want 10", ok)
+	}
+	left := 0
+	for f.svc.dp.acct.Load().allow(f.clk.Now().UnixNano()) {
+		left++
+	}
+	if left != 90 {
+		t.Errorf("account tokens left = %d, want 90", left)
+	}
+}
+
+type countingDeny struct{ n *atomic.Int32 }
+
+func (c countingDeny) Authorize(context.Context, *http.Request, authContext) *platformError {
+	c.n.Add(1)
+	return errForbidden()
+}

@@ -167,19 +167,21 @@ func (s *Service) dispatch(w *countingWriter, r *http.Request, id string, start 
 		return &platformError{Status: http.StatusServiceUnavailable, Message: "Web function environments are not available: Docker is not configured."}, ev
 	}
 
-	// 4. auth
-	if perr := s.authorize(r, ro, sourceARN); perr != nil {
-		return perr, ev
-	}
-
-	// 5. throttle
+	// 4. throttle. Before authentication, so that a flood of unsigned requests
+	// meets the rate limit and not the SigV4a verification; the endpoint's own
+	// limit first, so a request it refuses does not also spend the account's.
 	s.startEngine()
 	now := start.UnixNano()
+	if !ro.rt.limiter.Load().allow(now) {
+		return s.throttled(ro, errTypeEndpointRequestThrot, "The endpoint request rate limit was exceeded."), nil
+	}
 	if !s.dp.acct.Load().allow(now) {
 		return s.throttled(ro, errTypeAccountRequestThrottle, "The account request rate limit was exceeded."), nil
 	}
-	if !ro.rt.limiter.Load().allow(now) {
-		return s.throttled(ro, errTypeEndpointRequestThrot, "The endpoint request rate limit was exceeded."), nil
+
+	// 5. auth
+	if perr := s.authorize(r, ro, sourceARN); perr != nil {
+		return perr, ev
 	}
 
 	// 6. revision
