@@ -349,6 +349,7 @@ DeliveryDestination structure
 DeliveryDestinationConfiguration structure
 .destinationResourceArn Arn
 DeliveryDestinationName string
+DeliveryDestinationNames list m=DeliveryDestinationName
 DeliveryDestinationPolicy string
 DeliveryDestinationType enum
 DeliveryDestinationTypes list m=DeliveryDestinationType
@@ -380,6 +381,7 @@ DeliverySourceConfigurationSchemas list m=DeliverySourceConfigurationSchema
 DeliverySourceConfigurationSupportedValues list m=DeliverySourceConfigurationSchemaField
 DeliverySourceConfigurationValue string
 DeliverySourceName string
+DeliverySourceNames list m=DeliverySourceName
 DeliverySourceStatus enum
 DeliverySourceStatusReason enum
 DeliverySources list m=DeliverySource
@@ -407,6 +409,7 @@ DescribeConfigurationTemplatesResponse structure
 .nextToken NextToken
 DescribeDeliveries operation in=DescribeDeliveriesRequest out=DescribeDeliveriesResponse err=ServiceQuotaExceededException,ServiceUnavailableException,ThrottlingException,ValidationException
 DescribeDeliveriesRequest structure
+.deliverySourceNames DeliverySourceNames
 .limit DescribeLimit
 .nextToken NextToken
 DescribeDeliveriesResponse structure
@@ -415,6 +418,7 @@ DescribeDeliveriesResponse structure
 DescribeDeliveryDestinations operation in=DescribeDeliveryDestinationsRequest out=DescribeDeliveryDestinationsResponse err=ServiceQuotaExceededException,ServiceUnavailableException,ThrottlingException,ValidationException
 DescribeDeliveryDestinationsRequest structure
 .limit DescribeLimit
+.names DeliveryDestinationNames
 .nextToken NextToken
 DescribeDeliveryDestinationsResponse structure
 .deliveryDestinations DeliveryDestinations
@@ -423,6 +427,7 @@ DescribeDeliverySources operation in=DescribeDeliverySourcesRequest out=Describe
 DescribeDeliverySourcesRequest structure
 .limit DescribeLimit
 .nextToken NextToken
+.resourceArns FilterResourceArns
 DescribeDeliverySourcesResponse structure
 .deliverySources DeliverySources
 .nextToken NextToken
@@ -685,6 +690,7 @@ FilterLogEventsResponse structure
 .searchedLogStreams SearchedLogStreams
 FilterName string
 FilterPattern string
+FilterResourceArns list m=Arn
 FilteredLogEvent structure
 .eventId EventId
 .ingestionTime Timestamp

@@ -1,5 +1,7 @@
 service AWSJSON10,AWSQuery,RPCV2CBOR version=2010-08-01 ns=http://monitoring.amazonaws.com/doc/2010-08-01/ querycompat
 AccountId string
+ActionConfiguration structure
+.AlarmTagsPropagation AlarmTagsPropagation
 ActionLogLineCount integer
 ActionLogLineRoleArn string
 ActionPrefix string
@@ -42,6 +44,13 @@ AlarmPromQLCriteria structure
 .Query Query
 .RecoveryPeriod RecoveryPeriod
 AlarmRule string
+AlarmTagsPropagation structure
+.Enabled AlarmTagsPropagationEnabled
+.ExcludedTagKeys AlarmTagsPropagationTagKeys
+.IncludedTagKeys AlarmTagsPropagationTagKeys
+AlarmTagsPropagationEnabled boolean
+AlarmTagsPropagationTagKey string
+AlarmTagsPropagationTagKeys list m=AlarmTagsPropagationTagKey
 AlarmType enum
 AlarmTypes list m=AlarmType
 AmazonResourceName string
@@ -56,14 +65,18 @@ AnomalyDetector structure
 .SingleMetricAnomalyDetector SingleMetricAnomalyDetector
 .Stat AnomalyDetectorMetricStat
 .StateValue AnomalyDetectorStateValue
+AnomalyDetectorAdaptationSpeed enum
 AnomalyDetectorConfiguration structure
+.AdaptationSpeed AnomalyDetectorAdaptationSpeed
 .ExcludedTimeRanges AnomalyDetectorExcludedTimeRanges
 .MetricTimezone AnomalyDetectorMetricTimezone
+.OutlierFilteringStrength AnomalyDetectorOutlierFilteringStrength
 AnomalyDetectorExcludedTimeRanges list m=Range
 AnomalyDetectorId string
 AnomalyDetectorIds list m=AnomalyDetectorId
 AnomalyDetectorMetricStat string
 AnomalyDetectorMetricTimezone string
+AnomalyDetectorOutlierFilteringStrength enum
 AnomalyDetectorStateValue enum
 AnomalyDetectorType enum
 AnomalyDetectorTypes list m=AnomalyDetectorType
@@ -80,6 +93,7 @@ AwsQueryErrorMessage string
 BatchFailures list m=PartialFailure
 ComparisonOperator enum
 CompositeAlarm structure
+.ActionConfiguration ActionConfiguration
 .ActionsEnabled ActionsEnabled
 .ActionsSuppressedBy ActionsSuppressedBy
 .ActionsSuppressedReason ActionsSuppressedReason
@@ -549,6 +563,7 @@ ListTagsForResourceInput structure
 ListTagsForResourceOutput structure
 .Tags TagList
 LogAlarm structure
+.ActionConfiguration ActionConfiguration
 .ActionLogLineCount ActionLogLineCount
 .ActionLogLineRoleArn ActionLogLineRoleArn
 .ActionsEnabled ActionsEnabled
@@ -600,6 +615,7 @@ Metric structure
 .MetricName MetricName
 .Namespace Namespace
 MetricAlarm structure
+.ActionConfiguration ActionConfiguration
 .ActionsEnabled ActionsEnabled
 .AlarmActions ResourceList
 .AlarmArn AlarmArn
@@ -757,6 +773,7 @@ PutAnomalyDetectorOutput structure
 .AnomalyDetectorId AnomalyDetectorId
 PutCompositeAlarm operation in=PutCompositeAlarmInput out=~Unit err=LimitExceededFault
 PutCompositeAlarmInput structure
+.ActionConfiguration ActionConfiguration
 .ActionsEnabled ActionsEnabled
 .ActionsSuppressor AlarmArn
 .ActionsSuppressorExtensionPeriod SuppressorPeriod
@@ -785,6 +802,7 @@ PutInsightRuleInput structure
 PutInsightRuleOutput structure
 PutLogAlarm operation in=PutLogAlarmInput out=~Unit err=LimitExceededFault,ResourceConflict
 PutLogAlarmInput structure
+.ActionConfiguration ActionConfiguration
 .ActionLogLineCount ActionLogLineCount
 .ActionLogLineRoleArn ActionLogLineRoleArn
 .ActionsEnabled ActionsEnabled
@@ -808,6 +826,7 @@ PutManagedInsightRulesOutput structure
 .Failures BatchFailures
 PutMetricAlarm operation in=PutMetricAlarmInput out=~Unit err=LimitExceededFault
 PutMetricAlarmInput structure
+.ActionConfiguration ActionConfiguration
 .ActionsEnabled ActionsEnabled
 .AlarmActions ResourceList
 .AlarmDescription AlarmDescription

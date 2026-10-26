@@ -333,6 +333,14 @@ AnalysisSecurityGroupRule structure
 .Protocol String ec2=Protocol xml=protocol
 .SecurityGroupId String ec2=SecurityGroupId xml=securityGroupId
 AnalysisStatus enum
+AnalysisTransitGatewayPolicyTableEntry structure
+.DestinationCidr String ec2=DestinationCidr xml=destinationCidr
+.DestinationPortRange PortRange ec2=DestinationPortRange xml=destinationPortRange
+.Protocol String ec2=Protocol xml=protocol
+.RuleNumber Integer ec2=RuleNumber xml=ruleNumber
+.SourceCidr String ec2=SourceCidr xml=sourceCidr
+.SourcePortRange PortRange ec2=SourcePortRange xml=sourcePortRange
+.TargetRouteTableId String ec2=TargetRouteTableId xml=targetRouteTableId
 ApplianceModeSupportValue enum
 ApplicationStatus structure
 .Details ApplicationStatusDetailSet ec2=DetailSet xml=detailSet
@@ -6706,6 +6714,8 @@ Explanation structure
 .SubnetRouteTable AnalysisComponent ec2=SubnetRouteTable xml=subnetRouteTable
 .TransitGateway AnalysisComponent ec2=TransitGateway xml=transitGateway
 .TransitGatewayAttachment AnalysisComponent ec2=TransitGatewayAttachment xml=transitGatewayAttachment
+.TransitGatewayPolicyTable AnalysisComponent ec2=TransitGatewayPolicyTable xml=transitGatewayPolicyTable
+.TransitGatewayPolicyTableEntry AnalysisTransitGatewayPolicyTableEntry ec2=TransitGatewayPolicyTableEntry xml=transitGatewayPolicyTableEntry
 .TransitGatewayRouteTable AnalysisComponent ec2=TransitGatewayRouteTable xml=transitGatewayRouteTable
 .TransitGatewayRouteTableRoute TransitGatewayRouteTableRoute ec2=TransitGatewayRouteTableRoute xml=transitGatewayRouteTableRoute
 .Vpc AnalysisComponent ec2=Vpc xml=vpc
@@ -7691,6 +7701,15 @@ GetSubnetCidrReservationsResult structure
 .NextToken String ec2=NextToken xml=nextToken
 .SubnetIpv4CidrReservations SubnetCidrReservationList ec2=SubnetIpv4CidrReservationSet xml=subnetIpv4CidrReservationSet
 .SubnetIpv6CidrReservations SubnetCidrReservationList ec2=SubnetIpv6CidrReservationSet xml=subnetIpv6CidrReservationSet
+GetTransitGatewayAttachmentNatConfiguration operation in=GetTransitGatewayAttachmentNatConfigurationRequest out=GetTransitGatewayAttachmentNatConfigurationResult
+GetTransitGatewayAttachmentNatConfigurationRequest structure
+.DryRun Boolean
+.TransitGatewayAttachmentId TransitGatewayAttachmentId
+GetTransitGatewayAttachmentNatConfigurationResult structure
+.NatGatewayRules TransitGatewayNatRuleList ec2=NatGatewayRuleSet xml=natGatewayRuleSet
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportState ec2=NatGatewaySupport xml=natGatewaySupport
+.NatSystemRouteSupport TransitGatewayAttachmentNatSystemRouteSupportValue ec2=NatSystemRouteSupport xml=natSystemRouteSupport
+.TransitGatewayAttachmentId TransitGatewayAttachmentId ec2=TransitGatewayAttachmentId xml=transitGatewayAttachmentId
 GetTransitGatewayAttachmentPropagations operation in=GetTransitGatewayAttachmentPropagationsRequest out=GetTransitGatewayAttachmentPropagationsResult
 GetTransitGatewayAttachmentPropagationsRequest structure
 .DryRun Boolean
@@ -8829,6 +8848,7 @@ InstanceStatus structure
 .InstanceStatus InstanceStatusSummary ec2=InstanceStatus xml=instanceStatus
 .Operator OperatorResponse ec2=Operator xml=operator
 .OutpostArn String ec2=OutpostArn xml=outpostArn
+.PerformanceStatus PerformanceStatusSummary ec2=PerformanceStatus xml=performanceStatus
 .SystemStatus InstanceStatusSummary ec2=SystemStatus xml=systemStatus
 InstanceStatusDetails structure
 .ImpairedSince DateTime ec2=ImpairedSince xml=impairedSince
@@ -10741,6 +10761,19 @@ ModifyTrafficMirrorSessionRequest structure
 ModifyTrafficMirrorSessionResult structure
 .TrafficMirrorSession TrafficMirrorSession ec2=TrafficMirrorSession xml=trafficMirrorSession
 ModifyTransitGateway operation in=ModifyTransitGatewayRequest out=ModifyTransitGatewayResult
+ModifyTransitGatewayAttachmentNatConfiguration operation in=ModifyTransitGatewayAttachmentNatConfigurationRequest out=ModifyTransitGatewayAttachmentNatConfigurationResult
+ModifyTransitGatewayAttachmentNatConfigurationRequest structure
+.DryRun Boolean
+.NatGatewayRules TransitGatewayNatRuleRequestList xml=NatGatewayRule
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportValue
+.NatSystemRouteSupport TransitGatewayAttachmentNatSystemRouteSupportValue
+.ResetNatGatewayRules Boolean
+.TransitGatewayAttachmentId TransitGatewayAttachmentId
+ModifyTransitGatewayAttachmentNatConfigurationResult structure
+.NatGatewayRules TransitGatewayNatRuleList ec2=NatGatewayRuleSet xml=natGatewayRuleSet
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportState ec2=NatGatewaySupport xml=natGatewaySupport
+.NatSystemRouteSupport TransitGatewayAttachmentNatSystemRouteSupportValue ec2=NatSystemRouteSupport xml=natSystemRouteSupport
+.TransitGatewayAttachmentId TransitGatewayAttachmentId ec2=TransitGatewayAttachmentId xml=transitGatewayAttachmentId
 ModifyTransitGatewayMeteringPolicy operation in=ModifyTransitGatewayMeteringPolicyRequest out=ModifyTransitGatewayMeteringPolicyResult
 ModifyTransitGatewayMeteringPolicyRequest structure
 .AddMiddleboxAttachmentIds TransitGatewayAttachmentIdStringList xml=AddMiddleboxAttachmentId
@@ -11564,6 +11597,7 @@ PathComponent structure
 .SourceVpc AnalysisComponent ec2=SourceVpc xml=sourceVpc
 .Subnet AnalysisComponent ec2=Subnet xml=subnet
 .TransitGateway AnalysisComponent ec2=TransitGateway xml=transitGateway
+.TransitGatewayPolicyTableEntry AnalysisTransitGatewayPolicyTableEntry ec2=TransitGatewayPolicyTableEntry xml=transitGatewayPolicyTableEntry
 .TransitGatewayRouteTableRoute TransitGatewayRouteTableRoute ec2=TransitGatewayRouteTableRoute xml=transitGatewayRouteTableRoute
 .Vpc AnalysisComponent ec2=Vpc xml=vpc
 PathComponentList list m=PathComponent mxml=item
@@ -11619,6 +11653,10 @@ PerformanceFactorReferenceRequest structure
 .InstanceFamily String
 PerformanceFactorReferenceSet list m=PerformanceFactorReference mxml=item
 PerformanceFactorReferenceSetRequest list m=PerformanceFactorReferenceRequest mxml=item
+PerformanceStatusSummary structure
+.ImpairedSince MillisecondDateTime ec2=ImpairedSince xml=impairedSince
+.Remediation String ec2=Remediation xml=remediation
+.Status SummaryStatus ec2=Status xml=status
 Period integer
 PeriodType enum
 PermissionGroup enum
@@ -13912,6 +13950,7 @@ TransitGatewayAssociationState enum
 TransitGatewayAttachment structure
 .Association TransitGatewayAttachmentAssociation ec2=Association xml=association
 .CreationTime DateTime ec2=CreationTime xml=creationTime
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportState ec2=NatGatewaySupport xml=natGatewaySupport
 .ResourceId String ec2=ResourceId xml=resourceId
 .ResourceOwnerId String ec2=ResourceOwnerId xml=resourceOwnerId
 .ResourceType TransitGatewayAttachmentResourceType ec2=ResourceType xml=resourceType
@@ -13934,6 +13973,9 @@ TransitGatewayAttachmentBgpConfigurationList list m=TransitGatewayAttachmentBgpC
 TransitGatewayAttachmentId string
 TransitGatewayAttachmentIdStringList list m=TransitGatewayAttachmentId
 TransitGatewayAttachmentList list m=TransitGatewayAttachment mxml=item
+TransitGatewayAttachmentNatGatewaySupportState enum
+TransitGatewayAttachmentNatGatewaySupportValue enum
+TransitGatewayAttachmentNatSystemRouteSupportValue enum
 TransitGatewayAttachmentPropagation structure
 .State TransitGatewayPropagationState ec2=State xml=state
 .TransitGatewayRouteTableId String ec2=TransitGatewayRouteTableId xml=transitGatewayRouteTableId
@@ -14084,6 +14126,18 @@ TransitGatewayMulticastRegisteredGroupSources structure
 .GroupIpAddress String ec2=GroupIpAddress xml=groupIpAddress
 .RegisteredNetworkInterfaceIds ValueStringList ec2=RegisteredNetworkInterfaceIds xml=registeredNetworkInterfaceIds
 .TransitGatewayMulticastDomainId String ec2=TransitGatewayMulticastDomainId xml=transitGatewayMulticastDomainId
+TransitGatewayNatRule structure
+.MatchSourceCidr String ec2=MatchSourceCidr xml=matchSourceCidr
+.NatCidr String ec2=NatCidr xml=natCidr
+.RuleNumber Integer ec2=RuleNumber xml=ruleNumber
+.State TransitGatewayNatRuleState ec2=State xml=state
+TransitGatewayNatRuleList list m=TransitGatewayNatRule mxml=item
+TransitGatewayNatRuleRequest structure
+.MatchSourceCidr String
+.NatCidr String
+.RuleNumber Integer
+TransitGatewayNatRuleRequestList list m=TransitGatewayNatRuleRequest mxml=item
+TransitGatewayNatRuleState enum
 TransitGatewayNetworkInterfaceIdList list m=NetworkInterfaceId mxml=item
 TransitGatewayOptions structure
 .AmazonSideAsn Long ec2=AmazonSideAsn xml=amazonSideAsn
