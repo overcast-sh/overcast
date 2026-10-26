@@ -14,6 +14,7 @@ AcceleratorTypeSet list m=AcceleratorType mxml=item
 AccessDeniedException structure error=client code=403
 .message String
 AccessType enum
+AccessTypeList list m=AccessType
 AdvancedConfiguration structure
 .alternateTargetGroupArn String
 .productionListenerRule String
@@ -24,6 +25,14 @@ AllowedInstanceType string
 AllowedInstanceTypeSet list m=AllowedInstanceType mxml=item
 ApplicationProtocol enum
 AssignPublicIp enum
+AssociateGatewayWithCluster operation in=AssociateGatewayWithClusterRequest out=AssociateGatewayWithClusterResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,GatewayNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+AssociateGatewayWithClusterRequest structure
+.cluster String
+.gateway String
+AssociateGatewayWithClusterResponse structure
+.clusterArn String
+.gatewayArn String
+.status GatewayClusterAssociationStatus
 Attachment structure
 .details AttachmentDetails
 .id String
@@ -342,6 +351,19 @@ CreateExpressGatewayServiceRequest structure
 .taskRoleArn String
 CreateExpressGatewayServiceResponse structure
 .service ECSExpressGatewayService
+CreateGateway operation in=CreateGatewayRequest out=CreateGatewayResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException,UnsupportedFeatureException
+CreateGatewayRequest structure
+.clientToken String
+.configuration GatewayConfiguration
+.deletionProtection BoxedBoolean
+.infrastructureRoleArn String
+.name String
+.propagateTags PropagateGatewayTags
+.tags Tags
+CreateGatewayResponse structure
+.gatewayArn String
+.name String
+.status GatewayStatus
 CreateManagedInstancesProviderConfiguration structure
 .autoRepairConfiguration AutoRepairConfiguration
 .infrastructureOptimization InfrastructureOptimization
@@ -359,6 +381,7 @@ CreateServiceRequest structure
 .desiredCount BoxedInteger
 .enableECSManagedTags Boolean
 .enableExecuteCommand Boolean
+.gatewayConnectors GatewayConnectorList
 .healthCheckGracePeriodSeconds BoxedInteger
 .launchType LaunchType
 .loadBalancers LoadBalancers
@@ -622,6 +645,13 @@ DeleteExpressGatewayServiceRequest structure
 .serviceArn String
 DeleteExpressGatewayServiceResponse structure
 .service ECSExpressGatewayService
+DeleteGateway operation in=DeleteGatewayRequest out=DeleteGatewayResponse err=AccessDeniedException,ClientException,GatewayNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DeleteGatewayRequest structure
+.gateway String
+DeleteGatewayResponse structure
+.gatewayArn String
+.name String
+.status GatewayStatus
 DeleteService operation in=DeleteServiceRequest out=DeleteServiceResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException
 DeleteServiceRequest structure
 .cluster String
@@ -788,6 +818,37 @@ DescribeExpressGatewayServiceRequest structure
 .serviceArn String
 DescribeExpressGatewayServiceResponse structure
 .service ECSExpressGatewayService
+DescribeGateway operation in=DescribeGatewayRequest out=DescribeGatewayResponse err=AccessDeniedException,ClientException,GatewayNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DescribeGatewayAlbConfiguration structure
+.accessLogs GatewayElbAccessLogConfiguration
+.currentAlbCount BoxedInteger
+.httpDesync GatewayAlbDesyncMitigationMode
+.maxAlbCount BoxedInteger
+.networkConfiguration GatewayElbNetworkConfiguration
+.port BoxedInteger
+.protocol GatewayAlbProtocol
+.scheme GatewayElbScheme
+.testTrafficRules GatewayAlbTestTrafficRules
+.webACLArn String
+DescribeGatewayConfiguration union
+.hostSharedAlb DescribeGatewayAlbConfiguration
+DescribeGatewayRequest structure
+.gateway String
+DescribeGatewayResources operation in=DescribeGatewayResourcesRequest out=DescribeGatewayResourcesResponse err=AccessDeniedException,ClientException,GatewayNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+DescribeGatewayResourcesRequest structure
+.gateway String
+.maxResults BoxedInteger
+.nextToken String
+DescribeGatewayResourcesResponse structure
+.gatewayResources GatewayResources
+.nextToken String
+DescribeGatewayResponse structure
+.gateway Gateway
+DescribeGatewayRoute operation in=DescribeGatewayRouteRequest out=DescribeGatewayRouteResponse err=AccessDeniedException,ClientException,InvalidParameterException,ResourceNotFoundException,ServerException,UnsupportedFeatureException
+DescribeGatewayRouteRequest structure
+.gatewayRouteArn String
+DescribeGatewayRouteResponse structure
+.gatewayRoute GatewayRoute
 DescribeServiceDeployments operation in=DescribeServiceDeploymentsRequest out=DescribeServiceDeploymentsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException,UnsupportedFeatureException
 DescribeServiceDeploymentsRequest structure
 .serviceDeploymentArns StringList
@@ -840,6 +901,14 @@ Device structure
 DeviceCgroupPermission enum
 DeviceCgroupPermissions list m=DeviceCgroupPermission
 DevicesList list m=Device
+DisassociateGatewayFromCluster operation in=DisassociateGatewayFromClusterRequest out=DisassociateGatewayFromClusterResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,GatewayNotFoundException,InvalidParameterException,ResourceNotFoundException,ServerException,UnsupportedFeatureException
+DisassociateGatewayFromClusterRequest structure
+.cluster String
+.gateway String
+DisassociateGatewayFromClusterResponse structure
+.clusterArn String
+.gatewayArn String
+.status GatewayClusterAssociationStatus
 DiscoverPollEndpoint operation in=DiscoverPollEndpointRequest out=DiscoverPollEndpointResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException
 DiscoverPollEndpointRequest structure
 .cluster String
@@ -879,6 +948,7 @@ ECSExpressGatewayService structure
 .updatedAt Timestamp
 ECSManagedResources structure
 .autoScaling ManagedAutoScaling
+.gatewayConnections GatewayConnectionList
 .ingressPaths ManagedIngressPaths
 .logGroups ManagedLogGroups
 .metricAlarms ManagedMetricAlarms
@@ -895,6 +965,12 @@ EFSVolumeConfiguration structure
 .rootDirectory String
 .transitEncryption EFSTransitEncryption
 .transitEncryptionPort BoxedInteger
+ElbGatewayResources structure
+.gatewayRouteArns StringList
+.listenerArn String
+.loadBalancerArn String
+.securityGroup String
+ElbGatewayResourcesList list m=ElbGatewayResources
 EnvironmentFile structure
 .type EnvironmentFileType
 .value String
@@ -991,6 +1067,146 @@ FirelensConfiguration structure
 .type FirelensConfigurationType
 FirelensConfigurationOptionsMap map k=String v=String
 FirelensConfigurationType enum
+Gateway structure
+.accessType AccessType
+.configuration DescribeGatewayConfiguration
+.createdAt Timestamp
+.deletionProtection BoxedBoolean
+.failures GatewayResourceFailureList
+.gatewayArn String
+.infrastructureRoleArn String
+.name String
+.propagateTags PropagateGatewayTags
+.status GatewayStatus
+.statusReason String
+.tags Tags
+.updatedAt Timestamp
+GatewayAlbDesyncMitigationMode enum
+GatewayAlbProtocol enum
+GatewayAlbTestTrafficRules structure
+.header GatewayTestTrafficHeader
+GatewayClusterAssociationStatus enum
+GatewayClusterAssociationStatusList list m=GatewayClusterAssociationStatus
+GatewayClusterAssociationSummary structure
+.clusterArn String
+.gatewayArn String
+.status GatewayClusterAssociationStatus
+GatewayClusterAssociationSummaryList list m=GatewayClusterAssociationSummary
+GatewayConfiguration union
+.hostSharedAlb HostSharedAlbConfiguration
+GatewayConnection structure
+.accessType AccessType
+.gatewayArn String
+.gatewayRouteArn String
+.portName String
+.resources GatewayConnectionResources
+.serviceUrl String
+.status GatewayRouteStatus
+GatewayConnectionAlbResources structure
+.acmCertificateArn String
+.alternateTargetGroupArn String
+.listenerArn String
+.listenerRuleArn String
+.loadBalancerArn String
+.loadBalancerSecurityGroupArns StringList
+.targetGroupArn String
+.testListenerRuleArn String
+GatewayConnectionAlbResourcesList list m=GatewayConnectionAlbResources
+GatewayConnectionList list m=GatewayConnection
+GatewayConnectionResources union
+.hostSharedAlb GatewayConnectionAlbResourcesList
+GatewayConnector structure
+.filters GatewayConnectorFilters
+.healthCheck GatewayConnectorHealthCheck
+.portName String
+GatewayConnectorFilters structure
+.accessTypes AccessTypeList
+GatewayConnectorHealthCheck structure
+.healthCheckIntervalSeconds BoxedInteger
+.healthCheckPath String
+.healthCheckPort BoxedInteger
+.healthCheckProtocol GatewayConnectorHealthCheckProtocol
+.healthCheckTimeoutSeconds BoxedInteger
+.healthyThresholdCount BoxedInteger
+.matcher GatewayConnectorHealthCheckMatcher
+.unhealthyThresholdCount BoxedInteger
+GatewayConnectorHealthCheckMatcher structure
+.grpcCode String
+.httpCode String
+GatewayConnectorHealthCheckProtocol enum
+GatewayConnectorList list m=GatewayConnector
+GatewayElbAccessLogConfiguration structure
+.destination GatewayElbAccessLogDestination
+GatewayElbAccessLogDestination union
+.s3 GatewayElbAccessLogS3Destination
+GatewayElbAccessLogS3Destination structure
+.bucket String
+.prefix String
+GatewayElbIpAddressType enum
+GatewayElbNetworkConfiguration structure
+.inboundSecurityGroup String
+.ipAddressType GatewayElbIpAddressType
+.subnets StringList
+GatewayElbScheme enum
+GatewayInfrastructureResources union
+.hostSharedAlb ElbGatewayResourcesList
+GatewayNotFoundException structure error=client
+.message String
+GatewayOperationError structure
+.code String
+.message String
+.operation String
+GatewayOperationErrorList list m=GatewayOperationError
+GatewayResourceFailure structure
+.arn String
+.errors GatewayOperationErrorList
+GatewayResourceFailureList list m=GatewayResourceFailure
+GatewayResources structure
+.gatewayArn String
+.resources GatewayInfrastructureResources
+GatewayRoute structure
+.gatewayRouteArn String
+.resources GatewayRouteResources
+.serviceArn String
+.serviceContainerPortName String
+.serviceUrl String
+.status GatewayRouteStatus
+GatewayRouteAlbResources structure
+.acmCertificateArn String
+.listenerArn String
+.listenerRuleArn String
+.loadBalancerArn String
+.loadBalancerSecurityGroups GatewayRouteLoadBalancerSecurityGroupList
+.serviceSecurityGroupArn String
+.testListenerRuleArns StringList
+GatewayRouteAlbResourcesList list m=GatewayRouteAlbResources
+GatewayRouteLoadBalancerSecurityGroup structure
+.arn String
+.ruleArns StringList
+GatewayRouteLoadBalancerSecurityGroupList list m=GatewayRouteLoadBalancerSecurityGroup
+GatewayRouteResources union
+.hostSharedAlb GatewayRouteAlbResourcesList
+GatewayRouteStatus enum
+GatewayRouteStatusList list m=GatewayRouteStatus
+GatewayRouteSummary structure
+.clusterArn String
+.gatewayArn String
+.gatewayRouteArn String
+.serviceArn String
+.serviceContainerPortName String
+.status GatewayRouteStatus
+GatewayRouteSummaryList list m=GatewayRouteSummary
+GatewayStatus enum
+GatewayStatusList list m=GatewayStatus
+GatewaySummary structure
+.createdAt Timestamp
+.gatewayArn String
+.name String
+.status GatewayStatus
+GatewaySummaryList list m=GatewaySummary
+GatewayTestTrafficHeader structure
+.name String
+.values StringList
 GetTaskProtection operation in=GetTaskProtectionRequest out=GetTaskProtectionResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ResourceNotFoundException,ServerException,UnsupportedFeatureException
 GetTaskProtectionRequest structure
 .cluster String
@@ -1012,6 +1228,16 @@ HostEntry structure
 .hostname String
 .ipAddress String
 HostEntryList list m=HostEntry
+HostSharedAlbConfiguration structure
+.accessLogs GatewayElbAccessLogConfiguration
+.httpDesync GatewayAlbDesyncMitigationMode
+.maxAlbCount BoxedInteger
+.networkConfiguration GatewayElbNetworkConfiguration
+.port BoxedInteger
+.protocol GatewayAlbProtocol
+.scheme GatewayElbScheme
+.testTrafficRules GatewayAlbTestTrafficRules
+.webACLArn String
 HostVolumeProperties structure
 .sourcePath String
 IAMRoleArn string
@@ -1179,6 +1405,37 @@ ListDaemonsRequest structure
 .nextToken String
 ListDaemonsResponse structure
 .daemonSummariesList DaemonSummariesList
+.nextToken String
+ListGatewayClusterAssociations operation in=ListGatewayClusterAssociationsRequest out=ListGatewayClusterAssociationsResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException,UnsupportedFeatureException
+ListGatewayClusterAssociationsRequest structure
+.cluster String
+.gateway String
+.maxResults BoxedInteger
+.nextToken String
+.status GatewayClusterAssociationStatusList
+ListGatewayClusterAssociationsResponse structure
+.gatewayClusterAssociations GatewayClusterAssociationSummaryList
+.nextToken String
+ListGatewayRoutes operation in=ListGatewayRoutesRequest out=ListGatewayRoutesResponse err=AccessDeniedException,ClientException,GatewayNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+ListGatewayRoutesRequest structure
+.cluster String
+.gateway String
+.maxResults BoxedInteger
+.nextToken String
+.service String
+.serviceContainerPortName String
+.status GatewayRouteStatusList
+ListGatewayRoutesResponse structure
+.gatewayRoutes GatewayRouteSummaryList
+.nextToken String
+ListGateways operation in=ListGatewaysRequest out=ListGatewaysResponse err=AccessDeniedException,ClientException,InvalidParameterException,ServerException,UnsupportedFeatureException
+ListGatewaysRequest structure
+.maxResults BoxedInteger
+.names StringList
+.nextToken String
+.status GatewayStatusList
+ListGatewaysResponse structure
+.gateways GatewaySummaryList
 .nextToken String
 ListServiceDeployments operation in=ListServiceDeploymentsRequest out=ListServiceDeploymentsResponse err=AccessDeniedException,ClientException,ClusterNotFoundException,InvalidParameterException,ServerException,ServiceNotFoundException,UnsupportedFeatureException
 ListServiceDeploymentsRequest structure
@@ -1469,6 +1726,7 @@ PortMapping structure
 .protocol TransportProtocol
 PortMappingList list m=PortMapping
 PortNumber integer
+PropagateGatewayTags enum
 PropagateMITags enum
 PropagateTags enum
 ProtectedTask structure
@@ -1681,10 +1939,15 @@ ServiceConnectClientAlias structure
 ServiceConnectClientAliasList list m=ServiceConnectClientAlias
 ServiceConnectConfiguration structure
 .accessLogConfiguration ServiceConnectAccessLogConfiguration
+.containerConfigurations ServiceConnectContainerConfigurations
 .enabled Boolean
 .logConfiguration LogConfiguration
 .namespace String
 .services ServiceConnectServiceList
+ServiceConnectContainerConfiguration union
+.logLevel ServiceConnectContainerLogLevel
+ServiceConnectContainerConfigurations list m=ServiceConnectContainerConfiguration
+ServiceConnectContainerLogLevel enum
 ServiceConnectIncludeQueryParameters enum
 ServiceConnectService structure
 .clientAliases ServiceConnectClientAliasList
@@ -1798,6 +2061,7 @@ ServiceRevision structure
 .createdAt Timestamp
 .ecsManagedResources ECSManagedResources
 .fargateEphemeralStorage DeploymentEphemeralStorage
+.gatewayConnectors GatewayConnectorList
 .guardDutyEnabled Boolean
 .launchType LaunchType
 .loadBalancers LoadBalancers
@@ -2181,6 +2445,28 @@ UpdateExpressGatewayServiceRequest structure
 .taskRoleArn String
 UpdateExpressGatewayServiceResponse structure
 .service UpdatedExpressGatewayService
+UpdateGateway operation in=UpdateGatewayRequest out=UpdateGatewayResponse err=AccessDeniedException,ClientException,GatewayNotFoundException,InvalidParameterException,ServerException,UnsupportedFeatureException
+UpdateGatewayAlbConfiguration structure
+.accessLogs GatewayElbAccessLogConfiguration
+.httpDesync GatewayAlbDesyncMitigationMode
+.maxAlbCount BoxedInteger
+.networkConfiguration UpdateGatewayNetworkConfiguration
+.testTrafficRules GatewayAlbTestTrafficRules
+.webACLArn String
+UpdateGatewayConfiguration union
+.hostSharedAlb UpdateGatewayAlbConfiguration
+UpdateGatewayNetworkConfiguration structure
+.inboundSecurityGroup String
+UpdateGatewayRequest structure
+.configuration UpdateGatewayConfiguration
+.deletionProtection BoxedBoolean
+.gateway String
+.infrastructureRoleArn String
+.propagateTags PropagateGatewayTags
+UpdateGatewayResponse structure
+.gatewayArn String
+.name String
+.status GatewayStatus
 UpdateInProgressException structure error=client
 .message String
 UpdateManagedInstancesProviderConfiguration structure
@@ -2207,6 +2493,7 @@ UpdateServiceRequest structure
 .enableECSManagedTags BoxedBoolean
 .enableExecuteCommand BoxedBoolean
 .forceNewDeployment Boolean
+.gatewayConnectors GatewayConnectorList
 .healthCheckGracePeriodSeconds BoxedInteger
 .loadBalancers LoadBalancers
 .monitoring MonitoringConfiguration

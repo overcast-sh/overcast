@@ -11,6 +11,14 @@ AcceleratorTotalMemoryMiBRequest structure
 .Min NullablePositiveInteger
 AcceleratorType enum
 AcceleratorTypes list m=AcceleratorType
+AccountSetting structure
+.DefaultValue AsciiStringMaxLen255
+.EnforcedValue AsciiStringMaxLen255
+.EnforcementDate TimestampType
+.EnforcementType AsciiStringMaxLen255
+.Name AsciiStringMaxLen255
+.Value AsciiStringMaxLen255
+AccountSettings list m=AccountSetting
 ActiveInstanceRefreshNotFoundFault structure qerr=ActiveInstanceRefreshNotFound error=client code=400
 .message XmlStringMaxLen255
 Activities list m=Activity
@@ -337,6 +345,14 @@ DescribeAccountLimitsAnswer structure
 .MaxNumberOfLaunchConfigurations MaxNumberOfLaunchConfigurations
 .NumberOfAutoScalingGroups NumberOfAutoScalingGroups
 .NumberOfLaunchConfigurations NumberOfLaunchConfigurations
+DescribeAccountSettings operation in=DescribeAccountSettingsType out=DescribeAccountSettingsAnswer err=InvalidNextToken
+DescribeAccountSettingsAnswer structure
+.NextToken XmlString
+.Settings AccountSettings
+DescribeAccountSettingsType structure
+.MaxRecords MaxRecords
+.Name AsciiStringMaxLen255
+.NextToken XmlString
 DescribeAdjustmentTypes operation in=~Unit out=DescribeAdjustmentTypesAnswer err=ResourceContentionFault
 DescribeAdjustmentTypesAnswer structure
 .AdjustmentTypes AdjustmentTypes
@@ -918,6 +934,11 @@ ProcessesType structure
 Progress integer
 PropagateAtLaunch boolean
 ProtectedFromScaleIn boolean
+PutAccountSetting operation in=PutAccountSettingType out=PutAccountSettingAnswer
+PutAccountSettingAnswer structure
+PutAccountSettingType structure
+.Name AsciiStringMaxLen255
+.Value AsciiStringMaxLen255
 PutLifecycleHook operation in=PutLifecycleHookType out=PutLifecycleHookAnswer err=LimitExceededFault,ResourceContentionFault
 PutLifecycleHookAnswer structure
 PutLifecycleHookType structure

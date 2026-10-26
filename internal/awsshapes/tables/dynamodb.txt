@@ -403,6 +403,11 @@ DescribeTimeToLiveOutput structure
 .TimeToLiveDescription TimeToLiveDescription
 DestinationStatus enum
 DisableKinesisStreamingDestination operation in=KinesisStreamingDestinationInput out=KinesisStreamingDestinationOutput err=InternalServerError,InvalidEndpointException,LimitExceededException,ResourceInUseException,ResourceNotFoundException
+DisassociateReplicationGroupMemberAction structure
+.DisassociationMode DisassociationMode
+.RegionName RegionName
+DisassociationMode enum
+DisassociationProtectionEnabled boolean
 DoubleObject double
 DuplicateItemException structure error=client
 .message ErrorMessage
@@ -1043,6 +1048,7 @@ ReplicatedWriteConflictException structure error=client
 ReplicationGroupUpdate structure
 .Create CreateReplicationGroupMemberAction
 .Delete DeleteReplicationGroupMemberAction
+.Disassociate DisassociateReplicationGroupMemberAction
 .Update UpdateReplicationGroupMemberAction
 ReplicationGroupUpdateList list m=ReplicationGroupUpdate
 RequestLimitExceeded structure error=client
@@ -1224,6 +1230,7 @@ TableDescription structure
 .BillingModeSummary BillingModeSummary
 .CreationDateTime Date
 .DeletionProtectionEnabled DeletionProtectionEnabled
+.DisassociationProtectionEnabled DisassociationProtectionEnabled
 .GlobalSecondaryIndexes GlobalSecondaryIndexDescriptionList
 .GlobalTableSettingsReplicationMode GlobalTableSettingsReplicationMode
 .GlobalTableVersion String
@@ -1417,6 +1424,7 @@ UpdateTableInput structure
 .AttributeDefinitions AttributeDefinitions
 .BillingMode BillingMode
 .DeletionProtectionEnabled DeletionProtectionEnabled
+.DisassociationProtectionEnabled DisassociationProtectionEnabled
 .GlobalSecondaryIndexUpdates GlobalSecondaryIndexUpdateList
 .GlobalTableSettingsReplicationMode GlobalTableSettingsReplicationMode
 .GlobalTableWitnessUpdates GlobalTableWitnessGroupUpdateList
