@@ -261,6 +261,24 @@ DescribeRegistryRequest structure
 DescribeRegistryResponse structure
 .registryId RegistryId
 .replicationConfiguration ReplicationConfiguration
+DescribeReplicationBackfillResults operation in=DescribeReplicationBackfillResultsRequest out=DescribeReplicationBackfillResultsResponse err=InvalidParameterException,ReplicationBackfillNotFoundException,ServerException,ValidationException
+DescribeReplicationBackfillResultsRequest structure
+.maxResults MaxResults
+.nextToken NextToken
+.registryId RegistryId
+.replicationBackfillId ReplicationBackfillId
+.resultStatusFilter ReplicationBackfillResultStatus
+DescribeReplicationBackfillResultsResponse structure
+.destination ReplicationDestination
+.endedAt Date
+.failureCode ReplicationBackfillError
+.nextToken NextToken
+.progress ReplicationBackfillProgress
+.registryId RegistryId
+.replicationBackfillId ReplicationBackfillId
+.results ReplicationBackfillResultList
+.startedAt Date
+.status ReplicationBackfillStatus
 DescribeRepositories operation in=DescribeRepositoriesRequest out=DescribeRepositoriesResponse err=InvalidParameterException,RepositoryNotFoundException,ServerException
 DescribeRepositoriesRequest structure
 .maxResults MaxResults
@@ -620,6 +638,15 @@ ListPullTimeUpdateExclusionsRequest structure
 ListPullTimeUpdateExclusionsResponse structure
 .nextToken NextToken
 .pullTimeUpdateExclusions PullTimeUpdateExclusionList
+ListReplicationBackfills operation in=ListReplicationBackfillsRequest out=ListReplicationBackfillsResponse err=InvalidParameterException,ServerException,ValidationException
+ListReplicationBackfillsRequest structure
+.maxResults FiftyMaxResults
+.nextToken NextToken
+.registryId RegistryId
+ListReplicationBackfillsResponse structure
+.backfills ReplicationBackfillSummaryList
+.nextToken NextToken
+.registryId RegistryId
 ListTagsForResource operation in=ListTagsForResourceRequest out=ListTagsForResourceResponse err=InvalidParameterException,RepositoryNotFoundException,ServerException
 ListTagsForResourceRequest structure
 .resourceArn Arn
@@ -630,6 +657,7 @@ MediaType string
 MediaTypeList list m=MediaType
 Metric string
 NextToken string
+NonNegativeInteger integer
 PTCValidateFailure string
 PackageManager string
 PackageVulnerabilityDetails structure
@@ -770,6 +798,37 @@ RelatedVulnerability string
 Release string
 Remediation structure
 .recommendation Recommendation
+ReplicationBackfillError string
+ReplicationBackfillId string
+ReplicationBackfillInProgressException structure error=client
+.message ExceptionMessage
+ReplicationBackfillInvalidStatusException structure error=client
+.message ExceptionMessage
+ReplicationBackfillNotFoundException structure error=client
+.message ExceptionMessage
+ReplicationBackfillProgress structure
+.completedReplicationCount NonNegativeInteger
+.failedReplicationCount NonNegativeInteger
+.failureCodes ReplicationErrorList
+.totalReplicationCount NonNegativeInteger
+ReplicationBackfillResult structure
+.failureCode ReplicationError
+.imageId ImageIdentifier
+.repositoryName RepositoryName
+.status ReplicationBackfillResultStatus
+.subImageFailureCodes ReplicationErrorList
+ReplicationBackfillResultList list m=ReplicationBackfillResult
+ReplicationBackfillResultStatus enum
+ReplicationBackfillStatus enum
+ReplicationBackfillSummary structure
+.destination ReplicationDestination
+.endedAt Date
+.failureCode ReplicationBackfillError
+.progress ReplicationBackfillProgress
+.replicationBackfillId ReplicationBackfillId
+.startedAt Date
+.status ReplicationBackfillStatus
+ReplicationBackfillSummaryList list m=ReplicationBackfillSummary
 ReplicationConfiguration structure
 .rules ReplicationRuleList
 ReplicationDestination structure
@@ -777,6 +836,7 @@ ReplicationDestination structure
 .registryId RegistryId
 ReplicationDestinationList list m=ReplicationDestination
 ReplicationError string
+ReplicationErrorList list m=ReplicationError
 ReplicationRule structure
 .destinations ReplicationDestinationList
 .repositoryFilters RepositoryFilterList
@@ -923,7 +983,27 @@ StartLifecyclePolicyPreviewResponse structure
 .registryId RegistryId
 .repositoryName RepositoryName
 .status LifecyclePolicyPreviewStatus
+StartReplicationBackfill operation in=StartReplicationBackfillRequest out=StartReplicationBackfillResponse err=InvalidParameterException,LimitExceededException,ReplicationBackfillInProgressException,ServerException,ValidationException
+StartReplicationBackfillRequest structure
+.destination ReplicationDestination
+.registryId RegistryId
+StartReplicationBackfillResponse structure
+.destination ReplicationDestination
+.registryId RegistryId
+.replicationBackfillId ReplicationBackfillId
+.startedAt Date
+.status ReplicationBackfillStatus
 Status string
+StopReplicationBackfill operation in=StopReplicationBackfillRequest out=StopReplicationBackfillResponse err=InvalidParameterException,ReplicationBackfillInvalidStatusException,ReplicationBackfillNotFoundException,ServerException,ValidationException
+StopReplicationBackfillRequest structure
+.registryId RegistryId
+.replicationBackfillId ReplicationBackfillId
+StopReplicationBackfillResponse structure
+.destination ReplicationDestination
+.registryId RegistryId
+.replicationBackfillId ReplicationBackfillId
+.startedAt Date
+.status ReplicationBackfillStatus
 String string
 SubjectIdentifier structure
 .imageDigest ImageDigest

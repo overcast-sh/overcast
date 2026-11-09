@@ -11,6 +11,14 @@ AcceleratorTotalMemoryMiBRequest structure
 .Min NullablePositiveInteger
 AcceleratorType enum
 AcceleratorTypes list m=AcceleratorType
+AccountSetting structure
+.DefaultValue AsciiStringMaxLen255
+.EnforcedValue AsciiStringMaxLen255
+.EnforcementDate TimestampType
+.EnforcementType AsciiStringMaxLen255
+.Name AsciiStringMaxLen255
+.Value AsciiStringMaxLen255
+AccountSettings list m=AccountSetting
 ActiveInstanceRefreshNotFoundFault structure qerr=ActiveInstanceRefreshNotFound error=client code=400
 .message XmlStringMaxLen255
 Activities list m=Activity
@@ -123,6 +131,7 @@ AutoScalingGroupNamesType structure
 .AutoScalingGroupNames AutoScalingGroupNames
 .Filters Filters
 .IncludeInstances IncludeInstances
+.IncludeManagedResources IncludeManagedResources
 .MaxRecords MaxRecords
 .NextToken XmlString
 AutoScalingGroupPredictedCapacity integer
@@ -337,12 +346,21 @@ DescribeAccountLimitsAnswer structure
 .MaxNumberOfLaunchConfigurations MaxNumberOfLaunchConfigurations
 .NumberOfAutoScalingGroups NumberOfAutoScalingGroups
 .NumberOfLaunchConfigurations NumberOfLaunchConfigurations
+DescribeAccountSettings operation in=DescribeAccountSettingsType out=DescribeAccountSettingsAnswer err=InvalidNextToken
+DescribeAccountSettingsAnswer structure
+.NextToken XmlString
+.Settings AccountSettings
+DescribeAccountSettingsType structure
+.MaxRecords MaxRecords
+.Name AsciiStringMaxLen255
+.NextToken XmlString
 DescribeAdjustmentTypes operation in=~Unit out=DescribeAdjustmentTypesAnswer err=ResourceContentionFault
 DescribeAdjustmentTypesAnswer structure
 .AdjustmentTypes AdjustmentTypes
 DescribeAutoScalingGroups operation in=AutoScalingGroupNamesType out=AutoScalingGroupsType err=InvalidNextToken,ResourceContentionFault
 DescribeAutoScalingInstances operation in=DescribeAutoScalingInstancesType out=AutoScalingInstancesType err=InvalidNextToken,ResourceContentionFault
 DescribeAutoScalingInstancesType structure
+.IncludeManagedResources IncludeManagedResources
 .InstanceIds InstanceIds
 .MaxRecords MaxRecords
 .NextToken XmlString
@@ -394,11 +412,13 @@ DescribeNotificationConfigurationsAnswer structure
 .NotificationConfigurations NotificationConfigurations
 DescribeNotificationConfigurationsType structure
 .AutoScalingGroupNames AutoScalingGroupNames
+.IncludeManagedResources IncludeManagedResources
 .MaxRecords MaxRecords
 .NextToken XmlString
 DescribePolicies operation in=DescribePoliciesType out=PoliciesType err=InvalidNextToken,ResourceContentionFault,ServiceLinkedRoleFailure
 DescribePoliciesType structure
 .AutoScalingGroupName XmlStringMaxLen255
+.IncludeManagedResources IncludeManagedResources
 .MaxRecords MaxRecords
 .NextToken XmlString
 .PolicyNames PolicyNames
@@ -409,6 +429,7 @@ DescribeScalingActivitiesType structure
 .AutoScalingGroupName XmlStringMaxLen255
 .Filters Filters
 .IncludeDeletedGroups IncludeDeletedGroups
+.IncludeManagedResources IncludeManagedResources
 .MaxRecords MaxRecords
 .NextToken XmlString
 DescribeScalingProcessTypes operation in=~Unit out=ProcessesType err=ResourceContentionFault
@@ -416,6 +437,7 @@ DescribeScheduledActions operation in=DescribeScheduledActionsType out=Scheduled
 DescribeScheduledActionsType structure
 .AutoScalingGroupName XmlStringMaxLen255
 .EndTime TimestampType
+.IncludeManagedResources IncludeManagedResources
 .MaxRecords MaxRecords
 .NextToken XmlString
 .ScheduledActionNames ScheduledActionNames
@@ -423,6 +445,7 @@ DescribeScheduledActionsType structure
 DescribeTags operation in=DescribeTagsType out=TagsType err=InvalidNextToken,ResourceContentionFault
 DescribeTagsType structure
 .Filters Filters
+.IncludeManagedResources IncludeManagedResources
 .MaxRecords MaxRecords
 .NextToken XmlString
 DescribeTerminationPolicyTypes operation in=~Unit out=DescribeTerminationPolicyTypesAnswer err=ResourceContentionFault
@@ -552,6 +575,7 @@ ImageId string
 ImpairedZoneHealthCheckBehavior enum
 IncludeDeletedGroups boolean
 IncludeInstances boolean
+IncludeManagedResources boolean
 Instance structure
 .AvailabilityZone XmlStringMaxLen255
 .AvailabilityZoneId XmlStringMaxLen255
@@ -918,6 +942,11 @@ ProcessesType structure
 Progress integer
 PropagateAtLaunch boolean
 ProtectedFromScaleIn boolean
+PutAccountSetting operation in=PutAccountSettingType out=PutAccountSettingAnswer
+PutAccountSettingAnswer structure
+PutAccountSettingType structure
+.Name AsciiStringMaxLen255
+.Value AsciiStringMaxLen255
 PutLifecycleHook operation in=PutLifecycleHookType out=PutLifecycleHookAnswer err=LimitExceededFault,ResourceContentionFault
 PutLifecycleHookAnswer structure
 PutLifecycleHookType structure

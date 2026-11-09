@@ -246,10 +246,13 @@ DateTimeConverter structure
 .targetTimezone TargetTimezone
 Days integer
 DefaultValue double
-DeleteAccountPolicy operation in=DeleteAccountPolicyRequest out=~Unit err=InvalidParameterException,OperationAbortedException,ResourceNotFoundException,ServiceUnavailableException
+DeleteAccountPolicy operation in=DeleteAccountPolicyRequest out=DeleteAccountPolicyResponse err=InvalidParameterException,OperationAbortedException,ResourceNotFoundException,ServiceUnavailableException
 DeleteAccountPolicyRequest structure
+.dryRun DryRun
 .policyName PolicyName
 .policyType PolicyType
+DeleteAccountPolicyResponse structure
+.dryRunResult DryRunResult
 DeleteDataProtectionPolicy operation in=DeleteDataProtectionPolicyRequest out=~Unit err=InvalidParameterException,OperationAbortedException,ResourceNotFoundException,ServiceUnavailableException
 DeleteDataProtectionPolicyRequest structure
 .logGroupIdentifier LogGroupIdentifier
@@ -349,6 +352,7 @@ DeliveryDestination structure
 DeliveryDestinationConfiguration structure
 .destinationResourceArn Arn
 DeliveryDestinationName string
+DeliveryDestinationNames list m=DeliveryDestinationName
 DeliveryDestinationPolicy string
 DeliveryDestinationType enum
 DeliveryDestinationTypes list m=DeliveryDestinationType
@@ -380,6 +384,7 @@ DeliverySourceConfigurationSchemas list m=DeliverySourceConfigurationSchema
 DeliverySourceConfigurationSupportedValues list m=DeliverySourceConfigurationSchemaField
 DeliverySourceConfigurationValue string
 DeliverySourceName string
+DeliverySourceNames list m=DeliverySourceName
 DeliverySourceStatus enum
 DeliverySourceStatusReason enum
 DeliverySources list m=DeliverySource
@@ -407,6 +412,7 @@ DescribeConfigurationTemplatesResponse structure
 .nextToken NextToken
 DescribeDeliveries operation in=DescribeDeliveriesRequest out=DescribeDeliveriesResponse err=ServiceQuotaExceededException,ServiceUnavailableException,ThrottlingException,ValidationException
 DescribeDeliveriesRequest structure
+.deliverySourceNames DeliverySourceNames
 .limit DescribeLimit
 .nextToken NextToken
 DescribeDeliveriesResponse structure
@@ -415,6 +421,7 @@ DescribeDeliveriesResponse structure
 DescribeDeliveryDestinations operation in=DescribeDeliveryDestinationsRequest out=DescribeDeliveryDestinationsResponse err=ServiceQuotaExceededException,ServiceUnavailableException,ThrottlingException,ValidationException
 DescribeDeliveryDestinationsRequest structure
 .limit DescribeLimit
+.names DeliveryDestinationNames
 .nextToken NextToken
 DescribeDeliveryDestinationsResponse structure
 .deliveryDestinations DeliveryDestinations
@@ -423,6 +430,7 @@ DescribeDeliverySources operation in=DescribeDeliverySourcesRequest out=Describe
 DescribeDeliverySourcesRequest structure
 .limit DescribeLimit
 .nextToken NextToken
+.resourceArns FilterResourceArns
 DescribeDeliverySourcesResponse structure
 .deliverySources DeliverySources
 .nextToken NextToken
@@ -596,6 +604,15 @@ DisassociateSourceFromS3TableIntegrationRequest structure
 DisassociateSourceFromS3TableIntegrationResponse structure
 .identifier S3TableIntegrationSourceIdentifier
 Distribution enum
+DryRun boolean
+DryRunCount integer
+DryRunResult structure
+.decreasedRetentionLogGroupCount DryRunCount
+.failedAnalysisCount DryRunCount
+.increasedRetentionLogGroupCount DryRunCount
+.topLogGroupsImpacted LogGroupImpacts
+.totalMatchedLogGroups DryRunCount
+.unchangedRetentionLogGroupCount DryRunCount
 DynamicTokenPosition integer
 EmitSystemFields list m=SystemField
 EncryptionKey string
@@ -685,6 +702,7 @@ FilterLogEventsResponse structure
 .searchedLogStreams SearchedLogStreams
 FilterName string
 FilterPattern string
+FilterResourceArns list m=Arn
 FilteredLogEvent structure
 .eventId EventId
 .ingestionTime Timestamp
@@ -1108,6 +1126,7 @@ LogGroup structure
 .logGroupName LogGroupName
 .metricFilterCount FilterCount
 .retentionInDays Days
+.retentionPolicyName PolicyName
 .storedBytes StoredBytes
 LogGroupArn string
 LogGroupArnList list m=LogGroupArn
@@ -1119,6 +1138,12 @@ LogGroupField structure
 LogGroupFieldList list m=LogGroupField
 LogGroupIdentifier string
 LogGroupIdentifiers list m=LogGroupIdentifier
+LogGroupImpact structure
+.currentRetention RetentionValue
+.logGroupName LogGroupName
+.proposedRetention RetentionValue
+.storedBytes StoredBytes
+LogGroupImpacts list m=LogGroupImpact
 LogGroupName string
 LogGroupNamePattern string
 LogGroupNameRegexPattern string
@@ -1346,6 +1371,7 @@ Processor structure
 Processors list m=Processor
 PutAccountPolicy operation in=PutAccountPolicyRequest out=PutAccountPolicyResponse err=InvalidParameterException,LimitExceededException,OperationAbortedException,ServiceUnavailableException
 PutAccountPolicyRequest structure
+.dryRun DryRun
 .policyDocument AccountPolicyDocument
 .policyName PolicyName
 .policyType PolicyType
@@ -1353,6 +1379,7 @@ PutAccountPolicyRequest structure
 .selectionCriteria SelectionCriteria
 PutAccountPolicyResponse structure
 .accountPolicy AccountPolicy
+.dryRunResult DryRunResult
 PutBearerTokenAuthentication operation in=PutBearerTokenAuthenticationRequest out=~Unit err=AccessDeniedException,InvalidOperationException,InvalidParameterException,OperationAbortedException,ResourceNotFoundException,ServiceUnavailableException
 PutBearerTokenAuthenticationRequest structure
 .bearerTokenAuthenticationEnabled BearerTokenAuthenticationEnabled
@@ -1585,6 +1612,7 @@ ResultField structure
 .field Field
 .value Value
 ResultRows list m=ResultField
+RetentionValue string
 RoleArn string
 S3Configuration structure
 .destinationIdentifier S3Uri

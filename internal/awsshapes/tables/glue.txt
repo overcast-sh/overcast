@@ -74,6 +74,7 @@ AmazonRedshiftTarget structure
 .Data AmazonRedshiftNodeData
 .Inputs OneInput
 .Name NodeName
+AnalysisType enum
 AnnotationError structure
 .FailureReason DescriptionString
 .ProfileId HashString
@@ -161,6 +162,12 @@ AuthorizationCodeProperties structure
 AutoDataQuality structure
 .EvaluationContext EnclosedInStringProperty
 .IsEnabled BooleanValue
+AutoUpgradeMetadata structure
+.AnalysisId IdString
+.SourceVersion GlueVersionString
+.Status AutoUpgradeStatus
+.TargetVersion GlueVersionString
+AutoUpgradeStatus enum
 BackfillError structure
 .Code BackfillErrorCode
 .Partitions BackfillErroredPartitionsList
@@ -2834,6 +2841,20 @@ GetJobRunsRequest structure
 GetJobRunsResponse structure
 .JobRuns JobRunList
 .NextToken GenericString
+GetJobUpgradeAnalysis operation in=GetJobUpgradeAnalysisRequest out=GetJobUpgradeAnalysisResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationNotSupportedException
+GetJobUpgradeAnalysisRequest structure
+.analysisId Id
+.jobName Name
+GetJobUpgradeAnalysisResponse structure
+.analysisId Id
+.analysisType AnalysisType
+.autoUpgradeEligibilitySummary ~String
+.autoUpgradeEvaluationSummary ~String
+.errorMessage ~String
+.jobName Name
+.sourceVersion ~String
+.status Status
+.targetVersion ~String
 GetJobs operation in=GetJobsRequest out=GetJobsResponse err=EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
 GetJobsRequest structure
 .MaxResults PageSize
@@ -3305,6 +3326,7 @@ GlueTable structure
 GlueTableAdditionalOptions map k=NameString v=DescriptionString
 GlueTables list m=GlueTable
 GlueVersionString string
+GovernanceMode enum
 GovernedCatalogSource structure
 .AdditionalOptions S3SourceAdditionalOptions
 .Database EnclosedInStringProperty
@@ -3465,6 +3487,7 @@ IcebergTargetCompressionType enum
 IcebergTargetList list m=IcebergTarget
 IcebergTransformString string
 IcebergUpdateAction enum
+Id string
 IdString string
 IdempotentParameterMismatchException structure error=client
 .Message MessageString
@@ -3661,6 +3684,7 @@ JdbcTarget structure
 JdbcTargetList list m=JdbcTarget
 Job structure
 .AllocatedCapacity IntegerValue
+.AutoUpgradeMetadata AutoUpgradeMetadata
 .CodeGenConfigurationNodes CodeGenConfigurationNodes
 .Command JobCommand
 .Connections ConnectionsList
@@ -4324,6 +4348,7 @@ MySQLCatalogTarget structure
 .Inputs OneInput
 .Name NodeName
 .Table EnclosedInStringProperty
+Name string
 NameString string
 NameStringList list m=NameString
 NewRules list m=NameString
@@ -4839,6 +4864,7 @@ ResourceShareType enum
 ResourceState enum
 ResourceType enum
 ResourceUri structure
+.LastModified Timestamp
 .ResourceType ResourceType
 .Uri URI
 ResourceUriList list m=ResourceUri
@@ -5496,6 +5522,14 @@ StartJobRunRequest structure
 .WorkerType WorkerType
 StartJobRunResponse structure
 .JobRunId IdString
+StartJobUpgradeAnalysis operation in=StartJobUpgradeAnalysisRequest out=StartJobUpgradeAnalysisResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationNotSupportedException,ResourceNumberLimitExceededException,ValidationException
+StartJobUpgradeAnalysisRequest structure
+.analysisId Id
+.jobName Name
+.upgradeConsent UpgradeConsent
+StartJobUpgradeAnalysisResponse structure
+.analysisId Id
+.jobName Name
 StartMLEvaluationTaskRun operation in=StartMLEvaluationTaskRunRequest out=StartMLEvaluationTaskRunResponse err=ConcurrentRunsExceededException,EntityNotFoundException,InternalServiceException,InvalidInputException,MLTransformNotReadyException,OperationTimeoutException
 StartMLEvaluationTaskRunRequest structure
 .TransformId HashString
@@ -5579,6 +5613,7 @@ StatisticSummary structure
 .StatisticName StatisticNameString
 .StatisticProperties StatisticPropertiesMap
 StatisticSummaryList list m=StatisticSummary
+Status enum
 StatusDetails structure
 .RequestedChange Table
 .ViewValidations ViewValidationList
@@ -5602,6 +5637,11 @@ StopCrawlerSchedule operation in=StopCrawlerScheduleRequest out=StopCrawlerSched
 StopCrawlerScheduleRequest structure
 .CrawlerName NameString
 StopCrawlerScheduleResponse structure
+StopJobUpgradeAnalysis operation in=StopJobUpgradeAnalysisRequest out=StopJobUpgradeAnalysisResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationNotSupportedException,ThrottlingException
+StopJobUpgradeAnalysisRequest structure
+.analysisId Id
+.jobName Name
+StopJobUpgradeAnalysisResponse structure
 StopMaterializedViewRefreshTaskRun operation in=StopMaterializedViewRefreshTaskRunRequest out=StopMaterializedViewRefreshTaskRunResponse err=AccessDeniedException,InvalidInputException,MaterializedViewRefreshTaskNotRunningException,MaterializedViewRefreshTaskStoppingException,OperationTimeoutException
 StopMaterializedViewRefreshTaskRunRequest structure
 .CatalogId CatalogIdString
@@ -6249,6 +6289,7 @@ UpdateXMLClassifierRequest structure
 .RowTag RowTag
 UpdatedAt timestamp
 UpdatedTimestamp string
+UpgradeConsent enum
 UpsertRedshiftTargetOptions structure
 .ConnectionName EnclosedInStringProperty
 .TableLocation EnclosedInStringProperty
@@ -6263,19 +6304,23 @@ UsageProfileDefinition structure
 .Name NameString
 UsageProfileDefinitionList list m=UsageProfileDefinition
 UserDefinedFunction structure
+.ArtifactLocation URI
 .CatalogId CatalogIdString
 .ClassName NameString
 .CreateTime Timestamp
 .DatabaseName NameString
 .FunctionName NameString
 .FunctionType FunctionType
+.GovernanceMode GovernanceMode
 .OwnerName NameString
 .OwnerType PrincipalType
 .ResourceUris ResourceUriList
 UserDefinedFunctionInput structure
+.ArtifactLocation URI
 .ClassName NameString
 .FunctionName NameString
 .FunctionType FunctionType
+.GovernanceMode GovernanceMode
 .OwnerName NameString
 .OwnerType PrincipalType
 .ResourceUris ResourceUriList

@@ -148,6 +148,61 @@ BinaryAttributeValue blob
 BinarySetAttributeValue list m=BinaryAttributeValue
 BooleanAttributeValue boolean
 BooleanObject boolean
+BulkOperationArn string
+BulkOperationBytes structure
+.BulkPutBytes NonNegativeLongObject
+BulkOperationDescription structure
+.BulkOperationArn BulkOperationArn
+.BulkOperationStatus BulkOperationStatus
+.BulkOperationUsage BulkOperationUsageMultiple
+.ClientToken ClientToken
+.EndTime BulkOperationEndTime
+.FailedItemCount BulkOperationItemCount
+.FailureCode FailureCode
+.FailureMessage FailureMessage
+.InputS3Configuration InputS3Configuration
+.MaxWriteRequestUnits BulkOperationMaxWriteRequestUnits
+.OutputS3Configuration OutputS3Configuration
+.PerformanceTier BulkOperationPerformanceTier
+.ProcessedInputBytes ProcessedInputBytes
+.ProcessedItemCount BulkOperationItemCount
+.StartTime BulkOperationStartTime
+.TableDetails BulkOperationTableDetails
+.TotalInputBytes TotalInputBytes
+BulkOperationEndTime timestamp
+BulkOperationInputFormat enum
+BulkOperationItemCount long
+BulkOperationMaxWriteRequestUnits long
+BulkOperationNextToken string
+BulkOperationPerformanceTier enum
+BulkOperationStartTime timestamp
+BulkOperationStatus enum
+BulkOperationSummary structure
+.BulkOperationArn BulkOperationArn
+.BulkOperationStatus BulkOperationStatus
+.EndTime BulkOperationEndTime
+.StartTime BulkOperationStartTime
+BulkOperationTableDetail structure
+.TableId TableId
+.TableName TableArn
+BulkOperationTableDetails list m=BulkOperationTableDetail
+BulkOperationUsage structure
+.BulkPutBytes NonNegativeLongObject
+.GlobalSecondaryIndexes SecondaryIndexesBulkBytesMap
+.LocalSecondaryIndexes SecondaryIndexesBulkBytesMap
+.Table BulkOperationBytes
+.TableName TableArn
+.VectorIndexes VectorIndexesBulkVectorBytesMap
+BulkOperationUsageMultiple list m=BulkOperationUsage
+BulkOperationVectorBytes structure
+.BulkPutVectorBytes NonNegativeLongObject
+BulkOperationsSummaryList list m=BulkOperationSummary
+CancelBulkOperation operation in=CancelBulkOperationInput out=CancelBulkOperationOutput err=InvalidEndpointException,ResourceNotFoundException
+CancelBulkOperationInput structure
+.BulkOperationArn BulkOperationArn
+CancelBulkOperationOutput structure
+.BulkOperationArn BulkOperationArn
+.BulkOperationStatus BulkOperationStatus
 CancellationReason structure
 .Code Code
 .Item AttributeMap
@@ -331,6 +386,11 @@ DescribeBackupInput structure
 .BackupArn BackupArn
 DescribeBackupOutput structure
 .BackupDescription BackupDescription
+DescribeBulkOperation operation in=DescribeBulkOperationInput out=DescribeBulkOperationOutput err=InvalidEndpointException,ResourceNotFoundException
+DescribeBulkOperationInput structure
+.BulkOperationArn BulkOperationArn
+DescribeBulkOperationOutput structure
+.BulkOperationDescription BulkOperationDescription
 DescribeContinuousBackups operation in=DescribeContinuousBackupsInput out=DescribeContinuousBackupsOutput err=InternalServerError,InvalidEndpointException,TableNotFoundException
 DescribeContinuousBackupsInput structure
 .TableName TableArn
@@ -403,6 +463,11 @@ DescribeTimeToLiveOutput structure
 .TimeToLiveDescription TimeToLiveDescription
 DestinationStatus enum
 DisableKinesisStreamingDestination operation in=KinesisStreamingDestinationInput out=KinesisStreamingDestinationOutput err=InternalServerError,InvalidEndpointException,LimitExceededException,ResourceInUseException,ResourceNotFoundException
+DisassociateReplicationGroupMemberAction structure
+.DisassociationMode DisassociationMode
+.RegionName RegionName
+DisassociationMode enum
+DisassociationProtectionEnabled boolean
 DoubleObject double
 DuplicateItemException structure error=client
 .message ErrorMessage
@@ -679,6 +744,12 @@ InputCompressionType enum
 InputFormat enum
 InputFormatOptions structure
 .Csv CsvOptions
+InputS3Configuration structure
+.InputCompressionType InputCompressionType
+.InputFormat BulkOperationInputFormat
+.S3Bucket S3Bucket
+.S3BucketOwner S3BucketOwner
+.S3KeyPrefix S3Prefix
 Integer integer
 IntegerObject integer
 InternalServerError structure error=server
@@ -752,6 +823,14 @@ ListBackupsInput structure
 ListBackupsOutput structure
 .BackupSummaries BackupSummaries
 .LastEvaluatedBackupArn BackupArn
+ListBulkOperations operation in=ListBulkOperationsInput out=ListBulkOperationsOutput err=InvalidEndpointException
+ListBulkOperationsInput structure
+.MaxResults ListBulkOperationsMaxLimit
+.NextToken BulkOperationNextToken
+ListBulkOperationsMaxLimit integer
+ListBulkOperationsOutput structure
+.BulkOperationsSummaryList BulkOperationsSummaryList
+.NextToken BulkOperationNextToken
 ListContributorInsights operation in=ListContributorInsightsInput out=ListContributorInsightsOutput err=InternalServerError,ResourceNotFoundException
 ListContributorInsightsInput structure
 .MaxResults ListContributorInsightsLimit
@@ -836,6 +915,15 @@ OnDemandThroughput structure
 .MaxWriteRequestUnits LongObject
 OnDemandThroughputOverride structure
 .MaxReadRequestUnits LongObject
+OutputS3Configuration structure
+.OutputType OutputTypeList
+.S3Bucket S3Bucket
+.S3BucketOwner S3BucketOwner
+.S3KeyPrefix S3Prefix
+.S3SseAlgorithm S3SseAlgorithm
+.S3SseKmsKeyId S3SseKmsKeyId
+OutputTypeEnum enum
+OutputTypeList list m=OutputTypeEnum
 ParameterizedStatement structure
 .Parameters PreparedStatementParameters
 .ReturnValuesOnConditionCheckFailure ReturnValuesOnConditionCheckFailure
@@ -862,6 +950,7 @@ PolicyRevisionId string
 PositiveIntegerObject integer
 PositiveLongObject long
 PreparedStatementParameters list m=AttributeValue
+ProcessedInputBytes long
 ProcessedItemCount long
 Projection structure
 .NonKeyAttributes NonKeyAttributeNameList
@@ -1043,6 +1132,7 @@ ReplicatedWriteConflictException structure error=client
 ReplicationGroupUpdate structure
 .Create CreateReplicationGroupMemberAction
 .Delete DeleteReplicationGroupMemberAction
+.Disassociate DisassociateReplicationGroupMemberAction
 .Update UpdateReplicationGroupMemberAction
 ReplicationGroupUpdateList list m=ReplicationGroupUpdate
 RequestLimitExceeded structure error=client
@@ -1167,6 +1257,7 @@ SearchVectorsInput structure
 SearchVectorsOutput structure
 .ConsumedCapacity VectorCapacity
 .SearchResults SearchResultList
+SecondaryIndexesBulkBytesMap map k=IndexName v=BulkOperationBytes
 SecondaryIndexesCapacityMap map k=IndexName v=Capacity
 Select enum
 SourceTableDetails structure
@@ -1187,6 +1278,16 @@ SourceTableFeatureDetails structure
 .StreamDescription StreamSpecification
 .TimeToLiveDescription TimeToLiveDescription
 .VectorIndexes VectorIndexes
+StartBulkPutItems operation in=StartBulkPutItemsInput out=StartBulkPutItemsOutput err=IdempotentParameterMismatchException,InvalidEndpointException,LimitExceededException,ResourceInUseException,ResourceNotFoundException
+StartBulkPutItemsInput structure
+.ClientToken ClientToken
+.InputS3Configuration InputS3Configuration
+.MaxWriteRequestUnits BulkOperationMaxWriteRequestUnits
+.OutputS3Configuration OutputS3Configuration
+.PerformanceTier BulkOperationPerformanceTier
+.TableName TableArn
+StartBulkPutItemsOutput structure
+.BulkOperationDescription BulkOperationDescription
 StreamArn string
 StreamEnabled boolean
 StreamSpecification structure
@@ -1224,6 +1325,7 @@ TableDescription structure
 .BillingModeSummary BillingModeSummary
 .CreationDateTime Date
 .DeletionProtectionEnabled DeletionProtectionEnabled
+.DisassociationProtectionEnabled DisassociationProtectionEnabled
 .GlobalSecondaryIndexes GlobalSecondaryIndexDescriptionList
 .GlobalTableSettingsReplicationMode GlobalTableSettingsReplicationMode
 .GlobalTableVersion String
@@ -1290,6 +1392,7 @@ TimeToLiveSpecification structure
 .Enabled TimeToLiveEnabled
 TimeToLiveStatus enum
 TopKInteger integer
+TotalInputBytes long
 TransactGetItem structure
 .Get Get
 TransactGetItemList list m=TransactGetItem
@@ -1417,6 +1520,7 @@ UpdateTableInput structure
 .AttributeDefinitions AttributeDefinitions
 .BillingMode BillingMode
 .DeletionProtectionEnabled DeletionProtectionEnabled
+.DisassociationProtectionEnabled DisassociationProtectionEnabled
 .GlobalSecondaryIndexUpdates GlobalSecondaryIndexUpdateList
 .GlobalTableSettingsReplicationMode GlobalTableSettingsReplicationMode
 .GlobalTableWitnessUpdates GlobalTableWitnessGroupUpdateList
@@ -1486,6 +1590,7 @@ VectorIndexUpdate structure
 .Delete DeleteVectorIndexAction
 VectorIndexUpdateList list m=VectorIndexUpdate
 VectorIndexes list m=VectorIndexInfo
+VectorIndexesBulkVectorBytesMap map k=IndexName v=BulkOperationVectorBytes
 VectorIndexesCapacityMap map k=IndexName v=VectorCapacity
 WarmThroughput structure
 .ReadUnitsPerSecond LongObject

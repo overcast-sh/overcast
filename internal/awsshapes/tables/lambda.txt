@@ -966,6 +966,7 @@ KMSKeyArnNonEmpty string
 KMSNotFoundException structure error=server code=502
 .Message String
 .Type String
+KafkaEventSourceMappingConsumptionMode enum
 KafkaSchemaRegistryAccessConfig structure
 .Type KafkaSchemaRegistryAuthType
 .URI Arn
@@ -1452,6 +1453,7 @@ SelfManagedEventSource structure
 .Endpoints Endpoints
 SelfManagedKafkaEventSourceConfig structure
 .ConsumerGroupId URI
+.ConsumptionMode KafkaEventSourceMappingConsumptionMode
 .SchemaRegistryConfig KafkaSchemaRegistryConfig
 SendDurableExecutionCallbackFailure operation in=SendDurableExecutionCallbackFailureRequest out=SendDurableExecutionCallbackFailureResponse err=CallbackTimeoutException,InvalidParameterValueException,KMSAccessDeniedException,KMSDisabledException,KMSInvalidStateException,KMSNotFoundException,ResourceNotFoundException,ServiceException,TooManyRequestsException method=POST uri=/2025-12-01/durable-execution-callbacks/{CallbackId}/fail
 SendDurableExecutionCallbackFailureRequest structure
