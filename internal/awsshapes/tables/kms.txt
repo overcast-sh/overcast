@@ -118,6 +118,17 @@ CustomerMasterKeySpec enum
 DataKeyPairSpec enum
 DataKeySpec enum
 DateType timestamp
+Decapsulate operation in=DecapsulateRequest out=DecapsulateResponse err=DependencyTimeoutException,DisabledException,DryRunOperationException,InvalidCiphertextException,InvalidGrantTokenException,InvalidKeyUsageException,KMSInternalException,KMSInvalidStateException,KeyUnavailableException,NotFoundException
+DecapsulateRequest structure
+.DryRun NullableBooleanType
+.EncapsulationAlgorithm EncapsulationAlgorithmSpec
+.GrantTokens GrantTokenList
+.KeyId KeyIdType
+.SharedSecretCiphertextBlob CiphertextType
+DecapsulateResponse structure
+.EncapsulationAlgorithm EncapsulationAlgorithmSpec
+.KeyId KeyIdType
+.SharedSecret PlaintextType
 Decrypt operation in=DecryptRequest out=DecryptResponse err=DependencyTimeoutException,DisabledException,DryRunOperationException,IncorrectKeyException,InvalidCiphertextException,InvalidGrantTokenException,InvalidKeyUsageException,KMSInternalException,KMSInvalidStateException,KeyUnavailableException,NotFoundException
 DecryptRequest structure
 .CiphertextBlob CiphertextType
@@ -204,6 +215,19 @@ EnableKeyRotation operation in=EnableKeyRotationRequest out=~Unit err=Dependency
 EnableKeyRotationRequest structure
 .KeyId KeyIdType
 .RotationPeriodInDays RotationPeriodInDaysType
+Encapsulate operation in=EncapsulateRequest out=EncapsulateResponse err=DependencyTimeoutException,DisabledException,DryRunOperationException,InvalidGrantTokenException,InvalidKeyUsageException,KMSInternalException,KMSInvalidStateException,KeyUnavailableException,NotFoundException
+EncapsulateRequest structure
+.DryRun NullableBooleanType
+.EncapsulationAlgorithm EncapsulationAlgorithmSpec
+.GrantTokens GrantTokenList
+.KeyId KeyIdType
+EncapsulateResponse structure
+.EncapsulationAlgorithm EncapsulationAlgorithmSpec
+.KeyId KeyIdType
+.SharedSecret PlaintextType
+.SharedSecretCiphertextBlob CiphertextType
+EncapsulationAlgorithmSpec enum
+EncapsulationAlgorithmSpecList list m=EncapsulationAlgorithmSpec
 Encrypt operation in=EncryptRequest out=EncryptResponse err=DependencyTimeoutException,DisabledException,DryRunOperationException,InvalidGrantTokenException,InvalidKeyUsageException,KMSInternalException,KMSInvalidStateException,KeyUnavailableException,NotFoundException
 EncryptRequest structure
 .DryRun NullableBooleanType
@@ -340,6 +364,7 @@ GetPublicKeyRequest structure
 .KeyId KeyIdType
 GetPublicKeyResponse structure
 .CustomerMasterKeySpec CustomerMasterKeySpec
+.EncapsulationAlgorithms EncapsulationAlgorithmSpecList
 .EncryptionAlgorithms EncryptionAlgorithmSpecList
 .KeyAgreementAlgorithms KeyAgreementAlgorithmSpecList
 .KeyId KeyIdType
@@ -445,6 +470,7 @@ KeyMetadata structure
 .DeletionDate DateType
 .Description DescriptionType
 .Enabled BooleanType
+.EncapsulationAlgorithms EncapsulationAlgorithmSpecList
 .EncryptionAlgorithms EncryptionAlgorithmSpecList
 .ExpirationModel ExpirationModelType
 .KeyAgreementAlgorithms KeyAgreementAlgorithmSpecList

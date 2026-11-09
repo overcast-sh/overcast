@@ -51,6 +51,14 @@ AddDirectQueryDataSourceRequest structure
 .TagList TagList
 AddDirectQueryDataSourceResponse structure
 .DataSourceArn String
+AddReplicationPeer operation in=AddReplicationPeerRequest out=AddReplicationPeerResponse err=DisabledOperationException,InternalException,ResourceAlreadyExistsException,ResourceNotFoundException,ValidationException method=POST uri=/2021-01-01/opensearch/domain/{DomainName}/replication/addPeer code=200
+AddReplicationPeerRequest structure
+.DomainName DomainName label
+.DryRun Boolean
+.PeerDomainArn DomainArn
+AddReplicationPeerResponse structure
+.DomainArn DomainArn
+.Status ReplicationStatus
 AddTags operation in=AddTagsRequest out=~Unit err=BaseException,InternalException,LimitExceededException,ValidationException method=POST uri=/2021-01-01/tags code=200
 AddTagsRequest structure
 .ARN ARN
@@ -237,6 +245,14 @@ CapabilityFailureReason enum
 CapabilityFailures list m=CapabilityFailure
 CapabilityName string
 CapabilityStatus enum
+CategoryDiffResult structure
+.Diverged DiffCount
+.InSync DiffCount
+.Items DiffItems
+.SourceOnly DiffCount
+.Status DiffStatus
+.TargetOnly DiffCount
+.Truncated Boolean
 ChangeProgressDetails structure
 .ChangeId GUID
 .ConfigChangeStatus ConfigChangeStatus
@@ -297,6 +313,16 @@ CognitoOptionsStatus structure
 ColdStorageOptions structure
 .Enabled Boolean
 CommitMessage string
+CompareDomainConfiguration operation in=CompareDomainConfigurationRequest out=CompareDomainConfigurationResponse err=DisabledOperationException,InternalException,ResourceNotFoundException,ValidationException method=POST uri=/2021-01-01/opensearch/compareDomainConfiguration code=200
+CompareDomainConfigurationCategoryMap map k=MetadataCategory v=CategoryDiffResult
+CompareDomainConfigurationRequest structure
+.Categories MetadataCategoryList
+.SourceDomainArn DomainArn
+.TargetDomainArn DomainArn
+CompareDomainConfigurationResponse structure
+.Categories CompareDomainConfigurationCategoryMap
+.SourceDomainArn DomainArn
+.TargetDomainArn DomainArn
 CompatibleVersionsList list m=CompatibleVersionsMap
 CompatibleVersionsMap structure
 .SourceVersion VersionString
@@ -538,6 +564,13 @@ DescribeDomainNodesRequest structure
 .DomainName DomainName label
 DescribeDomainNodesResponse structure
 .DomainNodesStatusList DomainNodesStatusList
+DescribeDomainReplication operation in=DescribeDomainReplicationRequest out=DescribeDomainReplicationResponse err=DisabledOperationException,InternalException,ResourceNotFoundException,ValidationException method=GET uri=/2021-01-01/opensearch/domain/{DomainName}/replication code=200
+DescribeDomainReplicationRequest structure
+.DomainName DomainName label
+DescribeDomainReplicationResponse structure
+.DomainArn DomainArn
+.Peers ReplicationPeerList
+.Role ReplicationRole
 DescribeDomainRequest structure
 .DomainName DomainName label
 DescribeDomainResponse structure
@@ -632,6 +665,17 @@ DetachDataSourceResponse structure
 .arn ARN
 .dataSourceArn ARN
 .id Id
+DiffCount integer
+DiffFieldPath string
+DiffFieldPolicy enum
+DiffFieldValue string
+DiffItemName string
+DiffItemNameList list m=DiffItemName
+DiffItems structure
+.Diverged DivergentItemList
+.SourceOnly DiffItemNameList
+.TargetOnly DiffItemNameList
+DiffStatus enum
 DirectQueryDataSource structure
 .DataSourceArn String
 .DataSourceName DirectQueryDataSourceName
@@ -663,6 +707,16 @@ DissociatePackagesRequest structure
 .PackageList PackageIDList
 DissociatePackagesResponse structure
 .DomainPackageDetailsList DomainPackageDetailsList
+DivergentField structure
+.Path DiffFieldPath
+.Policy DiffFieldPolicy
+.SourceValue DiffFieldValue
+.TargetValue DiffFieldValue
+DivergentFieldList list m=DivergentField
+DivergentItem structure
+.Fields DivergentFieldList
+.Name DiffItemName
+DivergentItemList list m=DivergentItem
 DomainArn string
 DomainConfig structure
 .AIMLOptions AIMLOptionsStatus
@@ -841,6 +895,14 @@ ExportOptions structure
 .includeReferencesDeep Boolean
 .objects SavedObjectIdentifierList
 .types StringList
+FailoverReplication operation in=FailoverReplicationRequest out=FailoverReplicationResponse err=DisabledOperationException,InternalException,ResourceNotFoundException,ValidationException method=POST uri=/2021-01-01/opensearch/domain/{DomainName}/replication/failover code=200
+FailoverReplicationRequest structure
+.AllowDataLoss Boolean
+.DomainName DomainName label
+.PeerDomainArn DomainArn
+FailoverReplicationResponse structure
+.DomainArn DomainArn
+.Status ReplicationStatus
 Filter structure
 .Name NonEmptyString
 .Values ValueStringList
@@ -1266,6 +1328,8 @@ MasterUserOptions structure
 MaxResults integer
 MaximumInstanceCount integer
 Message string
+MetadataCategory string
+MetadataCategoryList list m=MetadataCategory
 MigrationError structure
 .code String
 .message String
@@ -1470,10 +1534,26 @@ RejectInboundConnectionRequest structure
 .ConnectionId ConnectionId label
 RejectInboundConnectionResponse structure
 .Connection InboundConnection
+RemoveReplicationPeer operation in=RemoveReplicationPeerRequest out=RemoveReplicationPeerResponse err=DisabledOperationException,InternalException,ResourceNotFoundException,ValidationException method=POST uri=/2021-01-01/opensearch/domain/{DomainName}/replication/removePeer code=200
+RemoveReplicationPeerRequest structure
+.DomainName DomainName label
+.PeerDomainArn DomainArn
+RemoveReplicationPeerResponse structure
+.DomainArn DomainArn
+.Status ReplicationStatus
 RemoveTags operation in=RemoveTagsRequest out=~Unit err=BaseException,InternalException,ValidationException method=POST uri=/2021-01-01/tags-removal code=200
 RemoveTagsRequest structure
 .ARN ARN
 .TagKeys StringList
+ReplicationPeer structure
+.PeerDomainArn DomainArn
+.PeerRole ReplicationRole
+.Status ReplicationStatus
+.StatusMessage ReplicationStatusMessage
+ReplicationPeerList list m=ReplicationPeer
+ReplicationRole enum
+ReplicationStatus enum
+ReplicationStatusMessage string
 RequestId string
 RequirementLevel enum
 ReservationToken string
@@ -1654,6 +1734,13 @@ String string
 StringList list m=String
 SubjectKey string
 SubjectKeyIdCOption enum
+SwitchoverReplication operation in=SwitchoverReplicationRequest out=SwitchoverReplicationResponse err=DisabledOperationException,InternalException,ResourceNotFoundException,ValidationException method=POST uri=/2021-01-01/opensearch/domain/{DomainName}/replication/switchover code=200
+SwitchoverReplicationRequest structure
+.DomainName DomainName label
+.PeerDomainArn DomainArn
+SwitchoverReplicationResponse structure
+.DomainArn DomainArn
+.Status ReplicationStatus
 TLSSecurityPolicy enum
 Tag structure
 .Key TagKey

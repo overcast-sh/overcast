@@ -4,6 +4,11 @@ AccessDeniedException structure error=client code=403
 AccountId string
 BadRequestException structure error=client code=400
 .message ErrorMessage
+ChecksumCRC64NVME string
+CompleteTableMigration operation in=CompleteTableMigrationRequest out=~Unit err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=POST uri=/complete-table-migration code=204
+CompleteTableMigrationRequest structure
+.tableARN TableARN query=tableARN
+CompressionCodec enum
 ConflictException structure error=client code=409
 .message ErrorMessage
 CreateNamespace operation in=CreateNamespaceRequest out=CreateNamespaceResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/namespaces/{tableBucketARN} code=200
@@ -34,6 +39,13 @@ CreateTableRequest structure
 CreateTableResponse structure
 .tableARN TableARN
 .versionToken VersionToken
+DataFileFormat enum
+DataMigrationOverview structure
+.maintenanceSettings MaintenanceSettings
+.migrationPolicies MigrationPolicies
+DataMigrationSettings structure
+.maintenanceSettings MaintenanceSettings
+.migrationPolicies MigrationPolicies
 DeleteNamespace operation in=DeleteNamespaceRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/namespaces/{tableBucketARN}/{namespace} code=204
 DeleteNamespaceRequest structure
 .namespace NamespaceName label
@@ -69,10 +81,22 @@ DeleteTableRequest structure
 .namespace NamespaceName label
 .tableBucketARN TableBucketARN label
 .versionToken VersionToken query=versionToken
+DestinationTable structure
+.encryptionConfiguration EncryptionConfiguration
+.icebergSortOrder IcebergSortOrder
+.name TableName
+.namespace NamespaceName
+.properties MigrationTableProperties
+.schema IcebergSchemaV2
+.storageClassConfiguration StorageClassConfiguration
+.tableBucketARN TableBucketARN
+.tags Tags
 EncryptionConfiguration structure
 .kmsKeyArn ~String
 .sseAlgorithm SSEAlgorithm
 ErrorMessage string
+FindingCategory enum
+FindingCategoryCounts map k=FindingCategory v=~Long
 ForbiddenException structure error=client code=403
 .message ErrorMessage
 GetNamespace operation in=GetNamespaceRequest out=GetNamespaceResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/namespaces/{tableBucketARN}/{namespace}
@@ -162,6 +186,30 @@ GetTableMetadataLocationResponse structure
 .metadataLocation MetadataLocation
 .versionToken VersionToken
 .warehouseLocation WarehouseLocation
+GetTableMigration operation in=GetTableMigrationRequest out=GetTableMigrationResponse err=AccessDeniedException,BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/get-table-migration code=200
+GetTableMigrationRequest structure
+.migrationId MigrationId query=migrationId
+.tableARN TableARN query=tableARN
+GetTableMigrationResponse structure
+.createdAt ~Timestamp ts=date-time
+.dataMigration DataMigrationOverview
+.failureReason MigrationFailureReason
+.hasValidPlan ~Boolean
+.migrationId MigrationId
+.migrationOutput MigrationOutputOverview
+.migrationStats MigrationStats
+.name TableName
+.namespace NamespaceName
+.planningStats PlanningStats
+.reviewMigrationPlan ~Boolean
+.roleARN RoleArn
+.source SourceConfiguration
+.sourceType MigrationSourceType
+.state MigrationState
+.stateUpdatedAt ~Timestamp ts=date-time
+.tableARN TableARN
+.tableBucketARN TableBucketARN
+.type MigrationType
 GetTablePolicy operation in=GetTablePolicyRequest out=GetTablePolicyResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}/{namespace}/{name}/policy
 GetTablePolicyRequest structure
 .name TableName label
@@ -224,6 +272,10 @@ GetTableStorageClassRequest structure
 .tableBucketARN TableBucketARN label
 GetTableStorageClassResponse structure
 .storageClassConfiguration StorageClassConfiguration
+GlueTableSource structure
+.catalogId ~String
+.databaseName ~String
+.tableName ~String
 IAMRole string
 IcebergCompactionSettings structure
 .strategy IcebergCompactionStrategy
@@ -268,6 +320,7 @@ IcebergSortOrder structure
 IcebergUnreferencedFileRemovalSettings structure
 .nonCurrentDays PositiveInteger
 .unreferencedDays PositiveInteger
+IncompatibleValuesPolicy enum
 IntegerList list m=~Integer
 InternalServerErrorException structure error=server code=500
 .message ErrorMessage
@@ -295,6 +348,20 @@ ListTableBucketsRequest structure
 ListTableBucketsResponse structure
 .continuationToken NextToken
 .tableBuckets TableBucketSummaryList
+ListTableMigrations operation in=ListTableMigrationsRequest out=ListTableMigrationsResponse err=AccessDeniedException,BadRequestException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/list-table-migrations code=200
+ListTableMigrationsLimit integer
+ListTableMigrationsRequest structure
+.hasValidPlan ~Boolean query=hasValidPlan
+.maxResults ListTableMigrationsLimit query=maxResults
+.name TableName query=name
+.namespace NamespaceName query=namespace
+.nextToken NextToken query=nextToken
+.state MigrationState query=state
+.tableARN TableARN query=tableARN
+.tableBucketARN TableBucketARN query=tableBucketARN
+ListTableMigrationsResponse structure
+.migrations MigrationSummaryList
+.nextToken NextToken
 ListTables operation in=ListTablesRequest out=ListTablesResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=GET uri=/tables/{tableBucketARN}
 ListTablesLimit integer
 ListTablesRequest structure
@@ -311,12 +378,70 @@ ListTagsForResourceRequest structure
 .resourceArn ResourceArn label
 ListTagsForResourceResponse structure
 .tags Tags
+MaintenanceSettings structure
+.icebergCompaction MigrationCompactionSettings
+.icebergSnapshotManagement MigrationSnapshotManagementSettings
 MaintenanceStatus enum
 ManagedTableInformation structure
 .replicationInformation ReplicationInformation
 MetadataLocation string
 MethodNotAllowedException structure error=client code=405
 .message ErrorMessage
+MigrationCompactionSettings structure
+.strategy IcebergCompactionStrategy
+.targetFileSizeMB MigrationTargetFileSizeMB
+MigrationFailureCode enum
+MigrationFailureDetail string
+MigrationFailureReason structure
+.code MigrationFailureCode
+.detail MigrationFailureDetail
+MigrationId string
+MigrationMinSnapshotsToKeep integer
+MigrationOutputConfiguration structure
+.bucket S3BucketARN
+.prefixes MigrationReportPrefixes
+MigrationOutputOverview structure
+.bucket S3BucketARN
+.objectCompatibilityReport ReportOverview
+.objectMigrationReport ReportOverview
+.tableCompatibilityReport ReportOverview
+MigrationPolicies structure
+.incompatibleValuesPolicy IncompatibleValuesPolicy
+.unmatchedSourceFieldsPolicy UnmatchedSourceFieldsPolicy
+MigrationReportPrefix string
+MigrationReportPrefixes structure
+.objectCompatibilityReport MigrationReportPrefix
+.objectMigrationReport MigrationReportPrefix
+.tableCompatibilityReport MigrationReportPrefix
+MigrationRequestedState enum
+MigrationSnapshotManagementSettings structure
+.maxSnapshotAgeHours PositiveInteger
+.minSnapshotsToKeep MigrationMinSnapshotsToKeep
+MigrationSourceType enum
+MigrationState enum
+MigrationStats structure
+.objectsFailedMigration ~Long
+.objectsMigrated ~Long
+.objectsPendingMigration ~Long
+MigrationSummary structure
+.createdAt ~Timestamp ts=date-time
+.hasValidPlan ~Boolean
+.migrationId MigrationId
+.name TableName
+.namespace NamespaceName
+.state MigrationState
+.stateUpdatedAt ~Timestamp ts=date-time
+.tableARN TableARN
+.tableBucketARN TableBucketARN
+.type MigrationType
+MigrationSummaryList list m=MigrationSummary
+MigrationTableProperties structure
+.compressionCodec CompressionCodec
+.dictionaryEncoding ~Boolean
+.icebergFormatVersion ~Integer
+.writeFormat DataFileFormat
+MigrationTargetFileSizeMB integer
+MigrationType enum
 NamespaceId string
 NamespaceList list m=NamespaceName
 NamespaceName string
@@ -332,6 +457,10 @@ NextToken string
 NotFoundException structure error=client code=404
 .message ErrorMessage
 OpenTableFormat enum
+PlanningStats structure
+.objectsPlanned ~Long
+.objectsScanned ~Long
+.partitionCount ~Long
 PositiveInteger integer
 PutTableBucketEncryption operation in=PutTableBucketEncryptionRequest out=~Unit err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=PUT uri=/buckets/{tableBucketARN}/encryption code=200
 PutTableBucketEncryptionRequest structure
@@ -407,8 +536,16 @@ ReplicationDestinations list m=ReplicationDestination
 ReplicationInformation structure
 .sourceTableARN TableARN
 ReplicationStatus enum
+ReportObjectKey string
+ReportOverview structure
+.checksumCRC64NVME ChecksumCRC64NVME
+.invalidFindings FindingCategoryCounts
+.key ReportObjectKey
+.prefix MigrationReportPrefix
 ResourceArn string
 ResourcePolicy string
+RoleArn string
+S3BucketARN string
 SSEAlgorithm enum
 SchemaField structure
 .id ~Integer
@@ -424,9 +561,32 @@ SchemaV2Field structure
 .type ~Document
 SchemaV2FieldList list m=SchemaV2Field
 SchemaV2FieldType enum
+SourceConfiguration union
+.glueTable GlueTableSource
+StartTableMigration operation in=StartTableMigrationRequest out=StartTableMigrationResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=POST uri=/start-table-migration code=202
+StartTableMigrationRequest structure
+.dataMigration DataMigrationSettings
+.destinationTable DestinationTable
+.migrationOutput MigrationOutputConfiguration
+.reviewMigrationPlan ~Boolean
+.roleARN RoleArn
+.source SourceConfiguration
+.sourceType MigrationSourceType
+StartTableMigrationResponse structure
+.migrationId MigrationId
+.state MigrationState
 StorageClass enum
 StorageClassConfiguration structure
 .storageClass StorageClass
+SyncTableMigration operation in=SyncTableMigrationRequest out=SyncTableMigrationResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=POST uri=/sync-table-migration code=202
+SyncTableMigrationRequest structure
+.migrationOutput MigrationOutputConfiguration
+.reviewMigrationPlan ~Boolean
+.roleARN RoleArn
+.tableARN TableARN
+SyncTableMigrationResponse structure
+.migrationId MigrationId
+.state MigrationState
 TableARN string
 TableBucketARN string
 TableBucketId string
@@ -511,6 +671,7 @@ TagValue string
 Tags map k=TagKey v=TagValue
 TooManyRequestsException structure error=client code=429
 .message ErrorMessage
+UnmatchedSourceFieldsPolicy enum
 UntagResource operation in=UntagResourceRequest out=UntagResourceResponse err=BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=DELETE uri=/tag/{resourceArn} code=204
 UntagResourceRequest structure
 .resourceArn ResourceArn label
@@ -529,5 +690,15 @@ UpdateTableMetadataLocationResponse structure
 .namespace NamespaceList
 .tableARN TableARN
 .versionToken VersionToken
+UpdateTableMigration operation in=UpdateTableMigrationRequest out=UpdateTableMigrationResponse err=AccessDeniedException,BadRequestException,ConflictException,ForbiddenException,InternalServerErrorException,NotFoundException,TooManyRequestsException method=POST uri=/update-table-migration code=200
+UpdateTableMigrationRequest structure
+.migrationId MigrationId query=migrationId
+.requestedState MigrationRequestedState
+.tableARN TableARN query=tableARN
+.updateDescription ~String
+UpdateTableMigrationResponse structure
+.migrationId MigrationId
+.state MigrationState
+.tableARN TableARN
 VersionToken string
 WarehouseLocation string

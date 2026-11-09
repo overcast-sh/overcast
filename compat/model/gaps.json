@@ -689,6 +689,13 @@
     },
     {
       "service": "kms",
+      "operation": "Decapsulate",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Decapsulate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "kms",
       "operation": "DeleteCustomKeyStore",
       "group": "kms-gen-probe",
       "reason": "never-probe",
@@ -728,6 +735,13 @@
       "group": "kms-gen-probe",
       "reason": "never-probe",
       "detail": "Turns on automatic annual rotation for a live KMS key. AWS bills for each key version the rotation creates, and rotation cannot be undone for versions already generated."
+    },
+    {
+      "service": "kms",
+      "operation": "Encapsulate",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Encapsulate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
     },
     {
       "service": "kms",
