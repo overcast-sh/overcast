@@ -689,6 +689,13 @@
     },
     {
       "service": "kms",
+      "operation": "Decapsulate",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Decapsulate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "kms",
       "operation": "DeleteCustomKeyStore",
       "group": "kms-gen-probe",
       "reason": "never-probe",
@@ -728,6 +735,13 @@
       "group": "kms-gen-probe",
       "reason": "never-probe",
       "detail": "Turns on automatic annual rotation for a live KMS key. AWS bills for each key version the rotation creates, and rotation cannot be undone for versions already generated."
+    },
+    {
+      "service": "kms",
+      "operation": "Encapsulate",
+      "group": "kms-gen-probe",
+      "reason": "never-probe",
+      "detail": "Encapsulate is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
     },
     {
       "service": "kms",
@@ -973,6 +987,27 @@
       "group": "organizations-gen-probe",
       "reason": "never-probe",
       "detail": "Mutates an in-flight responsibility transfer — a billing-ownership change already under way."
+    },
+    {
+      "service": "secretsmanager",
+      "operation": "AssociateCrossAccountReplica",
+      "group": "secretsmanager-gen-probe",
+      "reason": "never-probe",
+      "detail": "AssociateCrossAccountReplica is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "secretsmanager",
+      "operation": "DisassociateCrossAccountReplica",
+      "group": "secretsmanager-gen-probe",
+      "reason": "never-probe",
+      "detail": "DisassociateCrossAccountReplica is not a read operation; probes call unimplemented operations against a live account and must be side-effect free"
+    },
+    {
+      "service": "secretsmanager",
+      "operation": "ListResourcePolicies",
+      "group": "secretsmanager-gen-probe",
+      "reason": "probe-binds-live-resource:SecretId",
+      "detail": "ListResourcePolicies.SecretId would bind to secret.arn, a value exported from a resource the run owns; a probe calls an operation the emulator does not implement, so against real AWS it would act on that resource for real. Add a curated literal for SecretId to values.json, or leave the operation refused"
     },
     {
       "service": "secretsmanager",

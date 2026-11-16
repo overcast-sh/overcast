@@ -74,6 +74,7 @@ AmazonRedshiftTarget structure
 .Data AmazonRedshiftNodeData
 .Inputs OneInput
 .Name NodeName
+AnalysisType enum
 AnnotationError structure
 .FailureReason DescriptionString
 .ProfileId HashString
@@ -161,6 +162,12 @@ AuthorizationCodeProperties structure
 AutoDataQuality structure
 .EvaluationContext EnclosedInStringProperty
 .IsEnabled BooleanValue
+AutoUpgradeMetadata structure
+.AnalysisId IdString
+.SourceVersion GlueVersionString
+.Status AutoUpgradeStatus
+.TargetVersion GlueVersionString
+AutoUpgradeStatus enum
 BackfillError structure
 .Code BackfillErrorCode
 .Partitions BackfillErroredPartitionsList
@@ -1107,6 +1114,27 @@ CreateCustomEntityTypeRequest structure
 .Tags TagsMap
 CreateCustomEntityTypeResponse structure
 .Name NameString
+CreateDataQualityEvaluationConfig operation in=CreateDataQualityEvaluationConfigRequest out=CreateDataQualityEvaluationConfigResponse err=AccessDeniedException,AlreadyExistsException,EntityNotFoundException,IdempotentParameterMismatchException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
+CreateDataQualityEvaluationConfigRequest structure
+.AdditionalDataSources DataSourceMap
+.AdditionalRunOptions DataQualityEvaluationConfigAdditionalRunOptions
+.ClientToken ClientTokenString
+.DataSource DataQualityEvaluationConfigDataSource
+.EndAt Timestamp
+.Level DataQualityEvaluationConfigLevel
+.ManagedRulesetName DataQualityEvaluationConfigManagedRuleset
+.Name NameString
+.NumberOfWorkers NullableInteger
+.Role RoleString
+.RulesetName NameString
+.ScheduleExpression DataQualityEvaluationConfigScheduleExpression
+.StartAt Timestamp
+.Tags TagsMap
+.Timeout Timeout
+.Triggers DataQualityEvaluationConfigTriggers
+CreateDataQualityEvaluationConfigResponse structure
+.EvaluationRunMode DataQualityEvaluationRunMode
+.Name NameString
 CreateDataQualityRuleset operation in=CreateDataQualityRulesetRequest out=CreateDataQualityRulesetResponse err=AlreadyExistsException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
 CreateDataQualityRulesetRequest structure
 .ClientToken HashString
@@ -1551,6 +1579,49 @@ DataQualityEncryption structure
 .KmsKeyArn KmsKeyArn
 DataQualityEncryptionMode enum
 DataQualityEngine enum
+DataQualityEvaluationConfigAdditionalRunOptions structure
+.CloudWatchMetricsEnabled NullableBoolean
+.CompositeRuleEvaluationMethod DQCompositeRuleEvaluationMethod
+.CustomLogGroupPrefix GenericString
+.DataQualityRuleResults DataQualityRuleResultsOptions
+.ObservationMode ObservationMode
+.ObservationResults ObservationResultsOptions
+.ObservationScope ObservationConfiguration
+.ProfilingResults ProfilingResultsOptions
+.ResultsS3Prefix UriString
+.RowLevelResults RowLevelResultsOptions
+DataQualityEvaluationConfigDataSource structure
+.GlueTables DataQualityEvaluationConfigGlueTables
+DataQualityEvaluationConfigGlueTables structure
+.AdditionalOptions GlueTableAdditionalOptions
+.CatalogId NameString
+.ConnectionName NameString
+.DatabaseName NameString
+.PreProcessingQuery PreProcessingQueryString
+.TableNamePattern NameString
+DataQualityEvaluationConfigLevel enum
+DataQualityEvaluationConfigList list m=DataQualityEvaluationConfigListDetails
+DataQualityEvaluationConfigListDataSource structure
+.GlueTables DataQualityEvaluationConfigListGlueTables
+DataQualityEvaluationConfigListDetails structure
+.CreatedOn Timestamp
+.DataSource DataQualityEvaluationConfigListDataSource
+.EvaluationRunMode DataQualityEvaluationRunMode
+.LastModifiedOn Timestamp
+.Level DataQualityEvaluationConfigLevel
+.ManagedRulesetName DataQualityEvaluationConfigManagedRuleset
+.Name NameString
+.PauseRuns NullableBoolean
+.RulesetName NameString
+DataQualityEvaluationConfigListGlueTables structure
+.CatalogId NameString
+.DatabaseName NameString
+.TableNamePattern NameString
+DataQualityEvaluationConfigManagedRuleset enum
+DataQualityEvaluationConfigPageSize integer
+DataQualityEvaluationConfigScheduleExpression string
+DataQualityEvaluationConfigTrigger enum
+DataQualityEvaluationConfigTriggers list m=DataQualityEvaluationConfigTrigger
 DataQualityEvaluationRunAdditionalRunOptions structure
 .CloudWatchMetricsEnabled NullableBoolean
 .CompositeRuleEvaluationMethod DQCompositeRuleEvaluationMethod
@@ -1562,6 +1633,7 @@ DataQualityEvaluationRunAdditionalRunOptions structure
 .ProfilingResults ProfilingResultsOptions
 .ResultsS3Prefix UriString
 .RowLevelResults RowLevelResultsOptions
+DataQualityEvaluationRunMode enum
 DataQualityFlagsEnabled map k=NameString v=NameString
 DataQualityGlueTable structure
 .AdditionalOptions GlueTableAdditionalOptions
@@ -1585,8 +1657,10 @@ DataQualityResult structure
 .AggregatedMetrics DataQualityAggregatedMetrics
 .AnalyzerResults DataQualityAnalyzerResults
 .CompletedOn Timestamp
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
 .EvaluationContext GenericString
+.EvaluationRunMode DataQualityEvaluationRunMode
 .JobName NameString
 .JobRunId HashString
 .Observations DataQualityObservations
@@ -1598,14 +1672,18 @@ DataQualityResult structure
 .Score GenericBoundedDouble
 .StartedOn Timestamp
 DataQualityResultDescription structure
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
+.EvaluationRunMode DataQualityEvaluationRunMode
 .JobName NameString
 .JobRunId HashString
 .ResultId HashString
 .StartedOn Timestamp
 DataQualityResultDescriptionList list m=DataQualityResultDescription
 DataQualityResultFilterCriteria structure
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
+.EvaluationRunMode DataQualityEvaluationRunMode
 .JobName NameString
 .JobRunId HashString
 .StartedAfter Timestamp
@@ -1616,10 +1694,12 @@ DataQualityResultV2IdList list m=HashString
 DataQualityResultV2Item structure
 .AggregatedMetrics DataQualityAggregatedMetrics
 .AnalyzerResults DataQualityAnalyzerResults
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
 .Descriptors PublishDataQualityResultDescriptors
 .Dimensions PublishDataQualityResultDimensions
 .EvaluationContext NameString
+.EvaluationRunMode DataQualityEvaluationRunMode
 .ExecutionCompletedOn Timestamp
 .ExecutionStartedOn Timestamp
 .Observations DataQualityObservations
@@ -1632,17 +1712,21 @@ DataQualityResultV2Item structure
 DataQualityResultV2List list m=DataQualityResultV2Item
 DataQualityResultsList list m=DataQualityResult
 DataQualityResultsV2Description structure
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
 .Descriptors PublishDataQualityResultDescriptors
 .Dimensions PublishDataQualityResultDimensions
 .EvaluationContext NameString
+.EvaluationRunMode DataQualityEvaluationRunMode
 .ResultId HashString
 .ResultPublishedOn Timestamp
 DataQualityResultsV2DescriptionList list m=DataQualityResultsV2Description
 DataQualityResultsV2FilterCriteria structure
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
 .Dimensions PublishDataQualityResultDimensions
 .EvaluationContext NameString
+.EvaluationRunMode DataQualityEvaluationRunMode
 .PublishedAfter Timestamp
 .PublishedBefore Timestamp
 DataQualityRuleRecommendationRunAdditionalRunOptions structure
@@ -1858,6 +1942,10 @@ DeleteCustomEntityTypeRequest structure
 .Name NameString
 DeleteCustomEntityTypeResponse structure
 .Name NameString
+DeleteDataQualityEvaluationConfig operation in=DeleteDataQualityEvaluationConfigRequest out=DeleteDataQualityEvaluationConfigResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
+DeleteDataQualityEvaluationConfigRequest structure
+.Name NameString
+DeleteDataQualityEvaluationConfigResponse structure
 DeleteDataQualityRuleset operation in=DeleteDataQualityRulesetRequest out=DeleteDataQualityRulesetResponse err=EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
 DeleteDataQualityRulesetRequest structure
 .Name NameString
@@ -2606,6 +2694,28 @@ GetDataCatalogExportConfigurationOutput structure
 .S3TableBucketArn S3TableBucketArn
 .Status ExportStatus
 .UpdatedAt UpdatedAt
+GetDataQualityEvaluationConfig operation in=GetDataQualityEvaluationConfigRequest out=GetDataQualityEvaluationConfigResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
+GetDataQualityEvaluationConfigRequest structure
+.Name NameString
+GetDataQualityEvaluationConfigResponse structure
+.AdditionalDataSources DataSourceMap
+.AdditionalRunOptions DataQualityEvaluationConfigAdditionalRunOptions
+.CreatedOn Timestamp
+.DataSource DataQualityEvaluationConfigDataSource
+.EndAt Timestamp
+.EvaluationRunMode DataQualityEvaluationRunMode
+.LastModifiedOn Timestamp
+.Level DataQualityEvaluationConfigLevel
+.ManagedRulesetName DataQualityEvaluationConfigManagedRuleset
+.Name NameString
+.NumberOfWorkers NullableInteger
+.PauseRuns NullableBoolean
+.Role RoleString
+.RulesetName NameString
+.ScheduleExpression DataQualityEvaluationConfigScheduleExpression
+.StartAt Timestamp
+.Timeout Timeout
+.Triggers DataQualityEvaluationConfigTriggers
 GetDataQualityModel operation in=GetDataQualityModelRequest out=GetDataQualityModelResponse err=EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
 GetDataQualityModelRequest structure
 .ProfileId HashString
@@ -2629,8 +2739,10 @@ GetDataQualityResultResponse structure
 .AggregatedMetrics DataQualityAggregatedMetrics
 .AnalyzerResults DataQualityAnalyzerResults
 .CompletedOn Timestamp
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
 .EvaluationContext GenericString
+.EvaluationRunMode DataQualityEvaluationRunMode
 .JobName NameString
 .JobRunId HashString
 .Observations DataQualityObservations
@@ -2647,10 +2759,12 @@ GetDataQualityResultV2Request structure
 GetDataQualityResultV2Response structure
 .AggregatedMetrics DataQualityAggregatedMetrics
 .AnalyzerResults DataQualityAnalyzerResults
+.DataQualityEvaluationConfig NameString
 .DataSource DataSource
 .Descriptors PublishDataQualityResultDescriptors
 .Dimensions PublishDataQualityResultDimensions
 .EvaluationContext NameString
+.EvaluationRunMode DataQualityEvaluationRunMode
 .ExecutionCompletedOn Timestamp
 .ExecutionStartedOn Timestamp
 .Observations DataQualityObservations
@@ -2834,6 +2948,20 @@ GetJobRunsRequest structure
 GetJobRunsResponse structure
 .JobRuns JobRunList
 .NextToken GenericString
+GetJobUpgradeAnalysis operation in=GetJobUpgradeAnalysisRequest out=GetJobUpgradeAnalysisResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationNotSupportedException
+GetJobUpgradeAnalysisRequest structure
+.analysisId Id
+.jobName Name
+GetJobUpgradeAnalysisResponse structure
+.analysisId Id
+.analysisType AnalysisType
+.autoUpgradeEligibilitySummary ~String
+.autoUpgradeEvaluationSummary ~String
+.errorMessage ~String
+.jobName Name
+.sourceVersion ~String
+.status Status
+.targetVersion ~String
 GetJobs operation in=GetJobsRequest out=GetJobsResponse err=EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
 GetJobsRequest structure
 .MaxResults PageSize
@@ -3305,6 +3433,7 @@ GlueTable structure
 GlueTableAdditionalOptions map k=NameString v=DescriptionString
 GlueTables list m=GlueTable
 GlueVersionString string
+GovernanceMode enum
 GovernedCatalogSource structure
 .AdditionalOptions S3SourceAdditionalOptions
 .Database EnclosedInStringProperty
@@ -3465,6 +3594,7 @@ IcebergTargetCompressionType enum
 IcebergTargetList list m=IcebergTarget
 IcebergTransformString string
 IcebergUpdateAction enum
+Id string
 IdString string
 IdempotentParameterMismatchException structure error=client
 .Message MessageString
@@ -3661,6 +3791,7 @@ JdbcTarget structure
 JdbcTargetList list m=JdbcTarget
 Job structure
 .AllocatedCapacity IntegerValue
+.AutoUpgradeMetadata AutoUpgradeMetadata
 .CodeGenConfigurationNodes CodeGenConfigurationNodes
 .Command JobCommand
 .Connections ConnectionsList
@@ -3922,6 +4053,14 @@ ListCustomEntityTypesRequest structure
 .Tags TagsMap
 ListCustomEntityTypesResponse structure
 .CustomEntityTypes CustomEntityTypes
+.NextToken PaginationToken
+ListDataQualityEvaluationConfigs operation in=ListDataQualityEvaluationConfigsRequest out=ListDataQualityEvaluationConfigsResponse err=AccessDeniedException,InternalServiceException,InvalidInputException,OperationTimeoutException
+ListDataQualityEvaluationConfigsRequest structure
+.Level DataQualityEvaluationConfigLevel
+.MaxResults DataQualityEvaluationConfigPageSize
+.NextToken PaginationToken
+ListDataQualityEvaluationConfigsResponse structure
+.DataQualityEvaluationConfigs DataQualityEvaluationConfigList
 .NextToken PaginationToken
 ListDataQualityResults operation in=ListDataQualityResultsRequest out=ListDataQualityResultsResponse err=InternalServiceException,InvalidInputException,OperationTimeoutException
 ListDataQualityResultsRequest structure
@@ -4324,6 +4463,7 @@ MySQLCatalogTarget structure
 .Inputs OneInput
 .Name NodeName
 .Table EnclosedInStringProperty
+Name string
 NameString string
 NameStringList list m=NameString
 NewRules list m=NameString
@@ -4839,6 +4979,7 @@ ResourceShareType enum
 ResourceState enum
 ResourceType enum
 ResourceUri structure
+.LastModified Timestamp
 .ResourceType ResourceType
 .Uri URI
 ResourceUriList list m=ResourceUri
@@ -5496,6 +5637,14 @@ StartJobRunRequest structure
 .WorkerType WorkerType
 StartJobRunResponse structure
 .JobRunId IdString
+StartJobUpgradeAnalysis operation in=StartJobUpgradeAnalysisRequest out=StartJobUpgradeAnalysisResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationNotSupportedException,ResourceNumberLimitExceededException,ValidationException
+StartJobUpgradeAnalysisRequest structure
+.analysisId Id
+.jobName Name
+.upgradeConsent UpgradeConsent
+StartJobUpgradeAnalysisResponse structure
+.analysisId Id
+.jobName Name
 StartMLEvaluationTaskRun operation in=StartMLEvaluationTaskRunRequest out=StartMLEvaluationTaskRunResponse err=ConcurrentRunsExceededException,EntityNotFoundException,InternalServiceException,InvalidInputException,MLTransformNotReadyException,OperationTimeoutException
 StartMLEvaluationTaskRunRequest structure
 .TransformId HashString
@@ -5579,6 +5728,7 @@ StatisticSummary structure
 .StatisticName StatisticNameString
 .StatisticProperties StatisticPropertiesMap
 StatisticSummaryList list m=StatisticSummary
+Status enum
 StatusDetails structure
 .RequestedChange Table
 .ViewValidations ViewValidationList
@@ -5602,6 +5752,11 @@ StopCrawlerSchedule operation in=StopCrawlerScheduleRequest out=StopCrawlerSched
 StopCrawlerScheduleRequest structure
 .CrawlerName NameString
 StopCrawlerScheduleResponse structure
+StopJobUpgradeAnalysis operation in=StopJobUpgradeAnalysisRequest out=StopJobUpgradeAnalysisResponse err=AccessDeniedException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationNotSupportedException,ThrottlingException
+StopJobUpgradeAnalysisRequest structure
+.analysisId Id
+.jobName Name
+StopJobUpgradeAnalysisResponse structure
 StopMaterializedViewRefreshTaskRun operation in=StopMaterializedViewRefreshTaskRunRequest out=StopMaterializedViewRefreshTaskRunResponse err=AccessDeniedException,InvalidInputException,MaterializedViewRefreshTaskNotRunningException,MaterializedViewRefreshTaskStoppingException,OperationTimeoutException
 StopMaterializedViewRefreshTaskRunRequest structure
 .CatalogId CatalogIdString
@@ -6037,6 +6192,41 @@ UpdateCsvClassifierRequest structure
 .Name NameString
 .QuoteSymbol CsvQuoteSymbol
 .Serde CsvSerdeOption
+UpdateDataQualityEvaluationConfig operation in=UpdateDataQualityEvaluationConfigRequest out=UpdateDataQualityEvaluationConfigResponse err=AccessDeniedException,ConcurrentModificationException,EntityNotFoundException,InternalServiceException,InvalidInputException,OperationTimeoutException
+UpdateDataQualityEvaluationConfigRequest structure
+.AdditionalDataSources DataSourceMap
+.AdditionalRunOptions DataQualityEvaluationConfigAdditionalRunOptions
+.DataSource DataQualityEvaluationConfigDataSource
+.EndAt Timestamp
+.ManagedRulesetName DataQualityEvaluationConfigManagedRuleset
+.Name NameString
+.NumberOfWorkers NullableInteger
+.PauseRuns NullableBoolean
+.Role RoleString
+.RulesetName NameString
+.ScheduleExpression DataQualityEvaluationConfigScheduleExpression
+.StartAt Timestamp
+.Timeout Timeout
+.Triggers DataQualityEvaluationConfigTriggers
+UpdateDataQualityEvaluationConfigResponse structure
+.AdditionalDataSources DataSourceMap
+.AdditionalRunOptions DataQualityEvaluationConfigAdditionalRunOptions
+.CreatedOn Timestamp
+.DataSource DataQualityEvaluationConfigDataSource
+.EndAt Timestamp
+.EvaluationRunMode DataQualityEvaluationRunMode
+.LastModifiedOn Timestamp
+.Level DataQualityEvaluationConfigLevel
+.ManagedRulesetName DataQualityEvaluationConfigManagedRuleset
+.Name NameString
+.NumberOfWorkers NullableInteger
+.PauseRuns NullableBoolean
+.Role RoleString
+.RulesetName NameString
+.ScheduleExpression DataQualityEvaluationConfigScheduleExpression
+.StartAt Timestamp
+.Timeout Timeout
+.Triggers DataQualityEvaluationConfigTriggers
 UpdateDataQualityRuleset operation in=UpdateDataQualityRulesetRequest out=UpdateDataQualityRulesetResponse err=AlreadyExistsException,EntityNotFoundException,IdempotentParameterMismatchException,InternalServiceException,InvalidInputException,OperationTimeoutException,ResourceNumberLimitExceededException
 UpdateDataQualityRulesetRequest structure
 .Description DescriptionString
@@ -6249,6 +6439,7 @@ UpdateXMLClassifierRequest structure
 .RowTag RowTag
 UpdatedAt timestamp
 UpdatedTimestamp string
+UpgradeConsent enum
 UpsertRedshiftTargetOptions structure
 .ConnectionName EnclosedInStringProperty
 .TableLocation EnclosedInStringProperty
@@ -6263,19 +6454,23 @@ UsageProfileDefinition structure
 .Name NameString
 UsageProfileDefinitionList list m=UsageProfileDefinition
 UserDefinedFunction structure
+.ArtifactLocation URI
 .CatalogId CatalogIdString
 .ClassName NameString
 .CreateTime Timestamp
 .DatabaseName NameString
 .FunctionName NameString
 .FunctionType FunctionType
+.GovernanceMode GovernanceMode
 .OwnerName NameString
 .OwnerType PrincipalType
 .ResourceUris ResourceUriList
 UserDefinedFunctionInput structure
+.ArtifactLocation URI
 .ClassName NameString
 .FunctionName NameString
 .FunctionType FunctionType
+.GovernanceMode GovernanceMode
 .OwnerName NameString
 .OwnerType PrincipalType
 .ResourceUris ResourceUriList

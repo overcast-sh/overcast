@@ -378,6 +378,8 @@ ControlPlaneScalingTierInfo structure
 .podSchedulingRatePerSecond BoxedInteger
 .tierName String
 ControlPlaneScalingTierList list m=ControlPlaneScalingTierInfo
+CrdManagementConfiguration structure
+.managed BoxedBoolean
 CreateAccessConfigRequest structure
 .authenticationMode AuthenticationMode
 .bootstrapClusterCreatorAdminPermissions BoxedBoolean
@@ -737,6 +739,7 @@ EksAnywhereSubscriptionTerm structure
 EksAnywhereSubscriptionTermUnit enum
 ElasticLoadBalancing structure
 .enabled BoxedBoolean
+.gatewayApi GatewayApiConfiguration
 EncryptionConfig structure
 .provider Provider
 .resources StringList
@@ -777,6 +780,8 @@ FargateProfileSelector structure
 FargateProfileSelectors list m=FargateProfileSelector
 FargateProfileStatus enum
 FargateProfilesRequestMaxResults integer
+GatewayApiConfiguration structure
+.crds CrdManagementConfiguration
 HorizontalPodAutoscalerControllerConfigRequest structure
 .horizontalPodAutoscalerSyncPeriod String
 HorizontalPodAutoscalerControllerConfigResponse structure

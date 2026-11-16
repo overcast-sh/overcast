@@ -109,8 +109,10 @@ AccountVpcEncryptionControl structure
 .Mode AccountVpcEncryptionControlMode ec2=Mode xml=mode
 .State AccountVpcEncryptionControlState ec2=State xml=state
 AccountVpcEncryptionControlExclusions structure
+.ApiGatewayV2 VpcEncryptionControlExclusionState ec2=ApiGatewayV2 xml=apiGatewayV2
 .EgressOnlyInternetGateway VpcEncryptionControlExclusionState ec2=EgressOnlyInternetGateway xml=egressOnlyInternetGateway
 .ElasticFileSystem VpcEncryptionControlExclusionState ec2=ElasticFileSystem xml=elasticFileSystem
+.GlobalAccelerator VpcEncryptionControlExclusionState ec2=GlobalAccelerator xml=globalAccelerator
 .InternetGateway VpcEncryptionControlExclusionState ec2=InternetGateway xml=internetGateway
 .Lambda VpcEncryptionControlExclusionState ec2=Lambda xml=lambda
 .NatGateway VpcEncryptionControlExclusionState ec2=NatGateway xml=natGateway
@@ -333,6 +335,14 @@ AnalysisSecurityGroupRule structure
 .Protocol String ec2=Protocol xml=protocol
 .SecurityGroupId String ec2=SecurityGroupId xml=securityGroupId
 AnalysisStatus enum
+AnalysisTransitGatewayPolicyTableEntry structure
+.DestinationCidr String ec2=DestinationCidr xml=destinationCidr
+.DestinationPortRange PortRange ec2=DestinationPortRange xml=destinationPortRange
+.Protocol String ec2=Protocol xml=protocol
+.RuleNumber Integer ec2=RuleNumber xml=ruleNumber
+.SourceCidr String ec2=SourceCidr xml=sourceCidr
+.SourcePortRange PortRange ec2=SourcePortRange xml=sourcePortRange
+.TargetRouteTableId String ec2=TargetRouteTableId xml=targetRouteTableId
 ApplianceModeSupportValue enum
 ApplicationStatus structure
 .Details ApplicationStatusDetailSet ec2=DetailSet xml=detailSet
@@ -548,6 +558,16 @@ AssociateNatGatewayAddressRequest structure
 AssociateNatGatewayAddressResult structure
 .NatGatewayAddresses NatGatewayAddressList ec2=NatGatewayAddressSet xml=natGatewayAddressSet
 .NatGatewayId NatGatewayId ec2=NatGatewayId xml=natGatewayId
+AssociateNetworkingFlexCostAllocationPolicy operation in=AssociateNetworkingFlexCostAllocationPolicyRequest out=AssociateNetworkingFlexCostAllocationPolicyResult
+AssociateNetworkingFlexCostAllocationPolicyRequest structure
+.ClientToken String
+.DryRun Boolean
+.FcaPolicyId FlexCostAllocationPolicyId
+.NetworkResourceIds FlexCostAllocationNetworkResourceIdList
+.NetworkResourceScope FlexCostAllocationNetworkResourceScope
+AssociateNetworkingFlexCostAllocationPolicyResult structure
+.FcaPolicyAssociationFailures FlexCostAllocationOperationFailureList ec2=FcaPolicyAssociationFailures xml=fcaPolicyAssociationFailures
+.FcaPolicyAssociations FlexCostAllocationPolicyAssociationSet ec2=FcaPolicyAssociations xml=fcaPolicyAssociations
 AssociateRouteServer operation in=AssociateRouteServerRequest out=AssociateRouteServerResult
 AssociateRouteServerRequest structure
 .DryRun Boolean
@@ -1032,6 +1052,8 @@ CapacityAllocationMetadataEntry structure
 .Value String ec2=Value xml=value
 CapacityAllocationMetadataList list m=CapacityAllocationMetadataEntry mxml=item
 CapacityAllocations list m=CapacityAllocation mxml=item
+CapacityAmount integer
+CapacityAvailabilityZoneIdList list m=String mxml=item
 CapacityBlock structure
 .AvailabilityZone String ec2=AvailabilityZone xml=availabilityZone
 .AvailabilityZoneId String ec2=AvailabilityZoneId xml=availabilityZoneId
@@ -1152,6 +1174,11 @@ CapacityManagerMonitoredTagKey structure
 CapacityManagerMonitoredTagKeyList list m=CapacityManagerMonitoredTagKey mxml=item
 CapacityManagerMonitoredTagKeyStatus enum
 CapacityManagerStatus enum
+CapacityManagerSupportabilityScore structure
+.AvailabilityZoneId AvailabilityZoneId ec2=AvailabilityZoneId xml=availabilityZoneId
+.InstanceType String ec2=InstanceType xml=instanceType
+.Score SupportabilityScore ec2=Score xml=score
+CapacityManagerSupportabilityScoreSet list m=CapacityManagerSupportabilityScore mxml=item
 CapacityManagerTagDimension structure
 .Key String ec2=Key xml=key
 .Value String ec2=Value xml=value
@@ -1234,11 +1261,14 @@ CapacityReservationConfiguration structure
 CapacityReservationDeliveryPreference enum
 CapacityReservationFleet structure
 .AllocationStrategy String ec2=AllocationStrategy xml=allocationStrategy
+.AvailabilityZone String ec2=AvailabilityZone xml=availabilityZone
+.AvailabilityZoneId String ec2=AvailabilityZoneId xml=availabilityZoneId
 .CapacityReservationFleetArn String ec2=CapacityReservationFleetArn xml=capacityReservationFleetArn
 .CapacityReservationFleetId CapacityReservationFleetId ec2=CapacityReservationFleetId xml=capacityReservationFleetId
 .CreateTime MillisecondDateTime ec2=CreateTime xml=createTime
 .EndDate MillisecondDateTime ec2=EndDate xml=endDate
 .InstanceMatchCriteria FleetInstanceMatchCriteria ec2=InstanceMatchCriteria xml=instanceMatchCriteria
+.InstanceRequirements InstanceRequirementsRequest ec2=InstanceRequirements xml=instanceRequirements
 .InstanceTypeSpecifications FleetCapacityReservationSet ec2=InstanceTypeSpecificationSet xml=instanceTypeSpecificationSet
 .State CapacityReservationFleetState ec2=State xml=state
 .Tags TagList ec2=TagSet xml=tagSet
@@ -1319,6 +1349,7 @@ CapacityReservationTopology structure
 CapacityReservationTopologySet list m=CapacityReservationTopology mxml=item
 CapacityReservationType enum
 CapacityTenancy enum
+CapacityUnit enum
 CarrierGateway structure
 .CarrierGatewayId CarrierGatewayId ec2=CarrierGatewayId xml=carrierGatewayId
 .OwnerId String ec2=OwnerId xml=ownerId
@@ -1744,10 +1775,13 @@ CreateCapacityReservationDateChangeQuoteResult structure
 CreateCapacityReservationFleet operation in=CreateCapacityReservationFleetRequest out=CreateCapacityReservationFleetResult
 CreateCapacityReservationFleetRequest structure
 .AllocationStrategy String
+.AvailabilityZone AvailabilityZoneName
+.AvailabilityZoneId AvailabilityZoneId
 .ClientToken String
 .DryRun Boolean
 .EndDate MillisecondDateTime
 .InstanceMatchCriteria FleetInstanceMatchCriteria
+.InstanceRequirements InstanceRequirementsRequest
 .InstanceTypeSpecifications ReservationFleetInstanceSpecificationList xml=InstanceTypeSpecification
 .TagSpecifications TagSpecificationList xml=TagSpecification
 .Tenancy FleetCapacityReservationTenancy
@@ -2267,6 +2301,14 @@ CreateManagedPrefixListRequest structure
 .TagSpecifications TagSpecificationList xml=TagSpecification
 CreateManagedPrefixListResult structure
 .PrefixList ManagedPrefixList ec2=PrefixList xml=prefixList
+CreateMetricCategory operation in=CreateMetricCategoryRequest out=CreateMetricCategoryResult
+CreateMetricCategoryRequest structure
+.ClientToken String
+.DryRun Boolean
+.Metrics MetricCategoryMetricNameList xml=Metric
+.TagSpecifications TagSpecificationList xml=TagSpecification
+CreateMetricCategoryResult structure
+.MetricCategory MetricCategory ec2=MetricCategory xml=metricCategory
 CreateNatGateway operation in=CreateNatGatewayRequest out=CreateNatGatewayResult
 CreateNatGatewayRequest structure
 .AllocationId AllocationId
@@ -2364,6 +2406,22 @@ CreateNetworkInterfaceRequest structure
 CreateNetworkInterfaceResult structure
 .ClientToken String ec2=ClientToken xml=clientToken
 .NetworkInterface NetworkInterface ec2=NetworkInterface xml=networkInterface
+CreateNetworkingFlexCostAllocationPolicy operation in=CreateNetworkingFlexCostAllocationPolicyRequest out=CreateNetworkingFlexCostAllocationPolicyResult
+CreateNetworkingFlexCostAllocationPolicyRequest structure
+.ClientToken String
+.Description String
+.DryRun Boolean
+.InstanceFcaPolicyDocument InstanceFlexCostAllocationPolicyDocument
+.NatFcaPolicyDocument NatFlexCostAllocationPolicyDocument
+.NetworkResourceType FlexCostAllocationNetworkResourceType
+.PcxFcaPolicyDocument PcxFlexCostAllocationPolicyDocument
+.ShowBackEnabled Boolean
+.TagSpecifications TagSpecificationList
+CreateNetworkingFlexCostAllocationPolicyResult structure
+.CreatedAt DateTime ec2=CreatedAt xml=createdAt
+.ExpectedEffectiveAt DateTime ec2=ExpectedEffectiveAt xml=expectedEffectiveAt
+.FcaPolicyArn FlexCostAllocationPolicyArn ec2=FcaPolicyArn xml=fcaPolicyArn
+.FcaPolicyId FlexCostAllocationPolicyId ec2=FcaPolicyId xml=fcaPolicyId
 CreatePlacementGroup operation in=CreatePlacementGroupRequest out=CreatePlacementGroupResult
 CreatePlacementGroupRequest structure
 .DryRun Boolean ec2=DryRun xml=dryRun
@@ -3374,6 +3432,12 @@ DeleteManagedPrefixListRequest structure
 .PrefixListId PrefixListResourceId
 DeleteManagedPrefixListResult structure
 .PrefixList ManagedPrefixList ec2=PrefixList xml=prefixList
+DeleteMetricCategory operation in=DeleteMetricCategoryRequest out=DeleteMetricCategoryResult
+DeleteMetricCategoryRequest structure
+.DryRun Boolean
+.MetricCategoryId MetricCategoryId
+DeleteMetricCategoryResult structure
+.MetricCategoryId MetricCategoryId ec2=MetricCategoryId xml=metricCategoryId
 DeleteNatGateway operation in=DeleteNatGatewayRequest out=DeleteNatGatewayResult
 DeleteNatGatewayRequest structure
 .DryRun Boolean
@@ -3425,6 +3489,13 @@ DeleteNetworkInterfacePermissionResult structure
 DeleteNetworkInterfaceRequest structure
 .DryRun Boolean ec2=DryRun xml=dryRun
 .NetworkInterfaceId NetworkInterfaceId ec2=NetworkInterfaceId xml=networkInterfaceId
+DeleteNetworkingFlexCostAllocationPolicies operation in=DeleteNetworkingFlexCostAllocationPoliciesRequest out=DeleteNetworkingFlexCostAllocationPoliciesResult
+DeleteNetworkingFlexCostAllocationPoliciesRequest structure
+.DryRun Boolean
+.FcaPolicyIds FlexCostAllocationPolicyIdList
+DeleteNetworkingFlexCostAllocationPoliciesResult structure
+.Failed FlexCostAllocationOperationFailureList ec2=Failed xml=failed
+.Successful FlexCostAllocationPolicyIdList ec2=Successful xml=successful
 DeletePlacementGroup operation in=DeletePlacementGroupRequest out=~Unit
 DeletePlacementGroupRequest structure
 .DryRun Boolean ec2=DryRun xml=dryRun
@@ -4308,6 +4379,7 @@ DescribeFleetsRequest structure
 DescribeFleetsResult structure
 .Fleets FleetSet ec2=FleetSet xml=fleetSet
 .NextToken String ec2=NextToken xml=nextToken
+DescribeFlexCostAllocationPoliciesMaxResults integer
 DescribeFlowLogs operation in=DescribeFlowLogsRequest out=DescribeFlowLogsResult
 DescribeFlowLogsRequest structure
 .DryRun Boolean
@@ -4881,6 +4953,17 @@ DescribeManagedPrefixListsRequest structure
 DescribeManagedPrefixListsResult structure
 .NextToken NextToken ec2=NextToken xml=nextToken
 .PrefixLists ManagedPrefixListSet ec2=PrefixListSet xml=prefixListSet
+DescribeMetricCategories operation in=DescribeMetricCategoriesRequest out=DescribeMetricCategoriesResult
+DescribeMetricCategoriesMaxResults integer
+DescribeMetricCategoriesRequest structure
+.DryRun Boolean
+.Filters FilterList xml=Filter
+.MaxResults DescribeMetricCategoriesMaxResults
+.MetricCategoryIds MetricCategoryIdList xml=MetricCategoryId
+.NextToken String
+DescribeMetricCategoriesResult structure
+.MetricCategories MetricCategoryList ec2=MetricCategorySet xml=metricCategorySet
+.NextToken String ec2=NextToken xml=nextToken
 DescribeMovingAddresses operation in=DescribeMovingAddressesRequest out=DescribeMovingAddressesResult
 DescribeMovingAddressesMaxResults integer
 DescribeMovingAddressesRequest structure
@@ -4994,6 +5077,26 @@ DescribeNetworkInterfacesRequest structure
 DescribeNetworkInterfacesResult structure
 .NetworkInterfaces NetworkInterfaceList ec2=NetworkInterfaceSet xml=networkInterfaceSet
 .NextToken String ec2=NextToken xml=nextToken
+DescribeNetworkingFlexCostAllocationPolicies operation in=DescribeNetworkingFlexCostAllocationPoliciesRequest out=DescribeNetworkingFlexCostAllocationPoliciesResult
+DescribeNetworkingFlexCostAllocationPoliciesRequest structure
+.DryRun Boolean
+.FcaPolicyIds FlexCostAllocationPolicyIdSet
+.Filters FilterList
+.MaxResults DescribeFlexCostAllocationPoliciesMaxResults
+.NextToken NextToken
+DescribeNetworkingFlexCostAllocationPoliciesResult structure
+.FlexCostAllocationPolicies FlexCostAllocationPolicySet ec2=FlexCostAllocationPolicies xml=flexCostAllocationPolicies
+.NextToken NextToken ec2=NextToken xml=nextToken
+DescribeNetworkingFlexCostAllocationPolicyAssociations operation in=DescribeNetworkingFlexCostAllocationPolicyAssociationsRequest out=DescribeNetworkingFlexCostAllocationPolicyAssociationsResult
+DescribeNetworkingFlexCostAllocationPolicyAssociationsRequest structure
+.DryRun Boolean
+.FcaPolicyAssociationIds FlexCostAllocationPolicyAssociationIdList
+.Filters FilterList
+.MaxResults DescribeFlexCostAllocationPoliciesMaxResults
+.NextToken NextToken
+DescribeNetworkingFlexCostAllocationPolicyAssociationsResult structure
+.FcaPolicyAssociations FlexCostAllocationPolicyAssociationSet ec2=FcaPolicyAssociations xml=fcaPolicyAssociations
+.NextToken NextToken ec2=NextToken xml=nextToken
 DescribeOutpostLags operation in=DescribeOutpostLagsRequest out=DescribeOutpostLagsResult
 DescribeOutpostLagsRequest structure
 .DryRun Boolean
@@ -6155,6 +6258,13 @@ DisassociateNatGatewayAddressRequest structure
 DisassociateNatGatewayAddressResult structure
 .NatGatewayAddresses NatGatewayAddressList ec2=NatGatewayAddressSet xml=natGatewayAddressSet
 .NatGatewayId NatGatewayId ec2=NatGatewayId xml=natGatewayId
+DisassociateNetworkingFlexCostAllocationPolicy operation in=DisassociateNetworkingFlexCostAllocationPolicyRequest out=DisassociateNetworkingFlexCostAllocationPolicyResult
+DisassociateNetworkingFlexCostAllocationPolicyRequest structure
+.DryRun Boolean
+.FcaPolicyAssociationIds FlexCostAllocationPolicyDisassociateAssociationIdList
+DisassociateNetworkingFlexCostAllocationPolicyResult structure
+.FcaPolicyDisassociationFailures FlexCostAllocationOperationFailureList ec2=FcaPolicyDisassociationFailures xml=fcaPolicyDisassociationFailures
+.FcaPolicyDisassociations FlexCostAllocationPolicyAssociationIdList ec2=FcaPolicyDisassociations xml=fcaPolicyDisassociations
 DisassociateRouteServer operation in=DisassociateRouteServerRequest out=DisassociateRouteServerResult
 DisassociateRouteServerRequest structure
 .DryRun Boolean
@@ -6706,6 +6816,8 @@ Explanation structure
 .SubnetRouteTable AnalysisComponent ec2=SubnetRouteTable xml=subnetRouteTable
 .TransitGateway AnalysisComponent ec2=TransitGateway xml=transitGateway
 .TransitGatewayAttachment AnalysisComponent ec2=TransitGatewayAttachment xml=transitGatewayAttachment
+.TransitGatewayPolicyTable AnalysisComponent ec2=TransitGatewayPolicyTable xml=transitGatewayPolicyTable
+.TransitGatewayPolicyTableEntry AnalysisTransitGatewayPolicyTableEntry ec2=TransitGatewayPolicyTableEntry xml=transitGatewayPolicyTableEntry
 .TransitGatewayRouteTable AnalysisComponent ec2=TransitGatewayRouteTable xml=transitGatewayRouteTable
 .TransitGatewayRouteTableRoute TransitGatewayRouteTableRoute ec2=TransitGatewayRouteTableRoute xml=transitGatewayRouteTableRoute
 .Vpc AnalysisComponent ec2=Vpc xml=vpc
@@ -7002,6 +7114,82 @@ FleetSpotMaintenanceStrategiesRequest structure
 .CapacityRebalance FleetSpotCapacityRebalanceRequest
 FleetStateCode enum
 FleetType enum
+FlexCostAllocationAssociationMode enum
+FlexCostAllocationCidrLabel string
+FlexCostAllocationCidrMapping structure
+.CidrLabel FlexCostAllocationCidrLabel
+.CidrRange FlexCostAllocationCidrMappingCidrRangeString
+FlexCostAllocationCidrMappingCidrRangeString string
+FlexCostAllocationCidrMappingList list m=FlexCostAllocationCidrMapping mxml=item
+FlexCostAllocationCidrRangeSpecifications structure
+.Prefixes FlexCostAllocationCidrMappingList
+.PrefixesType FlexCostAllocationCidrRangeSpecificationsPrefixesTypeString
+FlexCostAllocationCidrRangeSpecificationsPrefixesTypeString string
+FlexCostAllocationCostDimension enum
+FlexCostAllocationCostDimensionList list m=FlexCostAllocationCostDimension mxml=item
+FlexCostAllocationNetworkResourceId string
+FlexCostAllocationNetworkResourceIdList list m=FlexCostAllocationNetworkResourceId mxml=item
+FlexCostAllocationNetworkResourceScope structure
+.ResourceIds FlexCostAllocationNetworkResourceScopeIdList
+.ResourceType FlexCostAllocationNetworkResourceScopeType
+FlexCostAllocationNetworkResourceScopeIdList list m=String mxml=item
+FlexCostAllocationNetworkResourceScopeType enum
+FlexCostAllocationNetworkResourceType enum
+FlexCostAllocationOperationFailure structure
+.FailureCode String ec2=FailureCode xml=failureCode
+.FailureReason String ec2=FailureReason xml=failureReason
+.ResourceId String ec2=ResourceId xml=resourceId
+FlexCostAllocationOperationFailureList list m=FlexCostAllocationOperationFailure mxml=item
+FlexCostAllocationPolicyArn string
+FlexCostAllocationPolicyAssociationDescription structure
+.AssociatedAt DateTime ec2=AssociatedAt xml=associatedAt
+.AssociationMode FlexCostAllocationAssociationMode ec2=AssociationMode xml=associationMode
+.ExpectedEffectiveAt DateTime ec2=ExpectedEffectiveAt xml=expectedEffectiveAt
+.FcaPolicyAssociationId FlexCostAllocationPolicyAssociationId ec2=FcaPolicyAssociationId xml=fcaPolicyAssociationId
+.FcaPolicyId FlexCostAllocationPolicyId ec2=FcaPolicyId xml=fcaPolicyId
+.ManagedBy ManagedBy ec2=ManagedBy xml=managedBy
+.NetworkResourceId String ec2=NetworkResourceId xml=networkResourceId
+.OwnerAccount String ec2=OwnerAccount xml=ownerAccount
+FlexCostAllocationPolicyAssociationId string
+FlexCostAllocationPolicyAssociationIdList list m=FlexCostAllocationPolicyAssociationId mxml=item
+FlexCostAllocationPolicyAssociationSet list m=FlexCostAllocationPolicyAssociationDescription mxml=item
+FlexCostAllocationPolicyDescription structure
+.Description String ec2=Description xml=description
+.FcaPolicyArn FlexCostAllocationPolicyArn ec2=FcaPolicyArn xml=fcaPolicyArn
+.FcaPolicyId FlexCostAllocationPolicyId ec2=FcaPolicyId xml=fcaPolicyId
+.InstanceFcaPolicyDocument InstanceFlexCostAllocationPolicyDocument ec2=InstanceFcaPolicyDocument xml=instanceFcaPolicyDocument
+.LatestVersion FlexCostAllocationPolicyVersionNumber ec2=LatestVersion xml=latestVersion
+.ManagedBy ManagedBy ec2=ManagedBy xml=managedBy
+.NatFcaPolicyDocument NatFlexCostAllocationPolicyDocument ec2=NatFcaPolicyDocument xml=natFcaPolicyDocument
+.NetworkResourceType FlexCostAllocationNetworkResourceType ec2=NetworkResourceType xml=networkResourceType
+.OwnerAccount String ec2=OwnerAccount xml=ownerAccount
+.PcxFcaPolicyDocument PcxFlexCostAllocationPolicyDocument ec2=PcxFcaPolicyDocument xml=pcxFcaPolicyDocument
+.PolicyCreatedAt DateTime ec2=PolicyCreatedAt xml=policyCreatedAt
+.ShowBackEnabled Boolean ec2=ShowBackEnabled xml=showBackEnabled
+.Tags TagList ec2=Tags xml=tags
+.UpdatedAt DateTime ec2=UpdatedAt xml=updatedAt
+.VersionExpectedEffectiveAt DateTime ec2=VersionExpectedEffectiveAt xml=versionExpectedEffectiveAt
+FlexCostAllocationPolicyDisassociateAssociationIdList list m=FlexCostAllocationPolicyAssociationId mxml=item
+FlexCostAllocationPolicyId string
+FlexCostAllocationPolicyIdList list m=FlexCostAllocationPolicyId mxml=item
+FlexCostAllocationPolicyIdSet list m=FlexCostAllocationPolicyId mxml=item
+FlexCostAllocationPolicySet list m=FlexCostAllocationPolicyDescription mxml=item
+FlexCostAllocationPolicyVersion structure
+.CreatedAt DateTime ec2=CreatedAt xml=createdAt
+.Description String ec2=Description xml=description
+.ExpectedEffectiveAt DateTime ec2=ExpectedEffectiveAt xml=expectedEffectiveAt
+.FcaPolicyId FlexCostAllocationPolicyId ec2=FcaPolicyId xml=fcaPolicyId
+.InstanceFcaPolicyDocument InstanceFlexCostAllocationPolicyDocument ec2=InstanceFcaPolicyDocument xml=instanceFcaPolicyDocument
+.NatFcaPolicyDocument NatFlexCostAllocationPolicyDocument ec2=NatFcaPolicyDocument xml=natFcaPolicyDocument
+.NetworkResourceType FlexCostAllocationNetworkResourceType ec2=NetworkResourceType xml=networkResourceType
+.PcxFcaPolicyDocument PcxFlexCostAllocationPolicyDocument ec2=PcxFcaPolicyDocument xml=pcxFcaPolicyDocument
+.ShowBackEnabled Boolean ec2=ShowBackEnabled xml=showBackEnabled
+.Version FlexCostAllocationPolicyVersionNumber ec2=Version xml=version
+FlexCostAllocationPolicyVersionNumber integer
+FlexCostAllocationPolicyVersionSet list m=FlexCostAllocationPolicyVersion mxml=item
+FlexCostAllocationReportingGranularity enum
+FlexCostAllocationReportingGranularityList list m=FlexCostAllocationReportingGranularity mxml=item
+FlexCostAllocationVersionsToIncludeList list m=FlexCostAllocationPolicyVersionNumber mxml=item
 FlexibleEnaQueuesSupport enum
 Float float
 FlowLog structure
@@ -7164,6 +7352,18 @@ GetCapacityManagerMonitoredTagKeysRequestMaxResults integer
 GetCapacityManagerMonitoredTagKeysResult structure
 .CapacityManagerTagKeys CapacityManagerMonitoredTagKeyList ec2=CapacityManagerTagKeySet xml=capacityManagerTagKeySet
 .NextToken String ec2=NextToken xml=nextToken
+GetCapacityManagerSupportabilityScores operation in=GetCapacityManagerSupportabilityScoresRequest out=GetCapacityManagerSupportabilityScoresResult
+GetCapacityManagerSupportabilityScoresRequest structure
+.CapacityAmount CapacityAmount
+.CapacityAvailabilityZoneIds CapacityAvailabilityZoneIdList xml=CapacityAvailabilityZoneId
+.CapacityUnit CapacityUnit
+.DryRun Boolean
+.InstanceRequirementsWithMetadata InstanceRequirementsWithMetadataRequest
+.InstanceTypes SupportabilityInstanceTypeList xml=InstanceType
+.MarketType SupportabilityMarketType
+GetCapacityManagerSupportabilityScoresResult structure
+.AggregateScore SupportabilityScore ec2=AggregateScore xml=aggregateScore
+.CapacityManagerSupportabilityScores CapacityManagerSupportabilityScoreSet ec2=CapacityManagerSupportabilityScoreSet xml=capacityManagerSupportabilityScoreSet
 GetCapacityReservationUsage operation in=GetCapacityReservationUsageRequest out=GetCapacityReservationUsageResult
 GetCapacityReservationUsageRequest structure
 .CapacityReservationId CapacityReservationId
@@ -7298,6 +7498,17 @@ GetImageBlockPublicAccessStateRequest structure
 GetImageBlockPublicAccessStateResult structure
 .ImageBlockPublicAccessState String ec2=ImageBlockPublicAccessState xml=imageBlockPublicAccessState
 .ManagedBy ManagedBy ec2=ManagedBy xml=managedBy
+GetImageFindings operation in=GetImageFindingsRequest out=GetImageFindingsResult
+GetImageFindingsEntrySet list m=ImageFinding mxml=item
+GetImageFindingsMaxResults integer
+GetImageFindingsRequest structure
+.DryRun Boolean
+.ImageId ImageId
+.MaxResults GetImageFindingsMaxResults
+.NextToken String
+GetImageFindingsResult structure
+.ImageFindings GetImageFindingsEntrySet ec2=ImageFindingSet xml=imageFindingSet
+.NextToken String ec2=NextToken xml=nextToken
 GetInstanceMetadataDefaults operation in=GetInstanceMetadataDefaultsRequest out=GetInstanceMetadataDefaultsResult
 GetInstanceMetadataDefaultsRequest structure
 .DryRun Boolean
@@ -7594,6 +7805,13 @@ GetNetworkInsightsAccessScopeContentRequest structure
 .NetworkInsightsAccessScopeId NetworkInsightsAccessScopeId
 GetNetworkInsightsAccessScopeContentResult structure
 .NetworkInsightsAccessScopeContent NetworkInsightsAccessScopeContent ec2=NetworkInsightsAccessScopeContent xml=networkInsightsAccessScopeContent
+GetNetworkingFlexCostAllocationPolicyVersions operation in=GetNetworkingFlexCostAllocationPolicyVersionsRequest out=GetNetworkingFlexCostAllocationPolicyVersionsResult
+GetNetworkingFlexCostAllocationPolicyVersionsRequest structure
+.DryRun Boolean
+.FcaPolicyId FlexCostAllocationPolicyId
+.VersionsToInclude FlexCostAllocationVersionsToIncludeList
+GetNetworkingFlexCostAllocationPolicyVersionsResult structure
+.FcaPolicyVersions FlexCostAllocationPolicyVersionSet ec2=FcaPolicyVersions xml=fcaPolicyVersions
 GetPasswordData operation in=GetPasswordDataRequest out=GetPasswordDataResult
 GetPasswordDataRequest structure
 .DryRun Boolean ec2=DryRun xml=dryRun
@@ -7691,6 +7909,15 @@ GetSubnetCidrReservationsResult structure
 .NextToken String ec2=NextToken xml=nextToken
 .SubnetIpv4CidrReservations SubnetCidrReservationList ec2=SubnetIpv4CidrReservationSet xml=subnetIpv4CidrReservationSet
 .SubnetIpv6CidrReservations SubnetCidrReservationList ec2=SubnetIpv6CidrReservationSet xml=subnetIpv6CidrReservationSet
+GetTransitGatewayAttachmentNatConfiguration operation in=GetTransitGatewayAttachmentNatConfigurationRequest out=GetTransitGatewayAttachmentNatConfigurationResult
+GetTransitGatewayAttachmentNatConfigurationRequest structure
+.DryRun Boolean
+.TransitGatewayAttachmentId TransitGatewayAttachmentId
+GetTransitGatewayAttachmentNatConfigurationResult structure
+.NatGatewayRules TransitGatewayNatRuleList ec2=NatGatewayRuleSet xml=natGatewayRuleSet
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportState ec2=NatGatewaySupport xml=natGatewaySupport
+.NatSystemRouteSupport TransitGatewayAttachmentNatSystemRouteSupportValue ec2=NatSystemRouteSupport xml=natSystemRouteSupport
+.TransitGatewayAttachmentId TransitGatewayAttachmentId ec2=TransitGatewayAttachmentId xml=transitGatewayAttachmentId
 GetTransitGatewayAttachmentPropagations operation in=GetTransitGatewayAttachmentPropagationsRequest out=GetTransitGatewayAttachmentPropagationsResult
 GetTransitGatewayAttachmentPropagationsRequest structure
 .DryRun Boolean
@@ -8035,6 +8262,7 @@ Image structure
 .RamdiskId String ec2=RamdiskId xml=ramdiskId
 .RootDeviceName String ec2=RootDeviceName xml=rootDeviceName
 .RootDeviceType DeviceType ec2=RootDeviceType xml=rootDeviceType
+.ScanResults ScanResults ec2=ScanResults xml=scanResults
 .SourceImageId String ec2=SourceImageId xml=sourceImageId
 .SourceImageRegion String ec2=SourceImageRegion xml=sourceImageRegion
 .SourceInstanceId String ec2=SourceInstanceId xml=sourceInstanceId
@@ -8077,6 +8305,7 @@ ImageCriterion structure
 .ImageProviders ImageProviderList ec2=ImageProviderSet xml=imageProviderSet
 .ImageWatermarks ImageWatermarkFilterResponseList ec2=ImageWatermarkSet xml=imageWatermarkSet
 .MarketplaceProductCodes MarketplaceProductCodeList ec2=MarketplaceProductCodeSet xml=marketplaceProductCodeSet
+.ScanResultCondition ScanResultCondition ec2=ScanResultCondition xml=scanResultCondition
 ImageCriterionList list m=ImageCriterion mxml=item
 ImageCriterionRequest structure
 .CreationDateCondition CreationDateConditionRequest
@@ -8085,6 +8314,7 @@ ImageCriterionRequest structure
 .ImageProviders ImageProviderRequestList xml=ImageProvider
 .ImageWatermarks ImageWatermarkFilterRequestList xml=ImageWatermark
 .MarketplaceProductCodes MarketplaceProductCodeRequestList xml=MarketplaceProductCode
+.ScanResultCondition ScanResultConditionRequest
 ImageCriterionRequestList list m=ImageCriterionRequest mxml=ImageCriterion
 ImageDescriptionRequest string
 ImageDiskContainer structure
@@ -8095,6 +8325,16 @@ ImageDiskContainer structure
 .Url SensitiveUrl
 .UserBucket UserBucket
 ImageDiskContainerList list m=ImageDiskContainer mxml=item
+ImageFinding structure
+.FirstObservedAt MillisecondDateTime ec2=FirstObservedAt xml=firstObservedAt
+.FixAvailable Boolean ec2=FixAvailable xml=fixAvailable
+.Paths ImageFindingPathSet ec2=PathSet xml=pathSet
+.Score Double ec2=Score xml=score
+.SeverityLabel SeverityLabel ec2=SeverityLabel xml=severityLabel
+.SnapshotId SnapshotId ec2=SnapshotId xml=snapshotId
+.Title String ec2=Title xml=title
+.UpdatedAt MillisecondDateTime ec2=UpdatedAt xml=updatedAt
+ImageFindingPathSet list m=String mxml=item
 ImageId string
 ImageIdList list m=ImageId mxml=item
 ImageIdStringList list m=ImageId mxml=ImageId
@@ -8561,6 +8801,10 @@ InstanceExportDetails structure
 InstanceFamilyCreditSpecification structure
 .CpuCredits String ec2=CpuCredits xml=cpuCredits
 .InstanceFamily UnlimitedSupportedInstanceFamily ec2=InstanceFamily xml=instanceFamily
+InstanceFlexCostAllocationPolicyDocument structure
+.CidrRangeSpecifications FlexCostAllocationCidrRangeSpecifications
+.Dimensions FlexCostAllocationCostDimensionList
+.ReportingGranularity FlexCostAllocationReportingGranularityList
 InstanceGeneration enum
 InstanceGenerationSet list m=InstanceGeneration mxml=item
 InstanceHealthStatus enum
@@ -8829,6 +9073,7 @@ InstanceStatus structure
 .InstanceStatus InstanceStatusSummary ec2=InstanceStatus xml=instanceStatus
 .Operator OperatorResponse ec2=Operator xml=operator
 .OutpostArn String ec2=OutpostArn xml=outpostArn
+.PerformanceStatus PerformanceStatusSummary ec2=PerformanceStatus xml=performanceStatus
 .SystemStatus InstanceStatusSummary ec2=SystemStatus xml=systemStatus
 InstanceStatusDetails structure
 .ImpairedSince DateTime ec2=ImpairedSince xml=impairedSince
@@ -9833,8 +10078,10 @@ LaunchTemplateVersion structure
 LaunchTemplateVersionSet list m=LaunchTemplateVersion mxml=item
 LaunchTemplatesMonitoring structure
 .Enabled Boolean ec2=Enabled xml=enabled
+.MetricCategoryIds MetricCategoryIdList ec2=MetricCategoryIdSet xml=metricCategoryIdSet
 LaunchTemplatesMonitoringRequest structure
 .Enabled Boolean
+.MetricCategoryIds MetricCategoryIdList xml=MetricCategoryId
 LicenseConfiguration structure
 .LicenseConfigurationArn String ec2=LicenseConfigurationArn xml=licenseConfigurationArn
 LicenseConfigurationRequest structure
@@ -10084,6 +10331,8 @@ MarketplaceProductCode string
 MarketplaceProductCodeList list m=MarketplaceProductCode mxml=item
 MarketplaceProductCodeRequest string
 MarketplaceProductCodeRequestList list m=MarketplaceProductCodeRequest mxml=item
+MaxDaysSinceFixAvailableValue integer
+MaxDaysSinceLastFindingScanValue integer
 MaxIpv4AddrPerInterface integer
 MaxIpv6AddrPerInterface integer
 MaxNetworkInterfaces integer
@@ -10135,6 +10384,15 @@ MemoryMiBRequest structure
 MemorySize long
 MetadataDefaultHttpTokensState enum
 Metric enum
+MetricCategory structure
+.MetricCategoryId MetricCategoryId ec2=MetricCategoryId xml=metricCategoryId
+.Metrics MetricCategoryMetricNameList ec2=MetricSet xml=metricSet
+.Tags TagList ec2=TagSet xml=tagSet
+MetricCategoryId string
+MetricCategoryIdList list m=MetricCategoryId mxml=item
+MetricCategoryList list m=MetricCategory mxml=item
+MetricCategoryMetricName string
+MetricCategoryMetricNameList list m=MetricCategoryMetricName mxml=item
 MetricDataResult structure
 .Dimension CapacityManagerDimension ec2=Dimension xml=dimension
 .MetricValues MetricValueSet ec2=MetricValueSet xml=metricValueSet
@@ -10167,9 +10425,11 @@ ModificationTerms structure
 .ReservationUpdate ModificationReservationUpdate ec2=ReservationUpdate xml=reservationUpdate
 ModifyAccountVpcEncryptionControl operation in=ModifyAccountVpcEncryptionControlRequest out=ModifyAccountVpcEncryptionControlResult
 ModifyAccountVpcEncryptionControlRequest structure
+.ApiGatewayV2 VpcEncryptionControlExclusionStateInput
 .DryRun Boolean
 .EgressOnlyInternetGateway VpcEncryptionControlExclusionStateInput
 .ElasticFileSystem VpcEncryptionControlExclusionStateInput
+.GlobalAccelerator VpcEncryptionControlExclusionStateInput
 .InternetGateway VpcEncryptionControlExclusionStateInput
 .Lambda VpcEncryptionControlExclusionStateInput
 .Mode AccountVpcEncryptionControlMode
@@ -10611,6 +10871,13 @@ ModifyManagedResourceVisibilityRequest structure
 .DryRun Boolean
 ModifyManagedResourceVisibilityResult structure
 .Visibility ManagedResourceVisibilitySettings ec2=Visibility xml=visibility
+ModifyMetricCategory operation in=ModifyMetricCategoryRequest out=ModifyMetricCategoryResult
+ModifyMetricCategoryRequest structure
+.DryRun Boolean
+.MetricCategoryId MetricCategoryId
+.Metrics MetricCategoryMetricNameList xml=Metric
+ModifyMetricCategoryResult structure
+.MetricCategory MetricCategory ec2=MetricCategory xml=metricCategory
 ModifyNetworkInterfaceAttribute operation in=ModifyNetworkInterfaceAttributeRequest out=~Unit
 ModifyNetworkInterfaceAttributeRequest structure
 .AssociatePublicIpAddress Boolean
@@ -10624,6 +10891,21 @@ ModifyNetworkInterfaceAttributeRequest structure
 .Groups SecurityGroupIdStringList xml=SecurityGroupId
 .NetworkInterfaceId NetworkInterfaceId ec2=NetworkInterfaceId xml=networkInterfaceId
 .SourceDestCheck AttributeBooleanValue ec2=SourceDestCheck xml=sourceDestCheck
+ModifyNetworkingFlexCostAllocationPolicy operation in=ModifyNetworkingFlexCostAllocationPolicyRequest out=ModifyNetworkingFlexCostAllocationPolicyResult
+ModifyNetworkingFlexCostAllocationPolicyRequest structure
+.ClientToken String
+.Description String
+.DryRun Boolean
+.FcaPolicyId FlexCostAllocationPolicyId
+.InstanceFcaPolicyDocument InstanceFlexCostAllocationPolicyDocument
+.NatFcaPolicyDocument NatFlexCostAllocationPolicyDocument
+.PcxFcaPolicyDocument PcxFlexCostAllocationPolicyDocument
+.ShowBackEnabled Boolean
+ModifyNetworkingFlexCostAllocationPolicyResult structure
+.FcaPolicyId FlexCostAllocationPolicyId ec2=FcaPolicyId xml=fcaPolicyId
+.UpdatedAt DateTime ec2=UpdatedAt xml=updatedAt
+.Version FlexCostAllocationPolicyVersionNumber ec2=Version xml=version
+.VersionExpectedEffectiveAt DateTime ec2=VersionExpectedEffectiveAt xml=versionExpectedEffectiveAt
 ModifyPrivateDnsNameOptions operation in=ModifyPrivateDnsNameOptionsRequest out=ModifyPrivateDnsNameOptionsResult
 ModifyPrivateDnsNameOptionsRequest structure
 .DryRun Boolean
@@ -10741,6 +11023,19 @@ ModifyTrafficMirrorSessionRequest structure
 ModifyTrafficMirrorSessionResult structure
 .TrafficMirrorSession TrafficMirrorSession ec2=TrafficMirrorSession xml=trafficMirrorSession
 ModifyTransitGateway operation in=ModifyTransitGatewayRequest out=ModifyTransitGatewayResult
+ModifyTransitGatewayAttachmentNatConfiguration operation in=ModifyTransitGatewayAttachmentNatConfigurationRequest out=ModifyTransitGatewayAttachmentNatConfigurationResult
+ModifyTransitGatewayAttachmentNatConfigurationRequest structure
+.DryRun Boolean
+.NatGatewayRules TransitGatewayNatRuleRequestList xml=NatGatewayRule
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportValue
+.NatSystemRouteSupport TransitGatewayAttachmentNatSystemRouteSupportValue
+.ResetNatGatewayRules Boolean
+.TransitGatewayAttachmentId TransitGatewayAttachmentId
+ModifyTransitGatewayAttachmentNatConfigurationResult structure
+.NatGatewayRules TransitGatewayNatRuleList ec2=NatGatewayRuleSet xml=natGatewayRuleSet
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportState ec2=NatGatewaySupport xml=natGatewaySupport
+.NatSystemRouteSupport TransitGatewayAttachmentNatSystemRouteSupportValue ec2=NatSystemRouteSupport xml=natSystemRouteSupport
+.TransitGatewayAttachmentId TransitGatewayAttachmentId ec2=TransitGatewayAttachmentId xml=transitGatewayAttachmentId
 ModifyTransitGatewayMeteringPolicy operation in=ModifyTransitGatewayMeteringPolicyRequest out=ModifyTransitGatewayMeteringPolicyResult
 ModifyTransitGatewayMeteringPolicyRequest structure
 .AddMiddleboxAttachmentIds TransitGatewayAttachmentIdStringList xml=AddMiddleboxAttachmentId
@@ -10952,9 +11247,11 @@ ModifyVpcBlockPublicAccessOptionsResult structure
 .VpcBlockPublicAccessOptions VpcBlockPublicAccessOptions ec2=VpcBlockPublicAccessOptions xml=vpcBlockPublicAccessOptions
 ModifyVpcEncryptionControl operation in=ModifyVpcEncryptionControlRequest out=ModifyVpcEncryptionControlResult
 ModifyVpcEncryptionControlRequest structure
+.ApiGatewayV2Exclusion VpcEncryptionControlExclusionStateInput
 .DryRun Boolean
 .EgressOnlyInternetGatewayExclusion VpcEncryptionControlExclusionStateInput
 .ElasticFileSystemExclusion VpcEncryptionControlExclusionStateInput
+.GlobalAcceleratorExclusion VpcEncryptionControlExclusionStateInput
 .InternetGatewayExclusion VpcEncryptionControlExclusionStateInput
 .LambdaExclusion VpcEncryptionControlExclusionStateInput
 .Mode VpcEncryptionControlMode
@@ -11112,9 +11409,11 @@ MonitorInstances operation in=MonitorInstancesRequest out=MonitorInstancesResult
 MonitorInstancesRequest structure
 .DryRun Boolean ec2=DryRun xml=dryRun
 .InstanceIds InstanceIdStringList xml=InstanceId
+.MetricCategoryIds MetricCategoryIdList xml=MetricCategoryId
 MonitorInstancesResult structure
 .InstanceMonitorings InstanceMonitoringList ec2=InstancesSet xml=instancesSet
 Monitoring structure
+.MetricCategoryIds MetricCategoryIdList ec2=MetricCategoryIdSet xml=metricCategoryIdSet
 .State MonitoringState ec2=State xml=state
 MonitoringState enum
 MoveAddressToVpc operation in=MoveAddressToVpcRequest out=MoveAddressToVpcResult
@@ -11149,6 +11448,10 @@ MovingAddressStatus structure
 .PublicIp String ec2=PublicIp xml=publicIp
 MovingAddressStatusSet list m=MovingAddressStatus mxml=item
 MulticastSupportValue enum
+NatFlexCostAllocationPolicyDocument structure
+.CidrRangeSpecifications FlexCostAllocationCidrRangeSpecifications
+.Dimensions FlexCostAllocationCostDimensionList
+.ReportingGranularity FlexCostAllocationReportingGranularityList
 NatGateway structure
 .AttachedAppliances NatGatewayAttachedApplianceList ec2=AttachedApplianceSet xml=attachedApplianceSet
 .AutoProvisionZones AutoProvisionZonesState ec2=AutoProvisionZones xml=autoProvisionZones
@@ -11564,6 +11867,7 @@ PathComponent structure
 .SourceVpc AnalysisComponent ec2=SourceVpc xml=sourceVpc
 .Subnet AnalysisComponent ec2=Subnet xml=subnet
 .TransitGateway AnalysisComponent ec2=TransitGateway xml=transitGateway
+.TransitGatewayPolicyTableEntry AnalysisTransitGatewayPolicyTableEntry ec2=TransitGatewayPolicyTableEntry xml=transitGatewayPolicyTableEntry
 .TransitGatewayRouteTableRoute TransitGatewayRouteTableRoute ec2=TransitGatewayRouteTableRoute xml=transitGatewayRouteTableRoute
 .Vpc AnalysisComponent ec2=Vpc xml=vpc
 PathComponentList list m=PathComponent mxml=item
@@ -11596,6 +11900,10 @@ PciId structure
 .SubsystemId String
 .SubsystemVendorId String
 .VendorId String
+PcxFlexCostAllocationPolicyDocument structure
+.CidrRangeSpecifications FlexCostAllocationCidrRangeSpecifications
+.Dimensions FlexCostAllocationCostDimensionList
+.ReportingGranularity FlexCostAllocationReportingGranularityList
 PeakBandwidthInGbps double
 PeeringAttachmentStatus structure
 .Code String ec2=Code xml=code
@@ -11619,6 +11927,10 @@ PerformanceFactorReferenceRequest structure
 .InstanceFamily String
 PerformanceFactorReferenceSet list m=PerformanceFactorReference mxml=item
 PerformanceFactorReferenceSetRequest list m=PerformanceFactorReferenceRequest mxml=item
+PerformanceStatusSummary structure
+.ImpairedSince MillisecondDateTime ec2=ImpairedSince xml=impairedSince
+.Remediation String ec2=Remediation xml=remediation
+.Status SummaryStatus ec2=Status xml=status
 Period integer
 PeriodType enum
 PermissionGroup enum
@@ -12813,6 +13125,7 @@ RuleOptionList list m=RuleOption mxml=item
 RunInstances operation in=RunInstancesRequest out=Reservation
 RunInstancesMonitoringEnabled structure
 .Enabled Boolean ec2=Enabled xml=enabled
+.MetricCategoryIds MetricCategoryIdList xml=MetricCategoryId
 RunInstancesRequest structure
 .AdditionalInfo String ec2=AdditionalInfo xml=additionalInfo
 .BlockDeviceMappings BlockDeviceMappingRequestList xml=BlockDeviceMapping
@@ -12880,6 +13193,30 @@ S3Storage structure
 .UploadPolicySignature S3StorageUploadPolicySignature ec2=UploadPolicySignature xml=uploadPolicySignature
 S3StorageUploadPolicySignature string
 SSEType enum
+ScanResultCondition structure
+.MaxDaysSinceCriticalFixAvailable MaxDaysSinceFixAvailableValue ec2=MaxDaysSinceCriticalFixAvailable xml=maxDaysSinceCriticalFixAvailable
+.MaxDaysSinceHighFixAvailable MaxDaysSinceFixAvailableValue ec2=MaxDaysSinceHighFixAvailable xml=maxDaysSinceHighFixAvailable
+.MaxDaysSinceInformationalFixAvailable MaxDaysSinceFixAvailableValue ec2=MaxDaysSinceInformationalFixAvailable xml=maxDaysSinceInformationalFixAvailable
+.MaxDaysSinceLastFindingScan MaxDaysSinceLastFindingScanValue ec2=MaxDaysSinceLastFindingScan xml=maxDaysSinceLastFindingScan
+.MaxDaysSinceLowFixAvailable MaxDaysSinceFixAvailableValue ec2=MaxDaysSinceLowFixAvailable xml=maxDaysSinceLowFixAvailable
+.MaxDaysSinceMediumFixAvailable MaxDaysSinceFixAvailableValue ec2=MaxDaysSinceMediumFixAvailable xml=maxDaysSinceMediumFixAvailable
+.MaximumSeverityLabel SeverityLabel ec2=MaximumSeverityLabel xml=maximumSeverityLabel
+ScanResultConditionRequest structure
+.MaxDaysSinceCriticalFixAvailable MaxDaysSinceFixAvailableValue
+.MaxDaysSinceHighFixAvailable MaxDaysSinceFixAvailableValue
+.MaxDaysSinceInformationalFixAvailable MaxDaysSinceFixAvailableValue
+.MaxDaysSinceLastFindingScan MaxDaysSinceLastFindingScanValue
+.MaxDaysSinceLowFixAvailable MaxDaysSinceFixAvailableValue
+.MaxDaysSinceMediumFixAvailable MaxDaysSinceFixAvailableValue
+.MaximumSeverityLabel SeverityLabel
+ScanResults structure
+.CriticalFixAvailableSince MillisecondDateTime ec2=CriticalFixAvailableSince xml=criticalFixAvailableSince
+.FindingScanDate MillisecondDateTime ec2=FindingScanDate xml=findingScanDate
+.HighFixAvailableSince MillisecondDateTime ec2=HighFixAvailableSince xml=highFixAvailableSince
+.HighestFindingSeverityLabel SeverityLabel ec2=HighestFindingSeverityLabel xml=highestFindingSeverityLabel
+.InformationalFixAvailableSince MillisecondDateTime ec2=InformationalFixAvailableSince xml=informationalFixAvailableSince
+.LowFixAvailableSince MillisecondDateTime ec2=LowFixAvailableSince xml=lowFixAvailableSince
+.MediumFixAvailableSince MillisecondDateTime ec2=MediumFixAvailableSince xml=mediumFixAvailableSince
 Schedule enum
 ScheduledInstance structure
 .AvailabilityZone String ec2=AvailabilityZone xml=availabilityZone
@@ -13259,6 +13596,7 @@ ServiceType enum
 ServiceTypeDetail structure
 .ServiceType ServiceType ec2=ServiceType xml=serviceType
 ServiceTypeDetailSet list m=ServiceTypeDetail mxml=item
+SeverityLabel enum
 ShutdownBehavior enum
 SlotDateTimeRangeRequest structure
 .EarliestTime DateTime
@@ -13700,6 +14038,9 @@ SuccessfulSuppressionResponseObject structure
 .SuppressAt MillisecondDateTime ec2=SuppressAt xml=suppressAt
 SuccessfulSuppressionResponseSet list m=SuccessfulSuppressionResponseObject mxml=item
 SummaryStatus enum
+SupportabilityInstanceTypeList list m=String mxml=item
+SupportabilityMarketType enum
+SupportabilityScore enum
 SupportedAdditionalProcessorFeature enum
 SupportedAdditionalProcessorFeatureList list m=SupportedAdditionalProcessorFeature mxml=item
 SupportedInRegion boolean
@@ -13912,6 +14253,7 @@ TransitGatewayAssociationState enum
 TransitGatewayAttachment structure
 .Association TransitGatewayAttachmentAssociation ec2=Association xml=association
 .CreationTime DateTime ec2=CreationTime xml=creationTime
+.NatGatewaySupport TransitGatewayAttachmentNatGatewaySupportState ec2=NatGatewaySupport xml=natGatewaySupport
 .ResourceId String ec2=ResourceId xml=resourceId
 .ResourceOwnerId String ec2=ResourceOwnerId xml=resourceOwnerId
 .ResourceType TransitGatewayAttachmentResourceType ec2=ResourceType xml=resourceType
@@ -13934,6 +14276,9 @@ TransitGatewayAttachmentBgpConfigurationList list m=TransitGatewayAttachmentBgpC
 TransitGatewayAttachmentId string
 TransitGatewayAttachmentIdStringList list m=TransitGatewayAttachmentId
 TransitGatewayAttachmentList list m=TransitGatewayAttachment mxml=item
+TransitGatewayAttachmentNatGatewaySupportState enum
+TransitGatewayAttachmentNatGatewaySupportValue enum
+TransitGatewayAttachmentNatSystemRouteSupportValue enum
 TransitGatewayAttachmentPropagation structure
 .State TransitGatewayPropagationState ec2=State xml=state
 .TransitGatewayRouteTableId String ec2=TransitGatewayRouteTableId xml=transitGatewayRouteTableId
@@ -14084,6 +14429,18 @@ TransitGatewayMulticastRegisteredGroupSources structure
 .GroupIpAddress String ec2=GroupIpAddress xml=groupIpAddress
 .RegisteredNetworkInterfaceIds ValueStringList ec2=RegisteredNetworkInterfaceIds xml=registeredNetworkInterfaceIds
 .TransitGatewayMulticastDomainId String ec2=TransitGatewayMulticastDomainId xml=transitGatewayMulticastDomainId
+TransitGatewayNatRule structure
+.MatchSourceCidr String ec2=MatchSourceCidr xml=matchSourceCidr
+.NatCidr String ec2=NatCidr xml=natCidr
+.RuleNumber Integer ec2=RuleNumber xml=ruleNumber
+.State TransitGatewayNatRuleState ec2=State xml=state
+TransitGatewayNatRuleList list m=TransitGatewayNatRule mxml=item
+TransitGatewayNatRuleRequest structure
+.MatchSourceCidr String
+.NatCidr String
+.RuleNumber Integer
+TransitGatewayNatRuleRequestList list m=TransitGatewayNatRuleRequest mxml=item
+TransitGatewayNatRuleState enum
 TransitGatewayNetworkInterfaceIdList list m=NetworkInterfaceId mxml=item
 TransitGatewayOptions structure
 .AmazonSideAsn Long ec2=AmazonSideAsn xml=amazonSideAsn
@@ -14340,6 +14697,7 @@ UnmonitorInstances operation in=UnmonitorInstancesRequest out=UnmonitorInstances
 UnmonitorInstancesRequest structure
 .DryRun Boolean ec2=DryRun xml=dryRun
 .InstanceIds InstanceIdStringList xml=InstanceId
+.MetricCategoryIds MetricCategoryIdList xml=MetricCategoryId
 UnmonitorInstancesResult structure
 .InstanceMonitorings InstanceMonitoringList ec2=InstancesSet xml=instancesSet
 UnsuccessfulAssociationResponseObject structure
@@ -14860,8 +15218,10 @@ VpcEncryptionControl structure
 .VpcEncryptionControlId VpcEncryptionControlId ec2=VpcEncryptionControlId xml=vpcEncryptionControlId
 .VpcId VpcId ec2=VpcId xml=vpcId
 VpcEncryptionControlConfiguration structure
+.ApiGatewayV2Exclusion VpcEncryptionControlExclusionStateInput
 .EgressOnlyInternetGatewayExclusion VpcEncryptionControlExclusionStateInput
 .ElasticFileSystemExclusion VpcEncryptionControlExclusionStateInput
+.GlobalAcceleratorExclusion VpcEncryptionControlExclusionStateInput
 .InternetGatewayExclusion VpcEncryptionControlExclusionStateInput
 .LambdaExclusion VpcEncryptionControlExclusionStateInput
 .Mode VpcEncryptionControlMode
@@ -14875,8 +15235,10 @@ VpcEncryptionControlExclusion structure
 VpcEncryptionControlExclusionState enum
 VpcEncryptionControlExclusionStateInput enum
 VpcEncryptionControlExclusions structure
+.ApiGatewayV2 VpcEncryptionControlExclusion ec2=ApiGatewayV2 xml=apiGatewayV2
 .EgressOnlyInternetGateway VpcEncryptionControlExclusion ec2=EgressOnlyInternetGateway xml=egressOnlyInternetGateway
 .ElasticFileSystem VpcEncryptionControlExclusion ec2=ElasticFileSystem xml=elasticFileSystem
+.GlobalAccelerator VpcEncryptionControlExclusion ec2=GlobalAccelerator xml=globalAccelerator
 .InternetGateway VpcEncryptionControlExclusion ec2=InternetGateway xml=internetGateway
 .Lambda VpcEncryptionControlExclusion ec2=Lambda xml=lambda
 .NatGateway VpcEncryptionControlExclusion ec2=NatGateway xml=natGateway

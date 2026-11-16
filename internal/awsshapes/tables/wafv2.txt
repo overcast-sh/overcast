@@ -56,6 +56,7 @@ AssociateWebACLRequest structure
 AssociateWebACLResponse structure
 AssociatedResourceType enum
 AssociationConfig structure
+.ChallengeJavascriptSdkInjection ChallengeJavascriptSdkInjection
 .RequestBody RequestBody
 AttributeName string
 AttributeValue string
@@ -91,6 +92,8 @@ ChallengeAction structure
 .CustomRequestHandling CustomRequestHandling
 ChallengeConfig structure
 .ImmunityTimeProperty ImmunityTimeProperty
+ChallengeJavascriptSdkInjection map k=AssociatedResourceType v=ChallengeJavascriptSdkInjectionConfig
+ChallengeJavascriptSdkInjectionConfig structure
 ChallengeResponse structure
 .FailureReason FailureReason
 .ResponseCode ResponseCode
@@ -112,6 +115,21 @@ Condition structure
 .ActionCondition ActionCondition
 .LabelNameCondition LabelNameCondition
 Conditions list m=Condition
+ConnectedAccountArn string
+ConnectedAccountChain enum
+ConnectedAccountChainConfig structure
+.Chain ConnectedAccountChain
+.Prices ConnectedAccountPrices
+ConnectedAccountConfig structure
+.ConnectedAccountArn ConnectedAccountArn
+.PaymentNetworks ConnectedAccountPaymentNetworks
+ConnectedAccountConfigs list m=ConnectedAccountConfig
+ConnectedAccountPaymentNetworks list m=ConnectedAccountChainConfig
+ConnectedAccountPrice structure
+.Amount ConnectedAccountPriceAmount
+.Currency CryptoCurrency
+ConnectedAccountPriceAmount string
+ConnectedAccountPrices list m=ConnectedAccountPrice
 ConsumedCapacity long
 CookieMatchPattern structure
 .All All
@@ -825,6 +843,7 @@ MobileSdkRelease structure
 .Timestamp Timestamp
 MonetizationAmountValue string
 MonetizationConfig structure
+.ConnectedAccountConfigs ConnectedAccountConfigs
 .CryptoConfig CryptoConfig
 .CurrencyMode CurrencyMode
 MonetizationFilter structure

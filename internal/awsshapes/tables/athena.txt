@@ -167,6 +167,17 @@ CreatePresignedNotebookUrlResponse structure
 .AuthToken AuthToken
 .AuthTokenExpirationTime Long
 .NotebookUrl String
+CreateSystemTableConfiguration operation in=CreateSystemTableConfigurationInput out=CreateSystemTableConfigurationOutput err=InternalServerException,InvalidRequestException,TooManyRequestsException
+CreateSystemTableConfigurationInput structure
+.ClientRequestToken IdempotencyToken
+.KmsKeyArn KmsKeyArn
+.TableName SystemTableName
+.Tags TagList
+CreateSystemTableConfigurationOutput structure
+.CreatedAt Timestamp
+.KmsKeyArn KmsKeyArn
+.LastModifiedAt Timestamp
+.TableName SystemTableName
 CreateWorkGroup operation in=CreateWorkGroupInput out=CreateWorkGroupOutput err=InternalServerException,InvalidRequestException
 CreateWorkGroupInput structure
 .Configuration WorkGroupConfiguration
@@ -226,6 +237,10 @@ DeletePreparedStatementInput structure
 .StatementName StatementName
 .WorkGroup WorkGroupName
 DeletePreparedStatementOutput structure
+DeleteSystemTableConfiguration operation in=DeleteSystemTableConfigurationInput out=DeleteSystemTableConfigurationOutput err=InternalServerException,InvalidRequestException,TooManyRequestsException
+DeleteSystemTableConfigurationInput structure
+.TableName SystemTableName
+DeleteSystemTableConfigurationOutput structure
 DeleteWorkGroup operation in=DeleteWorkGroupInput out=DeleteWorkGroupOutput err=InternalServerException,InvalidRequestException
 DeleteWorkGroupInput structure
 .RecursiveDeleteOption BoxedBoolean
@@ -387,6 +402,14 @@ GetSessionStatusRequest structure
 GetSessionStatusResponse structure
 .SessionId SessionId
 .Status SessionStatus
+GetSystemTableConfiguration operation in=GetSystemTableConfigurationInput out=GetSystemTableConfigurationOutput err=InternalServerException,InvalidRequestException,ResourceNotFoundException,TooManyRequestsException
+GetSystemTableConfigurationInput structure
+.TableName SystemTableName
+GetSystemTableConfigurationOutput structure
+.CreatedAt Timestamp
+.KmsKeyArn KmsKeyArn
+.LastModifiedAt Timestamp
+.TableName SystemTableName
 GetTableMetadata operation in=GetTableMetadataInput out=GetTableMetadataOutput err=InternalServerException,InvalidRequestException,MetadataException
 GetTableMetadataInput structure
 .CatalogName CatalogNameString
@@ -424,6 +447,7 @@ InvalidRequestException structure error=client
 .Message ErrorMessage
 KeyString string
 KmsKey string
+KmsKeyArn string
 ListApplicationDPUSizes operation in=ListApplicationDPUSizesInput out=ListApplicationDPUSizesOutput err=InternalServerException,InvalidRequestException,TooManyRequestsException
 ListApplicationDPUSizesInput structure
 .MaxResults MaxApplicationDPUSizesCount
@@ -531,6 +555,13 @@ ListSessionsRequest structure
 ListSessionsResponse structure
 .NextToken SessionManagerToken
 .Sessions SessionsList
+ListSystemTableStatuses operation in=ListSystemTableStatusesInput out=ListSystemTableStatusesOutput err=InternalServerException,InvalidRequestException,TooManyRequestsException
+ListSystemTableStatusesInput structure
+.MaxResults MaxSystemTableStatusesCount
+.NextToken Token
+ListSystemTableStatusesOutput structure
+.Items SystemTableStatusList
+.NextToken Token
 ListTableMetadata operation in=ListTableMetadataInput out=ListTableMetadataOutput err=InternalServerException,InvalidRequestException,MetadataException
 ListTableMetadataInput structure
 .CatalogName CatalogNameString
@@ -590,6 +621,7 @@ MaxPreparedStatementsCount integer
 MaxQueryExecutionsCount integer
 MaxQueryResults integer
 MaxSessionsCount integer
+MaxSystemTableStatusesCount integer
 MaxTableMetadataCount integer
 MaxTagsCount integer
 MaxWorkGroupsCount integer
@@ -844,6 +876,12 @@ StopQueryExecutionOutput structure
 String string
 StringList list m=String
 SupportedDPUSizeList list m=Integer
+SystemTableName enum
+SystemTableStatus structure
+.Enabled BoxedBoolean
+.TableName SystemTableType
+SystemTableStatusList list m=SystemTableStatus
+SystemTableType enum
 TableMetadata structure
 .Columns ColumnList
 .CreateTime Timestamp
@@ -939,6 +977,15 @@ UpdatePreparedStatementInput structure
 .StatementName StatementName
 .WorkGroup WorkGroupName
 UpdatePreparedStatementOutput structure
+UpdateSystemTableConfiguration operation in=UpdateSystemTableConfigurationInput out=UpdateSystemTableConfigurationOutput err=InternalServerException,InvalidRequestException,ResourceNotFoundException,TooManyRequestsException
+UpdateSystemTableConfigurationInput structure
+.KmsKeyArn KmsKeyArn
+.TableName SystemTableName
+UpdateSystemTableConfigurationOutput structure
+.CreatedAt Timestamp
+.KmsKeyArn KmsKeyArn
+.LastModifiedAt Timestamp
+.TableName SystemTableName
 UpdateWorkGroup operation in=UpdateWorkGroupInput out=UpdateWorkGroupOutput err=InternalServerException,InvalidRequestException
 UpdateWorkGroupInput structure
 .ConfigurationUpdates WorkGroupConfigurationUpdates
@@ -969,6 +1016,7 @@ WorkGroupConfiguration structure
 .QueryResultsS3AccessGrantsConfiguration QueryResultsS3AccessGrantsConfiguration
 .RequesterPaysEnabled BoxedBoolean
 .ResultConfiguration ResultConfiguration
+.SystemTableStatuses SystemTableStatusList
 WorkGroupConfigurationUpdates structure
 .AdditionalConfiguration NameString
 .BytesScannedCutoffPerQuery BytesScannedCutoffValue
