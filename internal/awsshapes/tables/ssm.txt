@@ -273,6 +273,7 @@ AutomationExecution structure
 .TargetMaps TargetMaps
 .TargetParameterName AutomationParameterKey
 .Targets Targets
+.TargetsSummary TargetsSummary
 .TriggeredAlarms AlarmStateInformationList
 .Variables AutomationParameterMap
 .WarningMessage String
@@ -401,6 +402,7 @@ ClientToken string
 CloudConnectorArn string
 CloudConnectorConfiguration union
 .AzureConfiguration AzureConfiguration
+.GcpConfiguration GcpConfiguration
 CloudConnectorDescription string
 CloudConnectorFilter structure
 .FilterKey CloudConnectorFilterKey
@@ -414,9 +416,11 @@ CloudConnectorId string
 CloudConnectorMaxResults integer
 CloudConnectorSummary structure
 .CloudConnectorId CloudConnectorId
+.ConfigConnectorArn ConfigConnectorArn
 .CreatedAt DateTime
 .Description CloudConnectorDescription
 .DisplayName DisplayName
+.Provider Provider
 .RoleArn CloudConnectorIamRoleArn
 .UpdatedAt DateTime
 CloudConnectorSummaryList list m=CloudConnectorSummary
@@ -732,6 +736,8 @@ Credentials structure
 .SessionToken SessionTokenType
 CustomSchemaCountLimitExceededException structure qerr=CustomSchemaCountLimitExceeded error=client
 .Message String
+DHMCPermissionModel enum
+DHMCRoleArn string
 DateTime timestamp
 DefaultBaseline boolean
 DefaultInstanceName string
@@ -809,6 +815,9 @@ DeleteResourcePolicyRequest structure
 DeleteResourcePolicyResponse structure
 DeletionMode enum
 DeliveryTimedOutCount integer
+DeregisterDefaultHostManagementConfiguration operation in=DeregisterDefaultHostManagementConfigurationRequest out=DeregisterDefaultHostManagementConfigurationResult err=InternalServerError
+DeregisterDefaultHostManagementConfigurationRequest structure
+DeregisterDefaultHostManagementConfigurationResult structure
 DeregisterManagedInstance operation in=DeregisterManagedInstanceRequest out=DeregisterManagedInstanceResult err=InternalServerError,InvalidInstanceId
 DeregisterManagedInstanceRequest structure
 .InstanceId ManagedInstanceId
@@ -1325,6 +1334,22 @@ FailureDetails structure
 Fault enum
 FeatureNotAvailableException structure qerr=FeatureNotAvailableException error=client
 .Message String
+GcpConfiguration structure
+.OrganizationId GcpOrganizationId
+.ServiceAccountEmail GcpServiceAccountEmail
+.Targets GcpConfigurationTargets
+.WorkloadIdentityPoolProvider GcpWorkloadIdentityPoolProvider
+GcpConfigurationTargets union
+.Projects GcpProjectList
+GcpOrganizationId string
+GcpProject structure
+.ProjectDisplayName GcpProjectDisplayName
+.ProjectId GcpProjectId
+GcpProjectDisplayName string
+GcpProjectId string
+GcpProjectList list m=GcpProject
+GcpServiceAccountEmail string
+GcpWorkloadIdentityPoolProvider string
 GetAccessToken operation in=GetAccessTokenRequest out=GetAccessTokenResponse err=AccessDeniedException,InternalServerError,ResourceNotFoundException,ThrottlingException,ValidationException
 GetAccessTokenRequest structure
 .AccessRequestId AccessRequestId
@@ -2919,6 +2944,7 @@ ProgressCounters structure
 .SuccessSteps Integer
 .TimedOutSteps Integer
 .TotalSteps Integer
+Provider enum
 PutComplianceItems operation in=PutComplianceItemsRequest out=PutComplianceItemsResult err=ComplianceTypeCountLimitExceededException,InternalServerError,InvalidItemContentException,InvalidResourceId,InvalidResourceType,ItemSizeLimitExceededException,TotalSizeLimitExceededException
 PutComplianceItemsRequest structure
 .ComplianceType ComplianceTypeName
@@ -2965,6 +2991,13 @@ RebootOption enum
 Region string
 RegionList list m=Region
 Regions list m=Region
+RegisterDefaultHostManagementConfiguration operation in=RegisterDefaultHostManagementConfigurationRequest out=RegisterDefaultHostManagementConfigurationResult err=InternalServerError
+RegisterDefaultHostManagementConfigurationRequest structure
+.Overwrite Boolean
+.PermissionModel DHMCPermissionModel
+.RoleArn DHMCRoleArn
+RegisterDefaultHostManagementConfigurationResult structure
+.RoleArn DHMCRoleArn
 RegisterDefaultPatchBaseline operation in=RegisterDefaultPatchBaselineRequest out=RegisterDefaultPatchBaselineResult err=DoesNotExistException,InternalServerError,InvalidResourceId
 RegisterDefaultPatchBaselineRequest structure
 .BaselineId BaselineId
@@ -3442,6 +3475,12 @@ TargetType string
 TargetValue string
 TargetValues list m=TargetValue
 Targets list m=Target
+TargetsSummary structure
+.CompletedCount Integer
+.FailedCount Integer
+.StartedCount Integer
+.SuccessfulCount Integer
+.TotalCount Integer
 TerminateSession operation in=TerminateSessionRequest out=TerminateSessionResponse err=InternalServerError
 TerminateSessionRequest structure
 .SessionId SessionId
@@ -3518,7 +3557,7 @@ UpdateAssociationStatusRequest structure
 .Name DocumentARN
 UpdateAssociationStatusResult structure
 .AssociationDescription AssociationDescription
-UpdateCloudConnector operation in=UpdateCloudConnectorRequest out=UpdateCloudConnectorResult err=ConflictException,InternalServerError,ResourceNotFoundException
+UpdateCloudConnector operation in=UpdateCloudConnectorRequest out=UpdateCloudConnectorResult err=ConflictException,InternalServerError,ResourceNotFoundException,ServiceQuotaExceededException
 UpdateCloudConnectorRequest structure
 .CloudConnectorId CloudConnectorId
 .Configuration CloudConnectorConfiguration

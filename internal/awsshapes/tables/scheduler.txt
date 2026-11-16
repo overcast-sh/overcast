@@ -43,7 +43,7 @@ CreateScheduleOutput structure
 CreationDate timestamp
 DeadLetterConfig structure
 .Arn ResourceArn
-DeleteSchedule operation in=DeleteScheduleInput out=DeleteScheduleOutput err=ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=DELETE uri=/schedules/{Name} code=200
+DeleteSchedule operation in=DeleteScheduleInput out=DeleteScheduleOutput err=ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=DELETE uri=/schedules/{Name} code=200
 DeleteScheduleGroup operation in=DeleteScheduleGroupInput out=DeleteScheduleGroupOutput err=ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=DELETE uri=/schedule-groups/{Name} code=200
 DeleteScheduleGroupInput structure
 .ClientToken ClientToken query=clientToken
@@ -74,14 +74,22 @@ EcsParameters structure
 EnableECSManagedTags boolean
 EnableExecuteCommand boolean
 EndDate timestamp
+EventBridgeMetadataKey string
+EventBridgeMetadataMap map k=EventBridgeMetadataKey v=EventBridgeMetadataValue
+EventBridgeMetadataValue string
 EventBridgeParameters structure
 .DetailType DetailType
 .Source Source
+EventBridgePutEventsV2Parameters structure
+.DetailType DetailType
+.Source Source
+EventBridgePutRawEventsParameters structure
+.Metadata EventBridgeMetadataMap
 FlexibleTimeWindow structure
 .MaximumWindowInMinutes MaximumWindowInMinutes
 .Mode FlexibleTimeWindowMode
 FlexibleTimeWindowMode string
-GetSchedule operation in=GetScheduleInput out=GetScheduleOutput err=InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=GET uri=/schedules/{Name} code=200
+GetSchedule operation in=GetScheduleInput out=GetScheduleOutput err=InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=GET uri=/schedules/{Name} code=200
 GetScheduleGroup operation in=GetScheduleGroupInput out=GetScheduleGroupOutput err=InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=GET uri=/schedule-groups/{Name} code=200
 GetScheduleGroupInput structure
 .Name ScheduleGroupName label
@@ -235,6 +243,8 @@ Target structure
 .DeadLetterConfig DeadLetterConfig
 .EcsParameters EcsParameters
 .EventBridgeParameters EventBridgeParameters
+.EventBridgePutEventsV2Parameters EventBridgePutEventsV2Parameters
+.EventBridgePutRawEventsParameters EventBridgePutRawEventsParameters
 .Input TargetInput
 .KinesisParameters KinesisParameters
 .RetryPolicy RetryPolicy
@@ -255,7 +265,7 @@ UntagResourceInput structure
 .ResourceArn TagResourceArn label
 .TagKeys TagKeyList query=TagKeys
 UntagResourceOutput structure
-UpdateSchedule operation in=UpdateScheduleInput out=UpdateScheduleOutput err=ConflictException,InternalServerException,ResourceNotFoundException,ThrottlingException,ValidationException method=PUT uri=/schedules/{Name} code=200
+UpdateSchedule operation in=UpdateScheduleInput out=UpdateScheduleOutput err=ConflictException,InternalServerException,ResourceNotFoundException,ServiceQuotaExceededException,ThrottlingException,ValidationException method=PUT uri=/schedules/{Name} code=200
 UpdateScheduleInput structure
 .ActionAfterCompletion ActionAfterCompletion
 .ClientToken ClientToken

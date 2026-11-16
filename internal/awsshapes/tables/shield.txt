@@ -1,4 +1,4 @@
-service AWSJSON11 version=2016-06-02 ns=http://ddp.amazonaws.com/doc/2016-06-02/
+service AWSJSON11,RPCV2CBOR version=2016-06-02 ns=http://ddp.amazonaws.com/doc/2016-06-02/
 AccessDeniedException structure error=client
 .message errorMessage
 AccessDeniedForDependencyException structure error=client

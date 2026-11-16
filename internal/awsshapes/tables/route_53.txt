@@ -174,6 +174,11 @@ CreateQueryLoggingConfigRequest structure
 CreateQueryLoggingConfigResponse structure
 .Location ResourceURI header=Location
 .QueryLoggingConfig QueryLoggingConfig
+CreateResourceRecordSetProtections operation in=CreateResourceRecordSetProtectionsRequest out=CreateResourceRecordSetProtectionsResponse err=InvalidInput,InvalidResourceRecordSetProtectionBatch,LimitsExceeded,NoSuchHostedZone,PriorRequestNotComplete,ProtectionAlreadyExists method=POST uri=/2013-04-01/hostedzone/{HostedZoneId}/rrsetprotection code=200
+CreateResourceRecordSetProtectionsRequest structure
+.HostedZoneId ResourceId label
+.Protections ResourceRecordSetProtectionConfigBatch
+CreateResourceRecordSetProtectionsResponse structure
 CreateReusableDelegationSet operation in=CreateReusableDelegationSetRequest out=CreateReusableDelegationSetResponse err=DelegationSetAlreadyCreated,DelegationSetAlreadyReusable,DelegationSetNotAvailable,HostedZoneNotFound,InvalidArgument,InvalidInput,LimitsExceeded method=POST uri=/2013-04-01/delegationset code=201
 CreateReusableDelegationSetRequest structure
 .CallerReference Nonce
@@ -266,6 +271,11 @@ DeleteQueryLoggingConfig operation in=DeleteQueryLoggingConfigRequest out=Delete
 DeleteQueryLoggingConfigRequest structure
 .Id QueryLoggingConfigId label
 DeleteQueryLoggingConfigResponse structure
+DeleteResourceRecordSetProtections operation in=DeleteResourceRecordSetProtectionsRequest out=DeleteResourceRecordSetProtectionsResponse err=InvalidInput,InvalidResourceRecordSetProtectionBatch,NoSuchHostedZone,PriorRequestNotComplete method=POST uri=/2013-04-01/hostedzone/{HostedZoneId}/rrsetprotection/delete code=200
+DeleteResourceRecordSetProtectionsRequest structure
+.HostedZoneId ResourceId label
+.Protections ResourceRecordSetProtectionKeyBatch
+DeleteResourceRecordSetProtectionsResponse structure
 DeleteReusableDelegationSet operation in=DeleteReusableDelegationSetRequest out=DeleteReusableDelegationSetResponse err=DelegationSetInUse,DelegationSetNotReusable,InvalidInput,NoSuchDelegationSet method=DELETE uri=/2013-04-01/delegationset/{Id} code=200
 DeleteReusableDelegationSetRequest structure
 .Id ResourceId label
@@ -548,6 +558,9 @@ InvalidKeySigningKeyStatus structure error=client code=400
 .message ErrorMessage
 InvalidPaginationToken structure error=client code=400
 .message ErrorMessage
+InvalidResourceRecordSetProtectionBatch structure qerr=InvalidResourceRecordSetProtectionBatch error=client code=400
+.Errors ProtectionErrors
+.Message ErrorMessage
 InvalidSigningStatus structure error=client
 .message ErrorMessage
 InvalidTrafficPolicyDocument structure error=client code=400
@@ -681,6 +694,16 @@ ListQueryLoggingConfigsRequest structure
 ListQueryLoggingConfigsResponse structure
 .NextToken PaginationToken
 .QueryLoggingConfigs QueryLoggingConfigs
+ListResourceRecordSetProtections operation in=ListResourceRecordSetProtectionsRequest out=ListResourceRecordSetProtectionsResponse err=InvalidInput,InvalidPaginationToken,NoSuchHostedZone method=GET uri=/2013-04-01/hostedzone/{HostedZoneId}/rrsetprotection code=200
+ListResourceRecordSetProtectionsRequest structure
+.HostedZoneId ResourceId label
+.MaxResults ~Integer query=maxresults
+.NextToken PaginationToken query=nexttoken
+.StartRecordName DNSName query=name
+.StartRecordType RRType query=type
+ListResourceRecordSetProtectionsResponse structure
+.NextToken PaginationToken
+.ResourceRecordSetProtections ResourceRecordSetProtections
 ListResourceRecordSets operation in=ListResourceRecordSetsRequest out=ListResourceRecordSetsResponse err=InvalidInput,NoSuchHostedZone method=GET uri=/2013-04-01/hostedzone/{HostedZoneId}/rrset code=200
 ListResourceRecordSetsRequest structure
 .HostedZoneId ResourceId label
@@ -829,6 +852,16 @@ Period integer
 Port integer
 PriorRequestNotComplete structure error=client code=400
 .message ErrorMessage
+ProtectionAlreadyExists structure qerr=ProtectionAlreadyExists error=client code=409
+.Errors ProtectionErrors
+.Message ErrorMessage
+ProtectionError structure
+.Code ProtectionErrorCode
+.Message ErrorMessage
+.RecordName DNSName
+.RecordType RRType
+ProtectionErrorCode string
+ProtectionErrors list m=ProtectionError mxml=ProtectionError
 PublicZoneVPCAssociation structure error=client code=400
 .message ErrorMessage
 QueryLoggingConfig structure
@@ -870,6 +903,20 @@ ResourceRecordSet structure
 ResourceRecordSetFailover enum
 ResourceRecordSetIdentifier string
 ResourceRecordSetMultiValueAnswer boolean
+ResourceRecordSetProtection structure
+.Comment ResourceDescription
+.RecordName DNSName
+.RecordType RRType
+ResourceRecordSetProtectionConfig structure
+.Comment ResourceDescription
+.RecordName DNSName
+.RecordType RRType
+ResourceRecordSetProtectionConfigBatch list m=ResourceRecordSetProtectionConfig mxml=ResourceRecordSetProtectionConfig
+ResourceRecordSetProtectionKey structure
+.RecordName DNSName
+.RecordType RRType
+ResourceRecordSetProtectionKeyBatch list m=ResourceRecordSetProtectionKey mxml=ResourceRecordSetProtectionKey
+ResourceRecordSetProtections list m=ResourceRecordSetProtection mxml=ResourceRecordSetProtection
 ResourceRecordSetRegion enum
 ResourceRecordSetWeight long
 ResourceRecordSets list m=ResourceRecordSet mxml=ResourceRecordSet

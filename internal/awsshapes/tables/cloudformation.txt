@@ -33,6 +33,7 @@ ActivateTypeOutput structure
 AfterContext string
 AfterValue string
 AfterValueFrom enum
+AliasName string
 AllowedValue string
 AllowedValues list m=AllowedValue
 AlreadyExistsException structure qerr=AlreadyExistsException error=client code=400
@@ -1135,6 +1136,9 @@ RegistryType enum
 RelatedResources list m=ScannedResource
 RemediationMessageRemediationMessage string
 RemediationMessageStatusMessage string
+RemoveAlias operation in=RemoveAliasInput out=~Unit
+RemoveAliasInput structure
+.AliasName AliasName
 Replacement enum
 RequestToken string
 RequiredActivatedType structure
@@ -1299,6 +1303,10 @@ ScannedResourceIdentifier structure
 ScannedResourceIdentifiers list m=ScannedResourceIdentifier
 ScannedResources list m=ScannedResource
 Scope list m=ResourceAttribute
+SetAlias operation in=SetAliasInput out=~Unit err=AlreadyExistsException,LimitExceededException
+SetAliasInput structure
+.AliasName AliasName
+.StackName StackName
 SetStackPolicy operation in=SetStackPolicyInput out=~Unit
 SetStackPolicyInput structure
 .StackName StackName
@@ -1327,6 +1335,7 @@ SignalResourceInput structure
 .Status ResourceSignalStatus
 .UniqueId ResourceSignalUniqueId
 Stack structure
+.AliasName AliasName
 .Capabilities Capabilities
 .ChangeSetId ChangeSetId
 .CreationTime CreationTime
